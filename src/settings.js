@@ -1,9 +1,3 @@
-/**
- * Settings JavaScript for HyperViewer
- * Handles cache location configuration and FFmpeg job monitoring
- */
-
-console.log('🎬 HyperViewer settings script loaded!')
 
 let activeJobs = []
 let autoGenDirs = []
@@ -11,15 +5,10 @@ let refreshInterval = null
 let jobPollingInterval = null
 
 document.addEventListener('DOMContentLoaded', function() {
-	console.log('🔧 HyperViewer settings DOM ready')
-
 	const settingsSection = document.getElementById('hyper_viewer_settings')
 	if (!settingsSection) {
-		console.log('⚠️ HyperViewer settings section not found')
 		return
 	}
-
-	console.log('✅ HyperViewer settings section found')
 
 	// Initialize dashboard sections
 	initializeDashboard()
@@ -36,10 +25,8 @@ document.addEventListener('DOMContentLoaded', function() {
 		saveButton.addEventListener('click', saveCacheSettings)
 	}
 
-	// Remove location buttons
 	document.addEventListener('click', function(e) {
 		if (e.target.classList.contains('remove-location')) {
-			console.log('🗑️ Removing cache location')
 			e.target.closest('.cache-location-item').remove()
 		}
 		
@@ -50,18 +37,12 @@ document.addEventListener('DOMContentLoaded', function() {
 		}
 	})
 
-	// Start auto-refresh
 	refreshDashboardData()
-	refreshInterval = setInterval(refreshDashboardData, 10000) // Every 10 seconds
+	refreshInterval = setInterval(refreshDashboardData, 10000)
 })
 
-/**
- * Initialize dashboard sections
- */
 function initializeDashboard() {
 	const settingsSection = document.getElementById('hyper_viewer_settings')
-	
-	// Add dashboard HTML after cache settings
 	const dashboardHTML = `
 		<div class="section">
 			<h3>🔥 Active FFmpeg Jobs</h3>
@@ -81,9 +62,6 @@ function initializeDashboard() {
 	settingsSection.insertAdjacentHTML('beforeend', dashboardHTML)
 }
 
-/**
- * Refresh dashboard data
- */
 async function refreshDashboardData() {
 	await Promise.all([
 		refreshActiveJobs(),
@@ -91,9 +69,6 @@ async function refreshDashboardData() {
 	])
 }
 
-/**
- * Refresh active jobs list
- */
 async function refreshActiveJobs() {
 	try {
 		const response = await fetch(OC.generateUrl('/apps/hyperviewer/cache/progress/all'), {
@@ -101,7 +76,6 @@ async function refreshActiveJobs() {
 		})
 		
 		if (!response.ok) {
-			// No endpoint yet, use placeholder
 			renderActiveJobs([])
 			return
 		}
@@ -109,8 +83,6 @@ async function refreshActiveJobs() {
 		const data = await response.json()
 		activeJobs = data.jobs || []
 		renderActiveJobs(activeJobs)
-		
-		// Poll for progress if there are active jobs
 		if (activeJobs.length > 0 && !jobPollingInterval) {
 			jobPollingInterval = setInterval(pollJobProgress, 5000)
 		} else if (activeJobs.length === 0 && jobPollingInterval) {
@@ -124,9 +96,6 @@ async function refreshActiveJobs() {
 	}
 }
 
-/**
- * Poll individual job progress
- */
 async function pollJobProgress() {
 	for (const job of activeJobs) {
 		try {
@@ -145,9 +114,6 @@ async function pollJobProgress() {
 	}
 }
 
-/**
- * Update job progress in UI
- */
 function updateJobProgress(filename, progress) {
 	const jobElement = document.querySelector(`[data-filename="${filename}"]`)
 	if (!jobElement) return
@@ -159,8 +125,6 @@ function updateJobProgress(filename, progress) {
 	if (progressBar) progressBar.style.width = `${progress.progress || 0}%`
 	if (progressText) progressText.textContent = `${progress.progress || 0}%`
 	if (statusText) statusText.textContent = progress.status || 'Processing'
-	
-	// Update stats if available
 	const stats = jobElement.querySelector('.job-stats')
 	if (stats && progress.speed) {
 		stats.innerHTML = `
@@ -171,9 +135,6 @@ function updateJobProgress(filename, progress) {
 	}
 }
 
-/**
- * Render active jobs list
- */
 function renderActiveJobs(jobs) {
 	const container = document.getElementById('active-jobs-list')
 	if (!container) return
@@ -204,9 +165,6 @@ function renderActiveJobs(jobs) {
 	`).join('')
 }
 
-/**
- * Refresh auto-generation directories
- */
 async function refreshAutoGenDirs() {
 	try {
 		const response = await fetch(OC.generateUrl('/apps/hyperviewer/api/auto-generation'), {
@@ -228,9 +186,6 @@ async function refreshAutoGenDirs() {
 	}
 }
 
-/**
- * Render auto-generation directories
- */
 function renderAutoGenDirs(dirs) {
 	const container = document.getElementById('autogen-dirs-list')
 	if (!container) return
@@ -262,9 +217,6 @@ function renderAutoGenDirs(dirs) {
 	`).join('')
 }
 
-/**
- * Remove auto-generation directory
- */
 async function removeAutoGeneration(configKey) {
 	if (!confirm('Remove this auto-generation directory?')) return
 	
@@ -289,9 +241,6 @@ async function removeAutoGeneration(configKey) {
 	}
 }
 
-/**
- * Add cache location
- */
 function addCacheLocation() {
 	const list = document.getElementById('cache-location-list')
 	const newIndex = list.children.length
@@ -309,19 +258,13 @@ function addCacheLocation() {
 	`
 
 	list.appendChild(newItem)
-	console.log('✅ Added new cache location input')
 }
 
-/**
- * Save cache settings
- */
 function saveCacheSettings() {
 	const inputs = document.querySelectorAll('.cache-location-input')
 	const locations = Array.from(inputs)
 		.map(input => input.value.trim())
 		.filter(value => value.length > 0)
-
-	console.log('📤 Saving cache locations:', locations)
 
 	fetch(OC.generateUrl('/apps/hyperviewer/settings/cache-locations'), {
 		method: 'POST',
@@ -332,17 +275,14 @@ function saveCacheSettings() {
 		body: JSON.stringify({ locations }),
 	})
 		.then(response => response.json())
-		.then(data => {
-			console.log('✅ Cache settings saved successfully:', data)
+		.then(() => {
 			OC.Notification.showTemporary('Cache locations saved successfully')
 		})
-		.catch(error => {
-			console.error('❌ Error saving cache settings:', error)
+		.catch(() => {
 			OC.Notification.showTemporary('Error saving cache locations', { type: 'error' })
 		})
 }
 
-// Cleanup on page unload
 window.addEventListener('beforeunload', () => {
 	if (refreshInterval) clearInterval(refreshInterval)
 	if (jobPollingInterval) clearInterval(jobPollingInterval)

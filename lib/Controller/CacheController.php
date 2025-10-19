@@ -12,7 +12,6 @@ use OCP\Files\IRootFolder;
 use OCP\IUserSession;
 use OCP\BackgroundJob\IJobList;
 use OCP\IConfig;
-use Psr\Log\LoggerInterface;
 use OCA\HyperViewer\BackgroundJob\HlsCacheGenerationJob;
 
 class CacheController extends Controller {
@@ -21,7 +20,6 @@ class CacheController extends Controller {
 	private IUserSession $userSession;
 	private IJobList $jobList;
 	private IConfig $config;
-	private LoggerInterface $logger;
 
 	public function __construct(
 		string $appName,
@@ -29,15 +27,13 @@ class CacheController extends Controller {
 		IRootFolder $rootFolder,
 		IUserSession $userSession,
 		IJobList $jobList,
-		IConfig $config,
-		LoggerInterface $logger
+		IConfig $config
 	) {
 		parent::__construct($appName, $request);
 		$this->rootFolder = $rootFolder;
 		$this->userSession = $userSession;
 		$this->jobList = $jobList;
 		$this->config = $config;
-		$this->logger = $logger;
 	}
 
 	/**
@@ -57,7 +53,6 @@ class CacheController extends Controller {
 		$overwriteExisting = $this->request->getParam('overwriteExisting', false);
 		$resolutions = $this->request->getParam('resolutions', ['720p', '480p', '240p']);
 
-		$this->logger->info('HLS cache generation requested', [
 			'user' => $user->getUID(),
 			'files' => count($files),
 			'cacheLocation' => $cacheLocation,
@@ -79,7 +74,6 @@ class CacheController extends Controller {
 				'resolutions' => $resolutions
 			];
 			
-			$this->logger->info('Adding HLS cache generation job to queue', [
 				'jobId' => $jobId,
 				'jobData' => $jobData
 			]);
@@ -150,7 +144,6 @@ class CacheController extends Controller {
 			]);
 
 		} catch (\Exception $e) {
-			$this->logger->error('Failed to get progress', [
 				'cachePath' => $cachePath,
 				'error' => $e->getMessage()
 			]);
@@ -307,10 +300,8 @@ class CacheController extends Controller {
 			try {
 				// Check for adaptive streaming master playlist first, fallback to single playlist
 				if ($userFolder->nodeExists($cachePath . '/master.m3u8')) {
-					$this->logger->debug('Found adaptive HLS cache', ['path' => $cachePath]);
 					return $cachePath;
 				} elseif ($userFolder->nodeExists($cachePath . '/playlist.m3u8')) {
-					$this->logger->debug('Found legacy HLS cache', ['path' => $cachePath]);
 					return $cachePath;
 				}
 			} catch (\Exception $e) {
@@ -342,7 +333,6 @@ class CacheController extends Controller {
 			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 			$videoFiles = $this->scanDirectoryForVideos($userFolder, $directory);
 
-			$this->logger->info('Video discovery completed', [
 				'directory' => $directory,
 				'filesFound' => count($videoFiles)
 			]);
@@ -354,7 +344,6 @@ class CacheController extends Controller {
 			]);
 
 		} catch (\Exception $e) {
-			$this->logger->error('Video discovery failed', [
 				'directory' => $directory,
 				'error' => $e->getMessage()
 			]);
@@ -397,7 +386,6 @@ class CacheController extends Controller {
 			$configKey = 'auto_gen_' . md5($user->getUID() . '_' . $directory);
 			\OC::$server->getConfig()->setAppValue('hyper_viewer', $configKey, json_encode($autoGenSettings));
 
-			$this->logger->info('Directory registered for auto-generation', [
 				'userId' => $user->getUID(),
 				'directory' => $directory,
 				'options' => $options
@@ -410,7 +398,6 @@ class CacheController extends Controller {
 			]);
 
 		} catch (\Exception $e) {
-			$this->logger->error('Auto-generation registration failed', [
 				'directory' => $directory,
 				'error' => $e->getMessage()
 			]);
@@ -438,7 +425,6 @@ class CacheController extends Controller {
 			$this->scanFolderRecursively($directory, $directoryPath, $supportedMimes, $videoFiles);
 
 		} catch (\Exception $e) {
-			$this->logger->error('Directory scanning failed', [
 				'directory' => $directoryPath,
 				'error' => $e->getMessage()
 			]);
@@ -498,7 +484,6 @@ class CacheController extends Controller {
 			// Construct the full path to the HLS file
 			$fullPath = $decodedCachePath . '/' . $decodedFilename;
 			
-			$this->logger->debug('Serving HLS file', [
 				'cachePath' => $decodedCachePath,
 				'filename' => $decodedFilename,
 				'fullPath' => $fullPath
@@ -506,7 +491,6 @@ class CacheController extends Controller {
 
 			// Check if the file exists
 			if (!$userFolder->nodeExists($fullPath)) {
-				$this->logger->warning('HLS file not found', ['path' => $fullPath]);
 				return new Response('File not found', 404);
 			}
 
@@ -552,7 +536,6 @@ class CacheController extends Controller {
 			return $response;
 
 		} catch (\Exception $e) {
-			$this->logger->error('Error serving HLS file', [
 				'error' => $e->getMessage(),
 				'cachePath' => $cachePath,
 				'filename' => $filename
@@ -594,7 +577,6 @@ class CacheController extends Controller {
 			return new JSONResponse(['jobs' => $activeJobs]);
 
 		} catch (\Exception $e) {
-			$this->logger->error('Error getting active jobs', ['error' => $e->getMessage()]);
 			return new JSONResponse(['error' => 'Failed to get active jobs'], 500);
 		}
 	}
@@ -691,7 +673,6 @@ class CacheController extends Controller {
 			return new JSONResponse($debugInfo, 404);
 
 		} catch (\Exception $e) {
-			$this->logger->error('Error getting job progress', ['error' => $e->getMessage(), 'filename' => $filename]);
 			return new JSONResponse(['error' => 'Failed to get job progress'], 500);
 		}
 	}
@@ -734,7 +715,6 @@ class CacheController extends Controller {
 			return new JSONResponse(['autoGenDirs' => $autoGenDirs]);
 
 		} catch (\Exception $e) {
-			$this->logger->error('Error getting auto-generation settings', ['error' => $e->getMessage()]);
 			return new JSONResponse(['error' => 'Failed to get settings'], 500);
 		}
 	}
@@ -781,7 +761,6 @@ class CacheController extends Controller {
 			return new JSONResponse(['success' => true, 'settings' => $settings]);
 
 		} catch (\Exception $e) {
-			$this->logger->error('Error updating auto-generation setting', ['error' => $e->getMessage()]);
 			return new JSONResponse(['error' => 'Failed to update auto-generation setting'], 500);
 		}
 	}
@@ -812,7 +791,6 @@ class CacheController extends Controller {
 			// Remove the configuration
 			$this->config->deleteAppValue('hyper_viewer', $configKey);
 
-			$this->logger->info('Auto-generation removed', [
 				'configKey' => $configKey,
 				'directory' => $settings['directory'] ?? 'unknown',
 				'userId' => $user->getUID()
@@ -821,7 +799,6 @@ class CacheController extends Controller {
 			return new JSONResponse(['success' => true]);
 
 		} catch (\Exception $e) {
-			$this->logger->error('Error removing auto-generation', [
 				'error' => $e->getMessage(),
 				'configKey' => $configKey
 			]);
@@ -892,7 +869,6 @@ class CacheController extends Controller {
 			return new JSONResponse(['stats' => $stats]);
 
 		} catch (\Exception $e) {
-			$this->logger->error('Error getting job statistics', ['error' => $e->getMessage()]);
 			return new JSONResponse(['error' => 'Failed to get statistics'], 500);
 		}
 	}
@@ -985,7 +961,6 @@ class CacheController extends Controller {
 			}
 			
 			// Debug logging to see what we're getting
-			$this->logger->debug('Cache size calculation', [
 				'folder' => $jobFolder->getName(),
 				'path' => $folderPath ?? 'virtual',
 				'size' => $size,
@@ -995,7 +970,6 @@ class CacheController extends Controller {
 			return $this->formatBytes($size);
 			
 		} catch (\Exception $e) {
-			$this->logger->error('Error calculating cache size', [
 				'folder' => $jobFolder->getName() ?? 'unknown',
 				'error' => $e->getMessage()
 			]);
