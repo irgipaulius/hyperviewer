@@ -28,14 +28,12 @@ return [
 		['name' => 'cache#generateCache', 'url' => '/cache/generate', 'verb' => 'POST'],
 		['name' => 'cache#checkCache', 'url' => '/cache/check', 'verb' => 'POST'],
 		['name' => 'cache#batchCheckCache', 'url' => '/cache/batch-check', 'verb' => 'POST'],
+		['name' => 'cache#getActiveJobs', 'url' => '/api/jobs/active', 'verb' => 'GET'],
 		['name' => 'cache#getProgress', 'url' => '/cache/progress/{cachePath}', 'verb' => 'GET', 'requirements' => ['cachePath' => '.+']],
-		['name' => 'cache#getActiveJobs', 'url' => '/cache/progress/all', 'verb' => 'GET'],
 		['name' => 'cache#discoverVideos', 'url' => '/cache/discover-videos', 'verb' => 'POST'],
 		['name' => 'cache#registerAutoGeneration', 'url' => '/cache/register-auto-generation', 'verb' => 'POST'],
 		['name' => 'cache#getAutoGenerationSettings', 'url' => '/api/auto-generation', 'verb' => 'GET'],
 		['name' => 'cache#removeAutoGeneration', 'url' => '/api/auto-generation/{configKey}', 'verb' => 'DELETE'],
 		['name' => 'cache#serveHlsFile', 'url' => '/hls/{cachePath}/{filename}', 'verb' => 'GET', 'requirements' => ['cachePath' => '.+', 'filename' => '.+']],
-		['name' => 'transcode#proxyTranscode', 'url' => '/api/proxy-transcode', 'verb' => 'GET'],
-		['name' => 'transcode#proxyStream', 'url' => '/api/proxy-stream', 'verb' => 'GET'],
 	]
 ];

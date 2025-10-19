@@ -71,7 +71,7 @@ async function refreshDashboardData() {
 
 async function refreshActiveJobs() {
 	try {
-		const response = await fetch(OC.generateUrl('/apps/hyperviewer/cache/progress/all'), {
+		const response = await fetch(OC.generateUrl('/apps/hyperviewer/api/jobs/active'), {
 			headers: { requesttoken: OC.requestToken }
 		})
 		

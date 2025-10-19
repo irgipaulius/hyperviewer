@@ -9,8 +9,6 @@ use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\Util;
-use OCP\AppFramework\Http\Events\AddContentSecurityPolicyEvent;
-use OCA\HyperViewer\Listener\CspListener;
 use OCA\HyperViewer\BackgroundJob\AutoHlsGenerationJob;
 
 class Application extends App implements IBootstrap {
@@ -21,12 +19,6 @@ class Application extends App implements IBootstrap {
 	}
 
 	public function register(IRegistrationContext $context): void {
-		// Hook CSP into pages rendered by other apps (Files/Viewer)
-		$context->registerEventListener(AddContentSecurityPolicyEvent::class, CspListener::class);
-		
-		// Settings are registered via info.xml for better compatibility
-		
-		// Register auto-generation cron job
 		$context->registerService('AutoHlsGenerationJob', function() {
 			return \OC::$server->get(AutoHlsGenerationJob::class);
 		});
