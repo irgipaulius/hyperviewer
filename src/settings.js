@@ -41,6 +41,9 @@ document.addEventListener('DOMContentLoaded', function() {
 			e.target.closest('.cache-location-item').remove()
 		}
 	})
+
+	// Load active jobs
+	loadActiveJobs()
 })
 
 /**
@@ -95,4 +98,88 @@ function saveCacheSettings() {
 			console.error('❌ Error saving cache settings:', error)
 			OC.Notification.showTemporary('Error saving cache locations', { type: 'error' })
 		})
+}
+
+/**
+ * Load and display active FFmpeg jobs
+ */
+function loadActiveJobs() {
+	const container = document.getElementById('active-jobs-container')
+	if (!container) {
+		console.log('⚠️ Active jobs container not found')
+		return
+	}
+
+	console.log('📊 Loading active jobs...')
+
+	fetch(OC.generateUrl('/apps/hyperviewer/api/jobs/active'), {
+		method: 'GET',
+		headers: {
+			requesttoken: OC.requestToken,
+		},
+	})
+		.then(response => response.json())
+		.then(data => {
+			console.log('✅ Active jobs loaded:', data)
+			displayActiveJobs(data.jobs || [])
+		})
+		.catch(error => {
+			console.error('❌ Error loading active jobs:', error)
+			container.innerHTML = '<p class="error">Failed to load active jobs</p>'
+		})
+}
+
+/**
+ * Display active jobs in a table
+ */
+function displayActiveJobs(jobs) {
+	const container = document.getElementById('active-jobs-container')
+	
+	if (jobs.length === 0) {
+		container.innerHTML = '<p class="empty">No active jobs</p>'
+		return
+	}
+
+	const table = document.createElement('table')
+	table.className = 'active-jobs-table'
+	
+	table.innerHTML = `
+		<thead>
+			<tr>
+				<th>Filename</th>
+				<th>Status</th>
+				<th>Progress</th>
+				<th>Speed</th>
+				<th>Time</th>
+			</tr>
+		</thead>
+		<tbody>
+			${jobs.map(job => `
+				<tr>
+					<td class="filename">${escapeHtml(job.filename || 'Unknown')}</td>
+					<td class="status">${escapeHtml(job.status || 'processing')}</td>
+					<td class="progress">
+						<div class="progress-bar">
+							<div class="progress-fill" style="width: ${job.progress || 0}%"></div>
+						</div>
+						<span class="progress-text">${job.progress || 0}%</span>
+					</td>
+					<td class="speed">${escapeHtml(job.speed || '0x')}</td>
+					<td class="time">${escapeHtml(job.time || '00:00:00')}</td>
+				</tr>
+			`).join('')}
+		</tbody>
+	`
+	
+	container.innerHTML = ''
+	container.appendChild(table)
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text) {
+	const div = document.createElement('div')
+	div.textContent = text
+	return div.innerHTML
 }

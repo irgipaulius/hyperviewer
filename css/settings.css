@@ -77,3 +77,82 @@
 	border-radius: 3px;
 	font-family: monospace;
 }
+
+/* Active Jobs Section */
+.active-jobs-section {
+	margin-top: 30px;
+}
+
+.active-jobs-section h3 {
+	margin-bottom: 10px;
+}
+
+#active-jobs-container {
+	margin-top: 15px;
+}
+
+#active-jobs-container .loading,
+#active-jobs-container .empty,
+#active-jobs-container .error {
+	color: var(--color-text-lighter);
+	font-style: italic;
+}
+
+#active-jobs-container .error {
+	color: var(--color-error);
+}
+
+.active-jobs-table {
+	width: 100%;
+	border-collapse: collapse;
+	margin-top: 10px;
+}
+
+.active-jobs-table th,
+.active-jobs-table td {
+	padding: 10px;
+	text-align: left;
+	border-bottom: 1px solid var(--color-border);
+}
+
+.active-jobs-table th {
+	background: var(--color-background-hover);
+	font-weight: 600;
+}
+
+.active-jobs-table .filename {
+	max-width: 300px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.active-jobs-table .status {
+	text-transform: capitalize;
+}
+
+.active-jobs-table .progress {
+	min-width: 150px;
+}
+
+.progress-bar {
+	width: 100px;
+	height: 8px;
+	background: var(--color-background-dark);
+	border-radius: 4px;
+	overflow: hidden;
+	display: inline-block;
+	vertical-align: middle;
+	margin-right: 8px;
+}
+
+.progress-fill {
+	height: 100%;
+	background: var(--color-primary);
+	transition: width 0.3s ease;
+}
+
+.progress-text {
+	font-size: 12px;
+	color: var(--color-text-lighter);
+}

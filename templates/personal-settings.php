@@ -35,4 +35,13 @@ style('hyper_viewer', 'settings');
 			<li><code>/mnt/cache/.cached_hls/</code> - <?php p($l->t('Absolute path (e.g., mounted storage)')); ?></li>
 		</ul>
 	</div>
+
+	<div class="active-jobs-section">
+		<h3><?php p($l->t('Active FFmpeg Jobs')); ?></h3>
+		<p><?php p($l->t('Currently processing HLS cache generation jobs')); ?></p>
+		
+		<div id="active-jobs-container">
+			<p class="loading"><?php p($l->t('Loading...')); ?></p>
+		</div>
+	</div>
 </div>
