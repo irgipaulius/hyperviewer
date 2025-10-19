@@ -3,7 +3,7 @@ script('hyper_viewer', 'settings');
 style('hyper_viewer', 'settings');
 ?>
 
-<div class="section" id="hyper_viewer_settings">
+<div class="section" id="hyperviewer_settings">
 	<h2><?php p($l->t('Hyper Viewer')); ?></h2>
 	<p class="settings-hint"><?php p($l->t('Configure HLS cache locations for video streaming')); ?></p>
 	

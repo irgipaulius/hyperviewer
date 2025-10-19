@@ -1,14 +1,16 @@
 /**
  * Settings JavaScript for Hyper Viewer
- * Handles cache location configuration UI
+ * Handles cache location configuration UI and active jobs monitoring
  */
 
 console.log('🎬 Hyper Viewer settings script loaded!')
 
+let refreshInterval = null
+
 document.addEventListener('DOMContentLoaded', function() {
 	console.log('🔧 Hyper Viewer settings DOM ready')
 
-	const settingsSection = document.getElementById('hyper_viewer_settings')
+	const settingsSection = document.getElementById('hyperviewer_settings')
 	if (!settingsSection) {
 		console.log('⚠️ Hyper Viewer settings section not found')
 		return
@@ -42,12 +44,14 @@ document.addEventListener('DOMContentLoaded', function() {
 		}
 	})
 
-	// Load active jobs with a small delay to ensure DOM is ready
-	console.log('⏰ Scheduling active jobs load...')
-	setTimeout(() => {
-		console.log('🚀 Calling loadActiveJobs()...')
+	// Load active jobs
+	console.log('📊 Loading active jobs...')
+	loadActiveJobs()
+	
+	// Set up auto-refresh every 10 seconds
+	refreshInterval = setInterval(() => {
 		loadActiveJobs()
-	}, 100)
+	}, 10000)
 })
 
 /**
@@ -70,11 +74,11 @@ function addCacheLocation() {
 	`
 
 	list.appendChild(newItem)
-	console.log('✅ Added new cache location input')
+	console.log(' Added new cache location input')
 }
 
 /**
- *
+ * Save cache settings
  */
 function saveCacheSettings() {
 	const inputs = document.querySelectorAll('.cache-location-input')
@@ -82,7 +86,7 @@ function saveCacheSettings() {
 		.map(input => input.value.trim())
 		.filter(value => value.length > 0)
 
-	console.log('📤 Saving cache locations:', locations)
+	console.log(' Saving cache locations:', locations)
 
 	// Make AJAX request to save settings
 	fetch(OC.generateUrl('/apps/hyperviewer/settings/cache-locations'), {
@@ -95,11 +99,11 @@ function saveCacheSettings() {
 	})
 		.then(response => response.json())
 		.then(data => {
-			console.log('✅ Cache settings saved successfully:', data)
+			console.log(' Cache settings saved successfully:', data)
 			OC.Notification.showTemporary('Cache locations saved successfully')
 		})
 		.catch(error => {
-			console.error('❌ Error saving cache settings:', error)
+			console.error(' Error saving cache settings:', error)
 			OC.Notification.showTemporary('Error saving cache locations', { type: 'error' })
 		})
 }
@@ -110,11 +114,11 @@ function saveCacheSettings() {
 function loadActiveJobs() {
 	const container = document.getElementById('active-jobs-container')
 	if (!container) {
-		console.log('⚠️ Active jobs container not found')
+		console.log(' Active jobs container not found')
 		return
 	}
 
-	console.log('📊 Loading active jobs...')
+	console.log(' Fetching active jobs...')
 
 	fetch(OC.generateUrl('/apps/hyperviewer/api/jobs/active'), {
 		method: 'GET',
@@ -122,14 +126,19 @@ function loadActiveJobs() {
 			requesttoken: OC.requestToken,
 		},
 	})
-		.then(response => response.json())
+		.then(response => {
+			if (!response.ok) {
+				throw new Error('HTTP ' + response.status)
+			}
+			return response.json()
+		})
 		.then(data => {
-			console.log('✅ Active jobs loaded:', data)
+			console.log(' Active jobs loaded:', data)
 			displayActiveJobs(data.jobs || [])
 		})
 		.catch(error => {
-			console.error('❌ Error loading active jobs:', error)
-			container.innerHTML = '<p class="error">Failed to load active jobs</p>'
+			console.error(' Error loading active jobs:', error)
+			container.innerHTML = '<p class="error">Failed to load active jobs: ' + escapeHtml(error.message) + '</p>'
 		})
 }
 
@@ -143,40 +152,35 @@ function displayActiveJobs(jobs) {
 		container.innerHTML = '<p class="empty">No active jobs</p>'
 		return
 	}
-
-	const table = document.createElement('table')
-	table.className = 'active-jobs-table'
 	
-	table.innerHTML = `
-		<thead>
-			<tr>
-				<th>Filename</th>
-				<th>Status</th>
-				<th>Progress</th>
-				<th>Speed</th>
-				<th>Time</th>
-			</tr>
-		</thead>
-		<tbody>
-			${jobs.map(job => `
-				<tr>
-					<td class="filename">${escapeHtml(job.filename || 'Unknown')}</td>
-					<td class="status">${escapeHtml(job.status || 'processing')}</td>
-					<td class="progress">
-						<div class="progress-bar">
-							<div class="progress-fill" style="width: ${job.progress || 0}%"></div>
-						</div>
-						<span class="progress-text">${job.progress || 0}%</span>
-					</td>
-					<td class="speed">${escapeHtml(job.speed || '0x')}</td>
-					<td class="time">${escapeHtml(job.time || '00:00:00')}</td>
-				</tr>
-			`).join('')}
-		</tbody>
-	`
+	let html = '<table class="active-jobs-table">' +
+		'<thead>' +
+		'<tr>' +
+		'<th>Filename</th>' +
+		'<th>Status</th>' +
+		'<th>Progress</th>' +
+		'<th>Speed</th>' +
+		'<th>Time</th>' +
+		'</tr>' +
+		'</thead>' +
+		'<tbody>'
 	
-	container.innerHTML = ''
-	container.appendChild(table)
+	jobs.forEach(job => {
+		const progress = job.progress || 0
+		html += '<tr>' +
+			'<td class="filename" title="' + escapeHtml(job.filename) + '">' + escapeHtml(job.filename) + '</td>' +
+			'<td class="status">' + escapeHtml(job.status) + '</td>' +
+			'<td class="progress">' +
+			'<div class="progress-bar"><div class="progress-fill" style="width: ' + progress + '%"></div></div>' +
+			'<span class="progress-text">' + progress + '%</span>' +
+			'</td>' +
+			'<td>' + escapeHtml(job.speed || 'N/A') + '</td>' +
+			'<td>' + escapeHtml(job.time || 'N/A') + '</td>' +
+			'</tr>'
+	})
+	
+	html += '</tbody></table>'
+	container.innerHTML = html
 }
 
 /**
