@@ -1,0 +1,5 @@
+{
+	"name": "irgipaulius/hyperviewer",
+	"description": "Professional video toolkit for Nextcloud with HLS streaming and server-side cropping",
+	"license": "AGPL-3.0-or-later"
+}

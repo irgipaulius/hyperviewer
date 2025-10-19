@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<info xmlns:xsi= "http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+    <id>hyperviewer</id>
+    <name>HyperViewer</name>
+    <summary>Professional video toolkit with HLS streaming, m3u8 generation, and server-side cropping</summary>
+    <description><![CDATA[Professional video processing toolkit for Nextcloud. Automatically generates HLS streams with m3u8 playlists, enables server-side video cropping, and provides adaptive streaming playback. Perfect for videographers managing large footage libraries without downloading terabytes of raw files.]]></description>
+    <version>1.0.0</version>
+    <licence>agpl</licence>
+    <author mail="irgipaulius@gmail.com" >Paulius Jacinkevičius</author>
+    <namespace>HyperViewer</namespace>
+    <category>tools</category>
+    <bugs>https://github.com/irgipaulius/hyperviewer/issues</bugs>
+    <dependencies>
+        <nextcloud min-version="19" max-version="30"/>
+    </dependencies>
+    <types>
+        <type>video/quicktime</type>
+        <type>video/mp4</type>
+    </types>
+    <settings>
+        <personal>OCA\HyperViewer\Settings\PersonalSettings</personal>
+        <personal-section>OCA\HyperViewer\Settings\PersonalSection</personal-section>
+    </settings>
+</info>
