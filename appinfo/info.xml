@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <info xmlns:xsi= "http://www.w3.org/2001/XMLSchema-instance"
       xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
-    <id>hyperviewer</id>
+    <id>hyper_viewer</id>
     <name>HyperViewer</name>
     <summary>Professional video toolkit with HLS streaming, m3u8 generation, and server-side cropping</summary>
     <description><![CDATA[Professional video processing toolkit for Nextcloud. Automatically generates HLS streams with m3u8 playlists, enables server-side video cropping, and provides adaptive streaming playback. Perfect for videographers managing large footage libraries without downloading terabytes of raw files.]]></description>
