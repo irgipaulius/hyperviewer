@@ -42,8 +42,12 @@ document.addEventListener('DOMContentLoaded', function() {
 		}
 	})
 
-	// Load active jobs
-	loadActiveJobs()
+	// Load active jobs with a small delay to ensure DOM is ready
+	console.log('⏰ Scheduling active jobs load...')
+	setTimeout(() => {
+		console.log('🚀 Calling loadActiveJobs()...')
+		loadActiveJobs()
+	}, 100)
 })
 
 /**
