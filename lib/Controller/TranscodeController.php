@@ -57,7 +57,7 @@ class TranscodeController extends Controller {
                 $this->tempDir = $tempFolder->getStorage()->getLocalFile($tempFolder->getInternalPath());
             } catch (\Exception $e) {
                 // Fallback to system temp directory
-                $this->tempDir = sys_get_temp_dir() . '/hyper_viewer_' . $user->getUID();
+                $this->tempDir = sys_get_temp_dir() . '/hyperviewer_' . $user->getUID();
                 if (!is_dir($this->tempDir)) {
                     mkdir($this->tempDir, 0755, true);
                 }
@@ -94,7 +94,7 @@ class TranscodeController extends Controller {
             // Check if already transcoded (unless force is true)
             if (!$force && file_exists($tempFile)) {
                 return new JSONResponse([
-                    'url' => '/apps/hyper_viewer/api/proxy-stream?id=' . $fileId,
+                    'url' => '/apps/hyperviewer/api/proxy-stream?id=' . $fileId,
                     'debug' => [
                         'fileSize' => filesize($tempFile),
                         'tempFile' => basename($tempFile),
@@ -131,7 +131,7 @@ class TranscodeController extends Controller {
             }
 
             return new JSONResponse([
-                'url' => '/apps/hyper_viewer/api/proxy-stream?id=' . $fileId,
+                'url' => '/apps/hyperviewer/api/proxy-stream?id=' . $fileId,
                 'debug' => [
                     'backgroundTranscode' => true,
                     'tempFile' => basename($tempFile),

@@ -22,7 +22,7 @@ class PageController extends Controller {
 	 * @NoCSRFRequired
 	 */
 	public function index(): TemplateResponse {
-		Util::addScript($this->appName, 'hyper_viewer-main');
+		Util::addScript($this->appName, 'hyperviewer-main');
 		Util::addStyle($this->appName, 'icons');
 		
 		// Load file picker assets for export functionality

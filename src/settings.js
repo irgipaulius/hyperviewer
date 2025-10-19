@@ -8,7 +8,7 @@ console.log('🎬 Hyper Viewer settings script loaded!')
 document.addEventListener('DOMContentLoaded', function() {
 	console.log('🔧 Hyper Viewer settings DOM ready')
 
-	const settingsSection = document.getElementById('hyper_viewer_settings')
+	const settingsSection = document.getElementById('hyperviewer_settings')
 	if (!settingsSection) {
 		console.log('⚠️ Hyper Viewer settings section not found')
 		return
@@ -78,7 +78,7 @@ function saveCacheSettings() {
 	console.log('📤 Saving cache locations:', locations)
 
 	// Make AJAX request to save settings
-	fetch(OC.generateUrl('/apps/hyper_viewer/settings/cache-locations'), {
+	fetch(OC.generateUrl('/apps/hyperviewer/settings/cache-locations'), {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',

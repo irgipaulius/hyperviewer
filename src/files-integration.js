@@ -32,7 +32,7 @@ function initializeFilesIntegration() {
 	// Register "Generate HLS Cache" action for MOV files
 	OCA.Files.fileActions.registerAction({
 		name: "generateHlsCacheMov",
-		displayName: t("hyper_viewer", "Generate HLS Cache"),
+		displayName: t("hyperviewer", "Generate HLS Cache"),
 		mime: "video/quicktime",
 		permissions: OC.PERMISSION_UPDATE,
 		iconClass: "icon-category-multimedia",
@@ -49,7 +49,7 @@ function initializeFilesIntegration() {
 	// Override default video player for MOV files - auto-detect HLS cache
 	OCA.Files.fileActions.registerAction({
 		name: "playVideoSmart",
-		displayName: t("hyper_viewer", "Play"),
+		displayName: t("hyperviewer", "Play"),
 		mime: "video/quicktime",
 		permissions: OC.PERMISSION_READ,
 		iconClass: "icon-play",
@@ -68,7 +68,7 @@ function initializeFilesIntegration() {
 	// Register "Generate HLS Cache" action for MP4 files
 	OCA.Files.fileActions.registerAction({
 		name: "generateHlsCacheMp4",
-		displayName: t("hyper_viewer", "Generate HLS Cache"),
+		displayName: t("hyperviewer", "Generate HLS Cache"),
 		mime: "video/mp4",
 		permissions: OC.PERMISSION_UPDATE,
 		iconClass: "icon-category-multimedia",
@@ -85,7 +85,7 @@ function initializeFilesIntegration() {
 	// Override default video player for MP4 files - auto-detect HLS cache
 	OCA.Files.fileActions.registerAction({
 		name: "playVideoSmartMp4",
-		displayName: t("hyper_viewer", "Play"),
+		displayName: t("hyperviewer", "Play"),
 		mime: "video/mp4",
 		permissions: OC.PERMISSION_READ,
 		iconClass: "icon-play",
@@ -104,7 +104,7 @@ function initializeFilesIntegration() {
 	// Register "Play Progressive (480p)" action for MOV files
 	OCA.Files.fileActions.registerAction({
 		name: "playProgressiveMov",
-		displayName: t("hyper_viewer", "Play Progressive (480p)"),
+		displayName: t("hyperviewer", "Play Progressive (480p)"),
 		mime: "video/quicktime",
 		permissions: OC.PERMISSION_READ,
 		iconClass: "icon-play",
@@ -123,7 +123,7 @@ function initializeFilesIntegration() {
 	// Register "Play Progressive (480p)" action for MP4 files
 	OCA.Files.fileActions.registerAction({
 		name: "playProgressiveMp4",
-		displayName: t("hyper_viewer", "Play Progressive (480p)"),
+		displayName: t("hyperviewer", "Play Progressive (480p)"),
 		mime: "video/mp4",
 		permissions: OC.PERMISSION_READ,
 		iconClass: "icon-play",
@@ -142,7 +142,7 @@ function initializeFilesIntegration() {
 	// Register "Generate HLS Cache" action for directories
 	OCA.Files.fileActions.registerAction({
 		name: "generateHlsCacheDirectory",
-		displayName: t("hyper_viewer", "Generate HLS Cache (Directory)"),
+		displayName: t("hyperviewer", "Generate HLS Cache (Directory)"),
 		mime: "httpd/unix-directory",
 		permissions: OC.PERMISSION_UPDATE,
 		iconClass: "icon-category-multimedia",
@@ -268,7 +268,7 @@ function addHlsBadgesToFileList() {
 		try {
 			// Batch check all videos at once (much faster!)
 			const response = await fetch(
-				OC.generateUrl('/apps/hyper_viewer/cache/batch-check'),
+				OC.generateUrl('/apps/hyperviewer/cache/batch-check'),
 				{
 					method: 'POST',
 					headers: {
@@ -1140,7 +1140,7 @@ async function openDirectoryCacheGenerationDialog(directoryName, context) {
 async function discoverVideoFilesInDirectory(directoryPath) {
 	try {
 		const response = await fetch(
-			OC.generateUrl("/apps/hyper_viewer/cache/discover-videos"),
+			OC.generateUrl("/apps/hyperviewer/cache/discover-videos"),
 			{
 				method: "POST",
 				headers: {
@@ -1261,7 +1261,7 @@ async function startDirectoryCacheGeneration(videoFiles, directoryPath) {
 async function registerDirectoryForAutoGeneration(directoryPath, options) {
 	try {
 		const response = await fetch(
-			OC.generateUrl("/apps/hyper_viewer/cache/register-auto-generation"),
+			OC.generateUrl("/apps/hyperviewer/cache/register-auto-generation"),
 			{
 				method: "POST",
 				headers: {
@@ -1366,7 +1366,7 @@ async function startCacheGeneration(files) {
 
 		// Send to backend for processing
 		const response = await fetch(
-			OC.generateUrl("/apps/hyper_viewer/cache/generate"),
+			OC.generateUrl("/apps/hyperviewer/cache/generate"),
 			{
 				method: "POST",
 				headers: {
@@ -1753,7 +1753,7 @@ function startProgressPolling(filename, directory, modal) {
 
 			const encodedCachePath = encodeURIComponent(cachePath);
 			const progressUrl = OC.generateUrl(
-				`/apps/hyper_viewer/cache/progress/${encodedCachePath}`
+				`/apps/hyperviewer/cache/progress/${encodedCachePath}`
 			);
 			console.log(`🌐 Polling URL: ${progressUrl}`);
 
@@ -1893,7 +1893,7 @@ function updateProgressModal(modal, progress) {
 async function checkHlsCache(filename, directory) {
 	try {
 		const response = await fetch(
-			OC.generateUrl("/apps/hyper_viewer/cache/check"),
+			OC.generateUrl("/apps/hyperviewer/cache/check"),
 			{
 				method: "POST",
 				headers: {
@@ -2026,7 +2026,7 @@ async function playProgressive(filename, directory, context) {
 
 		// Call the proxy-transcode endpoint
 		const response = await fetch(
-			OC.generateUrl("/apps/hyper_viewer/api/proxy-transcode") +
+			OC.generateUrl("/apps/hyperviewer/api/proxy-transcode") +
 				`?path=${encodeURIComponent(filePath)}`,
 			{
 				method: "GET",
@@ -2917,10 +2917,10 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		// Build manifest URL
 		const encodedCachePath = encodeURIComponent(cachePath);
 		const masterUrl = `${OC.generateUrl(
-			"/apps/hyper_viewer/hls"
+			"/apps/hyperviewer/hls"
 		)}/${encodedCachePath}/master.m3u8`;
 		const playlistUrl = `${OC.generateUrl(
-			"/apps/hyper_viewer/hls"
+			"/apps/hyperviewer/hls"
 		)}/${encodedCachePath}/playlist.m3u8`;
 
 		// Try master.m3u8 first, fallback to playlist.m3u8
@@ -3247,7 +3247,7 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 
 			// Call the export API
 			const response = await fetch(
-				OC.generateUrl("/apps/hyper_viewer/api/export-clip"),
+				OC.generateUrl("/apps/hyperviewer/api/export-clip"),
 				{
 					method: "POST",
 					headers: {

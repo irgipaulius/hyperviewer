@@ -18,7 +18,7 @@ class PersonalSection implements IIconSection {
 	}
 
 	public function getID(): string {
-		return 'hyper_viewer';
+		return 'hyperviewer';
 	}
 
 	public function getName(): string {
@@ -30,6 +30,6 @@ class PersonalSection implements IIconSection {
 	}
 
 	public function getIcon(): string {
-		return $this->urlGenerator->imagePath('hyper_viewer', 'app.svg');
+		return $this->urlGenerator->imagePath('hyperviewer', 'app.svg');
 	}
 }

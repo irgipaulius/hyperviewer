@@ -395,7 +395,7 @@ class CacheController extends Controller {
 
 			// Use a simple key-value storage for now (could be moved to database later)
 			$configKey = 'auto_gen_' . md5($user->getUID() . '_' . $directory);
-			\OC::$server->getConfig()->setAppValue('hyper_viewer', $configKey, json_encode($autoGenSettings));
+			\OC::$server->getConfig()->setAppValue('hyperviewer', $configKey, json_encode($autoGenSettings));
 
 			$this->logger->info('Directory registered for auto-generation', [
 				'userId' => $user->getUID(),
@@ -709,11 +709,11 @@ class CacheController extends Controller {
 
 		try {
 			$autoGenDirs = [];
-			$allAppValues = $this->config->getAppKeys('hyper_viewer');
+			$allAppValues = $this->config->getAppKeys('hyperviewer');
 
 			foreach ($allAppValues as $key) {
 				if (strpos($key, 'auto_gen_') === 0) {
-					$settingsJson = $this->config->getAppValue('hyper_viewer', $key, '');
+					$settingsJson = $this->config->getAppValue('hyperviewer', $key, '');
 					if (!empty($settingsJson)) {
 						$settings = json_decode($settingsJson, true);
 						if ($settings && isset($settings['userId']) && $settings['userId'] === $user->getUID()) {
@@ -751,7 +751,7 @@ class CacheController extends Controller {
 		}
 
 		try {
-			$settingsJson = $this->config->getAppValue('hyper_viewer', $configKey, '');
+			$settingsJson = $this->config->getAppValue('hyperviewer', $configKey, '');
 			if (empty($settingsJson)) {
 				return new JSONResponse(['error' => 'Auto-generation setting not found'], 404);
 			}
@@ -776,7 +776,7 @@ class CacheController extends Controller {
 			}
 
 			// Save updated settings
-			$this->config->setAppValue('hyper_viewer', $configKey, json_encode($settings));
+			$this->config->setAppValue('hyperviewer', $configKey, json_encode($settings));
 
 			return new JSONResponse(['success' => true, 'settings' => $settings]);
 
@@ -799,7 +799,7 @@ class CacheController extends Controller {
 
 		try {
 			// Verify the config belongs to this user
-			$settingsJson = $this->config->getAppValue('hyper_viewer', $configKey, '');
+			$settingsJson = $this->config->getAppValue('hyperviewer', $configKey, '');
 			if (empty($settingsJson)) {
 				return new JSONResponse(['error' => 'Configuration not found'], 404);
 			}
@@ -810,7 +810,7 @@ class CacheController extends Controller {
 			}
 
 			// Remove the configuration
-			$this->config->deleteAppValue('hyper_viewer', $configKey);
+			$this->config->deleteAppValue('hyperviewer', $configKey);
 
 			$this->logger->info('Auto-generation removed', [
 				'configKey' => $configKey,
@@ -869,10 +869,10 @@ class CacheController extends Controller {
 			}
 
 			// Count auto-generation directories
-			$allAppValues = $this->config->getAppKeys('hyper_viewer');
+			$allAppValues = $this->config->getAppKeys('hyperviewer');
 			foreach ($allAppValues as $key) {
 				if (strpos($key, 'auto_gen_') === 0) {
-					$settingsJson = $this->config->getAppValue('hyper_viewer', $key, '');
+					$settingsJson = $this->config->getAppValue('hyperviewer', $key, '');
 					if (!empty($settingsJson)) {
 						$settings = json_decode($settingsJson, true);
 						if ($settings && isset($settings['userId']) && $settings['userId'] === $user->getUID() && ($settings['enabled'] ?? false)) {

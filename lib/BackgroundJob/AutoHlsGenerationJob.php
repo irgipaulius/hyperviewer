@@ -81,11 +81,11 @@ class AutoHlsGenerationJob extends TimedJob {
 	 */
 	private function getAutoGenerationDirectories(): array {
 		$autoGenDirs = [];
-		$allAppValues = $this->config->getAppKeys('hyper_viewer');
+		$allAppValues = $this->config->getAppKeys('hyperviewer');
 
 		foreach ($allAppValues as $key) {
 			if (strpos($key, 'auto_gen_') === 0) {
-				$settingsJson = $this->config->getAppValue('hyper_viewer', $key, '');
+				$settingsJson = $this->config->getAppValue('hyperviewer', $key, '');
 				if (!empty($settingsJson)) {
 					$settings = json_decode($settingsJson, true);
 					if ($settings && isset($settings['enabled']) && $settings['enabled']) {
@@ -274,13 +274,13 @@ class AutoHlsGenerationJob extends TimedJob {
 	 * Disable auto-generation for a directory (e.g., if directory no longer exists)
 	 */
 	private function disableAutoGeneration(string $configKey): void {
-		$settingsJson = $this->config->getAppValue('hyper_viewer', $configKey, '');
+		$settingsJson = $this->config->getAppValue('hyperviewer', $configKey, '');
 		if (!empty($settingsJson)) {
 			$settings = json_decode($settingsJson, true);
 			if ($settings) {
 				$settings['enabled'] = false;
 				$settings['disabledAt'] = time();
-				$this->config->setAppValue('hyper_viewer', $configKey, json_encode($settings));
+				$this->config->setAppValue('hyperviewer', $configKey, json_encode($settings));
 			}
 		}
 	}

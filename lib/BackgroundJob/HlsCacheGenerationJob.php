@@ -582,7 +582,7 @@ class HlsCacheGenerationJob extends QueuedJob {
 	private function sendCompletionNotification($user, string $filename, bool $success, string $error = ''): void {
 		try {
 			$notification = $this->notificationManager->createNotification();
-			$notification->setApp('hyper_viewer')
+			$notification->setApp('hyperviewer')
 				->setUser($user->getUID())
 				->setDateTime(new \DateTime())
 				->setObject('hls_cache', $filename)
