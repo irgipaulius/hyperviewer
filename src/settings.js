@@ -8,7 +8,7 @@ console.log('🎬 Hyper Viewer settings script loaded!')
 document.addEventListener('DOMContentLoaded', function() {
 	console.log('🔧 Hyper Viewer settings DOM ready')
 
-	const settingsSection = document.getElementById('hyperviewer_settings')
+	const settingsSection = document.getElementById('hyper_viewer_settings')
 	if (!settingsSection) {
 		console.log('⚠️ Hyper Viewer settings section not found')
 		return

@@ -8,8 +8,23 @@ import "shaka-player/dist/controls.css";
 
 console.log("🎬 Hyper Viewer Files integration loading...");
 
+// Only initialize if we're in the Files app
+function isInFilesApp() {
+	// Check if we're in the Files app by looking for Files-specific elements
+	return document.body.id === 'body-user' && 
+	       (window.location.pathname.includes('/apps/files') || 
+	        document.querySelector('#app-content-files') !== null ||
+	        document.querySelector('.files-filestable') !== null);
+}
+
 // Wait for Files app to be ready
 document.addEventListener("DOMContentLoaded", function() {
+	// Only initialize if we're in the Files app
+	if (!isInFilesApp()) {
+		console.log("⏭️ Not in Files app, skipping integration");
+		return;
+	}
+	
 	// Wait a bit more for Files app to fully initialize
 	setTimeout(initializeFilesIntegration, 1000);
 });
@@ -18,11 +33,8 @@ document.addEventListener("DOMContentLoaded", function() {
  * Initialize files integration
  */
 function initializeFilesIntegration() {
-	console.log("🔧 Initializing Files integration...");
-
 	// Check if we're in the Files app
 	if (!window.OCA || !window.OCA.Files || !window.OCA.Files.fileActions) {
-		console.log("⚠️ Files app not available, retrying in 2 seconds...");
 		setTimeout(initializeFilesIntegration, 2000);
 		return;
 	}
