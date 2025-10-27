@@ -1220,4 +1220,8 @@ class CacheController extends Controller {
 			'totalChecked' => count($filenames)
 		]);
 	}
+
+	private function resolveCachePath(string $path, $userFolder): string {
+		return ltrim($path, '/');
+	}
 }
