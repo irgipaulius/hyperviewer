@@ -39,8 +39,7 @@ class HlsCacheGenerationJob extends QueuedJob {
 		$userId = $argument['userId'] ?? null;
 		$filename = $argument['filename'] ?? null;
 		$directory = $argument['directory'] ?? '/';
-		$cacheLocation = $argument['cacheLocation'] ?? 'relative';
-		$customPath = $argument['customPath'] ?? '';
+		$cachePath = $argument['cachePath'] ?? '';
 		$overwriteExisting = $argument['overwriteExisting'] ?? false;
 		$notifyCompletion = $argument['notifyCompletion'] ?? true;
 
@@ -77,18 +76,34 @@ class HlsCacheGenerationJob extends QueuedJob {
 				throw new \Exception("Cannot access video file locally: $filename");
 			}
 
-			// Determine cache output path
-		$cacheOutputPath = $this->determineCacheOutputPath(
-			$userFolder, 
-			$filename,
-			$directory, 
-			$cacheLocation, 
-			$customPath
-		);
+			if (empty($cachePath)) {
+				throw new \Exception('Cache path is required but not provided');
+			}
 
-		// Check if cache already exists and skip if not overwriting
-		if (!$overwriteExisting && $this->cacheAlreadyExists($userFolder, $cacheOutputPath)) {
-			$this->logger->info('HLS cache already exists, skipping generation', [
+			// Build full cache output path with filename
+			$baseFilename = pathinfo($filename, PATHINFO_FILENAME);
+			$cacheOutputPath = rtrim($cachePath, '/') . '/' . $baseFilename;
+
+			// Check if cache already exists and skip if not overwriting
+			if (!$overwriteExisting && $this->cacheAlreadyExists($userFolder, $cacheOutputPath)) {
+				$this->logger->info('HLS cache already exists, skipping generation', [
+					'jobId' => $jobId,
+					'filename' => $filename,
+					'cachePath' => $cacheOutputPath
+				]);
+
+				// Send notification if requested
+				if ($notifyCompletion) {
+					$this->sendCompletionNotification($user, $filename, true);
+				}
+				return;
+			}
+
+			// Generate HLS cache with adaptive bitrate ladder
+			$resolutions = $argument['resolutions'] ?? ['720p', '480p', '240p'];
+			$this->generateHlsCache($videoLocalPath, $cacheOutputPath, $filename, $overwriteExisting, $userId, $resolutions);
+
+			$this->logger->info('HLS cache generation completed', [
 				'jobId' => $jobId,
 				'filename' => $filename,
 				'cachePath' => $cacheOutputPath
@@ -127,35 +142,6 @@ class HlsCacheGenerationJob extends QueuedJob {
 			if ($notifyCompletion) {
 				$this->sendCompletionNotification($user, $filename, false, $e->getMessage());
 			}
-		}
-	}
-
-	/**
-	 * Determine where to output the HLS cache
-	 */
-	private function determineCacheOutputPath($userFolder, string $filename, string $directory, string $cacheLocation, string $customPath): string {
-		$baseFilename = pathinfo($filename, PATHINFO_FILENAME);
-
-		switch ($cacheLocation) {
-			case 'relative':
-				return $directory . '/.cached_hls/' . $baseFilename;
-			
-			case 'home':
-				return '/.cached_hls/' . $baseFilename;
-			
-			case 'custom':
-				if (empty($customPath)) {
-					throw new \Exception('Custom cache path is required but not provided');
-				}
-				// Ensure custom path ends with .cached_hls
-				$customPath = rtrim($customPath, '/');
-				if (substr($customPath, -11) !== '.cached_hls') {
-					$customPath .= '/.cached_hls';
-				}
-				return $customPath . '/' . $baseFilename;
-			
-			default:
-				throw new \Exception("Unknown cache location: $cacheLocation");
 		}
 	}
 

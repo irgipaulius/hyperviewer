@@ -52,15 +52,18 @@ class CacheController extends Controller {
 		}
 
 		$files = $this->request->getParam('files', []);
-		$cacheLocation = $this->request->getParam('cacheLocation', 'relative');
-		$customPath = $this->request->getParam('customPath', '');
+		$cachePath = $this->request->getParam('cachePath', '');
 		$overwriteExisting = $this->request->getParam('overwriteExisting', false);
 		$resolutions = $this->request->getParam('resolutions', ['720p', '480p', '240p']);
+
+		if (empty($cachePath)) {
+			return new JSONResponse(['error' => 'Cache path is required'], 400);
+		}
 
 		$this->logger->info('HLS cache generation requested', [
 			'user' => $user->getUID(),
 			'files' => count($files),
-			'cacheLocation' => $cacheLocation,
+			'cachePath' => $cachePath,
 			'resolutions' => $resolutions
 		]);
 
@@ -73,8 +76,7 @@ class CacheController extends Controller {
 				'userId' => $user->getUID(),
 				'filename' => $fileData['filename'],
 				'directory' => $fileData['directory'] ?? '/',
-				'cacheLocation' => $cacheLocation,
-				'customPath' => $customPath,
+				'cachePath' => $cachePath,
 				'overwriteExisting' => $overwriteExisting,
 				'resolutions' => $resolutions
 			];
@@ -356,13 +358,16 @@ class CacheController extends Controller {
 			return new JSONResponse(['error' => 'Directory path required'], 400);
 		}
 
+		if (empty($options['cachePath'])) {
+			return new JSONResponse(['error' => 'Cache path is required'], 400);
+		}
+
 		try {
 			// Store auto-generation settings in app config
 			$autoGenSettings = [
 				'userId' => $user->getUID(),
 				'directory' => $directory,
-				'cacheLocation' => $options['cacheLocation'] ?? 'relative',
-				'customPath' => $options['customPath'] ?? '',
+				'cachePath' => $options['cachePath'],
 				'overwriteExisting' => $options['overwriteExisting'] ?? false,
 				'resolutions' => $options['resolutions'] ?? ['720p', '480p', '240p'],
 				'enabled' => true,
@@ -694,7 +699,7 @@ class CacheController extends Controller {
 								'directory' => $settings['directory'] ?? '',
 								'enabled' => $settings['enabled'] ?? false,
 								'resolutions' => $settings['resolutions'] ?? [],
-								'cacheLocation' => $settings['cacheLocation'] ?? 'relative',
+								'cachePath' => $settings['cachePath'] ?? '',
 								'registeredAt' => $settings['registeredAt'] ?? 0,
 								'lastScan' => $settings['lastScan'] ?? 0
 							];
@@ -743,14 +748,17 @@ class CacheController extends Controller {
 			if (isset($input['resolutions']) && is_array($input['resolutions'])) {
 				$settings['resolutions'] = $input['resolutions'];
 			}
-			if (isset($input['cacheLocation'])) {
-				$settings['cacheLocation'] = $input['cacheLocation'];
+			if (isset($input['cachePath'])) {
+				$settings['cachePath'] = $input['cachePath'];
 			}
 
 			// Save updated settings
 			$this->config->setAppValue('hyperviewer', $configKey, json_encode($settings));
 
-			return new JSONResponse(['success' => true, 'settings' => $settings]);
+			return new JSONResponse([
+				'success' => true,
+				'message' => 'Auto-generation setting updated'
+			]);
 
 		} catch (\Exception $e) {
 			$this->logger->error('Error updating auto-generation setting', ['error' => $e->getMessage()]);

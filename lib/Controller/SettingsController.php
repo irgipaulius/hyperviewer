@@ -53,6 +53,6 @@ class SettingsController extends Controller {
 			true
 		);
 
-		return new JSONResponse(['cacheLocations' => $locations]);
+		return new JSONResponse(['locations' => $locations]);
 	}
 }
