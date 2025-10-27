@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 vendor/
+vendor-bin/*/vendor/
 
 # Build artifacts
 build/
@@ -8,8 +9,12 @@ coverage/
 
 # Development
 .php_cs.cache
+.php-cs-fixer.cache
 composer.lock
 package-lock.json
+
+# Testing
+tests/.phpunit.cache
 
 # Logs
 npm-debug.log*

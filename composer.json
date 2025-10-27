@@ -1,5 +1,71 @@
 {
-	"name": "irgipaulius/hyperviewer",
-	"description": "Professional video toolkit for Nextcloud with HLS streaming and server-side cropping",
-	"license": "AGPL-3.0-or-later"
+	"name": "nextcloud/hyperviewer",
+	"description": "<![CDATA[Save time, storage, and bandwidth.
+
+Hyper Viewer brings powerful remote video clipping directly into your Nextcloud Files app.
+Rather than downloading huge RAW or MOV files just to check or trim them, Hyper Viewer automatically generates lightweight HLS proxies for smooth streaming. Browse your footage instantly — even from mobile.
+
+When you find the perfect moment, open the clipping tool and export only the selected segment in full original quality. No re-encoding, no quality loss, no wasted data.
+
+Perfect for:
+✅ Cinematographers
+✅ Video production teams
+✅ YouTubers & content creators
+✅ Anyone managing large video archives
+
+Key Features
+• Automatic HLS proxy generation for smooth streaming
+• Shaka Player integration with timeline preview
+• Frame-accurate start/end clip selection
+• Original-quality export of selected clips
+• No deletion or degradation of source files
+• Clean and intuitive UI inside Files
+
+Turn your Nextcloud into a lightweight remote video editing station — where you only download the footage you need.]]>",
+	"license": "AGPL-3.0-or-later",
+	"authors": [
+		{
+			"name": "Paulius Jacinkevičius",
+			"email": "irgipaulius@gmail.com",
+			"homepage": "https://github.com/irgipaulius"
+		}
+	],
+	"autoload": {
+		"psr-4": {
+			"OCA\\HyperViewer\\": "lib/"
+		}
+	},
+	"scripts": {
+		"post-install-cmd": [
+			"@composer bin all install --ansi"
+		],
+		"post-update-cmd": [
+			"@composer bin all install --ansi"
+		],
+		"lint": "find . -name \\*.php -not -path './vendor/*' -not -path './vendor-bin/*' -not -path './build/*' -print0 | xargs -0 -n1 php -l",
+		"cs:check": "php-cs-fixer fix --dry-run --diff",
+		"cs:fix": "php-cs-fixer fix",
+		"psalm": "psalm --threads=1 --no-cache",
+		"test:unit": "phpunit tests -c tests/phpunit.xml --colors=always --fail-on-warning --fail-on-risky",
+		"openapi": "generate-spec",
+		"rector": "rector && composer cs:fix"
+	},
+	"require": {
+		"bamarni/composer-bin-plugin": "^1.8",
+		"php": "^8.1"
+	},
+	"require-dev": {
+		"nextcloud/ocp": "dev-stable30",
+		"roave/security-advisories": "dev-latest"
+	},
+	"config": {
+		"allow-plugins": {
+			"bamarni/composer-bin-plugin": true
+		},
+		"optimize-autoloader": true,
+		"sort-packages": true,
+		"platform": {
+			"php": "8.1"
+		}
+	}
 }

@@ -1,18 +1,40 @@
 <?xml version="1.0"?>
-<info xmlns:xsi= "http://www.w3.org/2001/XMLSchema-instance"
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
       xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
     <id>hyperviewer</id>
-    <name>HyperViewer</name>
-    <summary>Professional video toolkit with HLS streaming, m3u8 generation, and server-side cropping</summary>
-    <description><![CDATA[Professional video processing toolkit for Nextcloud. Automatically generates HLS streams with m3u8 playlists, enables server-side video cropping, and provides adaptive streaming playback. Perfect for videographers managing large footage libraries without downloading terabytes of raw files.]]></description>
+    <name>Hyper Viewer</name>
+    <summary>Review footage instantly, choose highlights, and export only what you need in full quality.</summary>
+    <description><![CDATA[Save time, storage, and bandwidth.
+
+Hyper Viewer brings powerful remote video clipping directly into your Nextcloud Files app.
+Rather than downloading huge RAW or MOV files just to check or trim them, Hyper Viewer automatically generates lightweight HLS proxies for smooth streaming. Browse your footage instantly — even from mobile.
+
+When you find the perfect moment, open the clipping tool and export only the selected segment in full original quality. No re-encoding, no quality loss, no wasted data.
+
+Perfect for:
+✅ Cinematographers
+✅ Video production teams
+✅ YouTubers & content creators
+✅ Anyone managing large video archives
+
+Key Features
+• Automatic HLS proxy generation for smooth streaming
+• Shaka Player integration with timeline preview
+• Frame-accurate start/end clip selection
+• Original-quality export of selected clips
+• No deletion or degradation of source files
+• Clean and intuitive UI inside Files
+
+Turn your Nextcloud into a lightweight remote video editing station — where you only download the footage you need.]]></description>
     <version>1.0.0</version>
     <licence>agpl</licence>
-    <author mail="irgipaulius@gmail.com" >Paulius Jacinkevičius</author>
+    <author mail="irgipaulius@gmail.com" homepage="https://github.com/irgipaulius">Paulius Jacinkevičius</author>
     <namespace>HyperViewer</namespace>
-    <category>tools</category>
+    <category>files</category>
+    <category>multimedia</category>
     <bugs>https://github.com/irgipaulius/hyperviewer/issues</bugs>
     <dependencies>
-        <nextcloud min-version="19" max-version="30"/>
+        <nextcloud min-version="30" max-version="32"/>
     </dependencies>
     <types>
         <type>video/quicktime</type>

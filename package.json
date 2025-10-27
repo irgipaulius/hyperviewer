@@ -1,17 +1,18 @@
 {
     "name": "hyperviewer",
-    "description": "Professional video toolkit with HLS streaming, m3u8 generation, and server-side cropping for Nextcloud",
+    "description": "Review footage instantly, choose highlights, and export only what you need in full quality.",
     "version": "1.0.0",
-    "author": "Paulius Jacinkevicius <irgipaulius@gmail.com>",
+    "license": "AGPL-3.0-or-later",
+    "author": "Paulius Jacinkevičius <irgipaulius@gmail.com>",
     "contributors": [
-        "Paulius Jacinkevicius <irgipaulius@gmail.com>"
+        "Paulius Jacinkevičius <irgipaulius@gmail.com>"
     ],
     "keywords": [
         "nextcloud",
         "hyperviewer",
-        "app",
-        "dev",
-        "vuejs"
+        "video",
+        "hls",
+        "streaming"
     ],
     "bugs": {
         "url": "https://github.com/irgipaulius/hyperviewer/issues"
@@ -21,16 +22,18 @@
         "type": "git"
     },
     "homepage": "https://github.com/irgipaulius/hyperviewer",
-    "license": "agpl",
     "private": true,
     "scripts": {
         "build": "NODE_ENV=production webpack --progress --config webpack.js",
         "dev": "NODE_ENV=development webpack --progress --config webpack.js",
         "watch": "NODE_ENV=development webpack --progress --watch --config webpack.js",
+        "build:vite": "vite build",
+        "dev:vite": "vite --mode development build",
+        "watch:vite": "vite --mode development build --watch",
         "lint": "eslint --ext .js,.vue src",
         "lint:fix": "eslint --ext .js,.vue src --fix",
-        "stylelint": "stylelint src",
-        "stylelint:fix": "stylelint src --fix"
+        "stylelint": "stylelint src/**/*.vue src/**/*.scss src/**/*.css",
+        "stylelint:fix": "stylelint src/**/*.vue src/**/*.scss src/**/*.css --fix"
     },
     "dependencies": {
         "@nextcloud/axios": "^2.5.2",

@@ -1,59 +1,90 @@
-# 🎬 HyperViewer
+# Hyper Viewer
 
-**Professional video toolkit for Nextcloud with HLS streaming, m3u8 generation, and server-side cropping**
+**Review footage instantly, choose highlights, and export only what you need in full quality.**
 
-Transform how you work with videos in Nextcloud. Automatically generate HLS streams, crop videos on the server, and play large files instantly—perfect for videographers managing terabytes of footage without downloading everything.
+Professional video processing toolkit for Nextcloud. Automatically generates HLS streams for smooth remote video review, then extract and download specific clips in original quality without re-encoding. Stop downloading entire 50GB files just to get a 30-second segment - review remotely, clip precisely, export losslessly. Perfect for videographers managing large footage libraries.
 
-## ✨ Features
+## Features
 
-- **Adaptive HLS Streaming** - Multi-bitrate playback with automatic quality switching
-- **Automatic m3u8 Generation** - Background transcoding with FFmpeg
-- **Server-Side Video Cropping** - Edit before downloading, save bandwidth
-- **Progressive Playback** - Instant preview while transcoding
-- **Bulk Processing** - Process entire directories at once
-- **Smart Caching** - Reuses transcoded files efficiently
+- 🎬 **Automatic HLS Proxy Generation** - Background jobs create adaptive bitrate streams (720p, 480p, 360p, 240p) automatically for your directories
+- 🎞️ **Shaka Player Integration** - Professional HLS video playback interface
+- 📱 **Mobile Friendly** - Responsive UI works on all devices
 
-## 📦 Installation
+## Installation (No Build Required!)
 
-### Manual Installation
-```bash
-cd /path/to/nextcloud/apps
-git clone https://github.com/irgipaulius/hyperviewer.git
-chown -R www-data:www-data hyperviewer/
-sudo -u www-data php /path/to/nextcloud/occ app:enable hyperviewer
-```
+1. ☁ Clone into your Nextcloud `apps` folder: `git clone https://github.com/irgipaulius/hyperviewer.git`
+2. 🔧 Fix file ownership: `chown -R www-data:www-data hyperviewer/`
+3. ✅ Enable the app through Nextcloud app management, and refresh the page
+4. 🎉 Ready to use!
 
-**Note**: Built files are included—no build step required!
+**Note**: Build files are committed, so no Node.js or build step required on server.
 
-## 🎮 Usage
+## Requirements
 
-1. Right-click any MOV/MP4 file in Files app
-2. Select **"Play Progressive"** or **"Generate HLS Cache"**
-3. Enjoy instant playback or automatic transcoding!
+- Nextcloud 30+
+- PHP 8.1+
+- FFmpeg installed on server
+- Sufficient disk space for HLS cache files
 
-## ⚙️ Requirements
+## Development
 
-- Nextcloud 19+
-- PHP 7.4+ (8.0+ recommended)
-- FFmpeg 4.0+ with libx264 and AAC support
-
-## 🛠️ Development
-
+### Building (Webpack - Current)
 ```bash
 npm install
-npm run watch  # Development
-npm run build  # Production
+NODE_OPTIONS="--openssl-legacy-provider" npm run build
 ```
 
-**Legacy OpenSSL build:**
+### Building (Vite - Faster Alternative)
 ```bash
-NODE_OPTIONS="--openssl-legacy-provider" npm run build --fix
+npm install
+npm run build:vite
 ```
 
-## 📝 License
+### Watch Mode
+```bash
+npm run watch          # Webpack
+npm run watch:vite     # Vite
+```
 
-GNU AGPL v3 - see [LICENSE](LICENSE)
+### Code Quality
+```bash
+composer install                # Install PHP tools
+composer cs:check               # Check code style
+composer cs:fix                 # Fix code style
+composer psalm                  # Static analysis
+composer test:unit              # Run tests
+```
 
----
+## Configuration
 
-Made with ❤️ for videographers and the Nextcloud community
+In Nextcloud, navigate to **Settings → Personal → Hyper Viewer** to:
+- Configure HLS cache location
+- Monitor active FFmpeg jobs with real-time progress
+- Manage auto-generation directories
+- View job statistics
+
+## How It Works
+
+### HLS Streaming
+1. Right-click any MOV/MP4 file → **Generate HLS Cache**
+   > alternatively, right-click a directory which recursively generates HLS cache for all MOV/MP4 files in it
+2. Select quality variants (720p, 480p, 360p, 240p)
+3. FFmpeg generates adaptive HLS stream in background
+4. Click your gigantic MOV/MP4 file and enjoy HLS video stream within just a second!
+5. Video seeks, quality switching, and mobile playback all supported
+
+### Video Clipping & Export
+1. Open any video file in the HLS player
+2. Use the timeline to find your desired start and end points
+3. Click **Export Clip** to extract just that segment
+4. Original quality export using lossless stream copy (no re-encoding)
+5. Download only the clip you need - not the entire 50GB file!
+
+## License
+
+AGPL-3.0-or-later
+
+## Links
+
+- 🐛 [Issues](https://github.com/irgipaulius/hyperviewer/issues)
+- 👨‍💻 [GitHub](https://github.com/irgipaulius/hyperviewer)
