@@ -37,16 +37,22 @@ class SettingsController extends Controller {
 	}
 
 	/**
+	 * Get user's cache locations (uses PersonalSettings defaults)
 	 * @NoAdminRequired
 	 */
 	public function getCacheLocations(): JSONResponse {
 		$userId = \OC_User::getUser();
 		
 		$locations = json_decode(
-			$this->config->getUserValue($userId, $this->appName, 'cache_locations', '[]'), 
+			$this->config->getUserValue(
+				$userId, 
+				$this->appName, 
+				'cache_locations', 
+				json_encode(\OCA\HyperViewer\Settings\PersonalSettings::getDefaultCacheLocations())
+			), 
 			true
 		);
 
-		return new JSONResponse(['locations' => $locations]);
+		return new JSONResponse(['cacheLocations' => $locations]);
 	}
 }

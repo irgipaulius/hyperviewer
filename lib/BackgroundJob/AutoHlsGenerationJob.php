@@ -161,6 +161,7 @@ class AutoHlsGenerationJob extends TimedJob {
 	private function findNewVideoFiles($userFolder, string $directory, array $settings): array {
 		$newFiles = [];
 		$supportedMimes = ['video/quicktime', 'video/mp4'];
+		$userId = $settings['userId'];
 
 		try {
 			$dirNode = $userFolder->get($directory);
@@ -168,7 +169,7 @@ class AutoHlsGenerationJob extends TimedJob {
 				return [];
 			}
 
-			$this->scanForNewVideos($dirNode, $directory, $supportedMimes, $userFolder, $newFiles);
+			$this->scanForNewVideos($dirNode, $directory, $supportedMimes, $userFolder, $userId, $newFiles);
 
 		} catch (\Exception $e) {
 			$this->logger->error('Failed to scan for new videos', [
@@ -183,13 +184,13 @@ class AutoHlsGenerationJob extends TimedJob {
 	/**
 	 * Recursively scan for new video files without HLS cache
 	 */
-	private function scanForNewVideos($folder, string $basePath, array $supportedMimes, $userFolder, array &$newFiles): void {
+	private function scanForNewVideos($folder, string $basePath, array $supportedMimes, $userFolder, string $userId, array &$newFiles): void {
 		foreach ($folder->getDirectoryListing() as $node) {
 			if ($node instanceof \OCP\Files\File) {
 				$mimeType = $node->getMimeType();
 				if (in_array($mimeType, $supportedMimes)) {
 					// Check if HLS cache already exists
-					if (!$this->hasHlsCache($userFolder, $node->getName(), $basePath)) {
+					if (!$this->hasHlsCache($userFolder, $node->getName(), $basePath, $userId)) {
 						$relativePath = $basePath === '/' ? '/' : $basePath;
 						$newFiles[] = [
 							'filename' => $node->getName(),
@@ -205,7 +206,7 @@ class AutoHlsGenerationJob extends TimedJob {
 				$folderName = $node->getName();
 				if (strpos($folderName, '.') !== 0) {
 					$subPath = $basePath === '/' ? '/' . $folderName : $basePath . '/' . $folderName;
-					$this->scanForNewVideos($node, $subPath, $supportedMimes, $userFolder, $newFiles);
+					$this->scanForNewVideos($node, $subPath, $supportedMimes, $userFolder, $userId, $newFiles);
 				}
 			}
 		}
@@ -214,16 +215,36 @@ class AutoHlsGenerationJob extends TimedJob {
 	/**
 	 * Check if HLS cache exists for a video file
 	 */
-	private function hasHlsCache($userFolder, string $filename, string $directory): bool {
+	private function hasHlsCache($userFolder, string $filename, string $directory, string $userId): bool {
 		$baseFilename = pathinfo($filename, PATHINFO_FILENAME);
 		
-		// Check cache locations in order of preference
-		$cacheLocations = [
-			// Relative to video file
-			$directory . '/.cached_hls/' . $baseFilename,
-			// User home directory
-			'/.cached_hls/' . $baseFilename,
-		];
+		// Get user's cache locations (uses PersonalSettings defaults)
+		$userCacheLocations = json_decode(
+			$this->config->getUserValue(
+				$userId,
+				'hyperviewer',
+				'cache_locations',
+				json_encode(\OCA\HyperViewer\Settings\PersonalSettings::getDefaultCacheLocations())
+			),
+			true
+		);
+
+		// Resolve each location to actual paths
+		$cacheLocations = [];
+		foreach ($userCacheLocations as $location) {
+			$location = rtrim($location, '/');
+			
+			// Handle different path formats
+			if ($location === '.' || str_starts_with($location, './')) {
+				$cacheLocations[] = $directory . '/.cached_hls/' . $baseFilename;
+			} elseif ($location === '~' || str_starts_with($location, '~/')) {
+				$cacheLocations[] = '/.cached_hls/' . $baseFilename;
+			} elseif (str_starts_with($location, '/')) {
+				$cacheLocations[] = $location . '/' . $baseFilename;
+			} else {
+				$cacheLocations[] = '/' . $location . '/' . $baseFilename;
+			}
+		}
 
 		foreach ($cacheLocations as $cachePath) {
 			try {

@@ -245,23 +245,22 @@ class CacheController extends Controller {
 	/**
 	 * Get cache locations from user settings
 	 */
-	private function getCacheLocations(string $userId): array {
-		// Get user-configured cache locations
+	/**
+	 * Get user's cache locations from settings
+	 * Uses PersonalSettings::getDefaultCacheLocations() as default
+	 * NO fallbacks - if JSON is invalid, throw error
+	 */
+	private function getUserCacheLocations(string $userId): array {
 		$cacheLocationsJson = $this->config->getUserValue(
 			$userId,
 			$this->appName,
 			'cache_locations',
-			json_encode([
-				'./.cached_hls/',
-				'~/.cached_hls/',
-				'/mnt/cache/.cached_hls/'
-			])
+			json_encode(\OCA\HyperViewer\Settings\PersonalSettings::getDefaultCacheLocations())
 		);
 
 		$locations = json_decode($cacheLocationsJson, true);
 		if (!is_array($locations)) {
-			// Fallback to defaults if invalid JSON
-			$locations = ['./.cached_hls/', '~/.cached_hls/', '/mnt/cache/.cached_hls/'];
+			throw new \Exception('Invalid cache_locations configuration');
 		}
 
 		return $locations;
@@ -273,48 +272,25 @@ class CacheController extends Controller {
 	private function findHlsCache($userFolder, string $filename, string $directory, string $userId): ?string {
 		$baseFilename = pathinfo($filename, PATHINFO_FILENAME);
 		
-		// Get cache locations from user settings
-		$userCacheLocations = $this->getCacheLocations($userId);
+		// Get user's cache locations (uses PersonalSettings defaults)
+		$userCacheLocations = $this->getUserCacheLocations($userId);
 		
+		// Resolve each location to actual paths
 		$cacheLocations = [];
 		foreach ($userCacheLocations as $location) {
-			// Normalize the location path
-			$location = rtrim($location, '/');
-			
-			// Handle different path formats
-			if ($location === '.' || $location === './.cached_hls') {
-				// Relative to current directory
-				$cacheLocations[] = $directory . '/.cached_hls/' . $baseFilename;
-			} elseif ($location === '~' || strpos($location, '~/') === 0) {
-				// User home directory
-				$cacheLocations[] = '/.cached_hls/' . $baseFilename;
-			} elseif (strpos($location, '/') === 0) {
-				// Absolute path
-				$cacheLocations[] = $location . '/' . $baseFilename;
-			} else {
-				// Treat as relative path
-				$cacheLocations[] = '/' . $location . '/' . $baseFilename;
-			}
+			$resolvedPath = $this->resolveCachePath($location . '/' . $baseFilename, $userFolder);
+			$cacheLocations[] = $resolvedPath;
 		}
 
-		// Always check relative to video file as first priority (if not already added)
-		$relativeCache = $directory . '/.cached_hls/' . $baseFilename;
-		if (!in_array($relativeCache, $cacheLocations)) {
-			array_unshift($cacheLocations, $relativeCache);
-		}
-
+		// Check each location for HLS files
 		foreach ($cacheLocations as $cachePath) {
 			try {
-				// Check for adaptive streaming master playlist first, fallback to single playlist
 				if ($userFolder->nodeExists($cachePath . '/master.m3u8')) {
-					$this->logger->debug('Found adaptive HLS cache', ['path' => $cachePath]);
 					return $cachePath;
 				} elseif ($userFolder->nodeExists($cachePath . '/playlist.m3u8')) {
-					$this->logger->debug('Found legacy HLS cache', ['path' => $cachePath]);
 					return $cachePath;
 				}
 			} catch (\Exception $e) {
-				// Continue checking other locations
 				continue;
 			}
 		}
@@ -576,25 +552,24 @@ class CacheController extends Controller {
 			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 			$activeJobs = [];
 
-			// Fast scan - just find active job directories, no detailed progress
-			$cacheLocations = [
-				'/.cached_hls',
-				'/cached_hls'
-			];
+			// Get cache locations from user settings (uses PersonalSettings defaults)
+			$cacheLocations = $this->getUserCacheLocations($user->getUID());
 
-			foreach ($cacheLocations as $cacheLocation) {
-				if ($userFolder->nodeExists($cacheLocation)) {
-					$cacheFolder = $userFolder->get($cacheLocation);
+			// Scan each configured cache location
+			foreach ($cacheLocations as $location) {
+				$resolvedPath = $this->resolveCachePath($location, $userFolder);
+				
+				if ($userFolder->nodeExists($resolvedPath)) {
+					$cacheFolder = $userFolder->get($resolvedPath);
 					if ($cacheFolder instanceof \OCP\Files\Folder) {
 						$this->scanForActiveJobsOnly($cacheFolder, $activeJobs);
 					}
 				}
 			}
 
-			return new JSONResponse(['jobs' => $activeJobs]);
+			return new JSONResponse(['activeJobs' => $activeJobs]);
 
 		} catch (\Exception $e) {
-			$this->logger->error('Error getting active jobs', ['error' => $e->getMessage()]);
 			return new JSONResponse(['error' => 'Failed to get active jobs'], 500);
 		}
 	}
@@ -611,20 +586,17 @@ class CacheController extends Controller {
 		}
 
 		try {
-			// URL decode the filename to handle Cyrillic and other special characters
 			$decodedFilename = urldecode($filename);
-			
 			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 			
-			// Look for the job in cache directories
-			$cacheLocations = [
-				'/.cached_hls',
-				'/cached_hls'
-			];
+			// Get user's cache locations (uses PersonalSettings defaults)
+			$cacheLocations = $this->getUserCacheLocations($user->getUID());
 
-			foreach ($cacheLocations as $cacheLocation) {
-				if ($userFolder->nodeExists($cacheLocation)) {
-					$cacheFolder = $userFolder->get($cacheLocation);
+			foreach ($cacheLocations as $location) {
+				$resolvedPath = $this->resolveCachePath($location, $userFolder);
+				
+				if ($userFolder->nodeExists($resolvedPath)) {
+					$cacheFolder = $userFolder->get($resolvedPath);
 					if ($cacheFolder instanceof \OCP\Files\Folder) {
 						// Try to find the specific job directory using decoded filename
 						// First try exact match (directory name matches filename exactly)
@@ -853,15 +825,14 @@ class CacheController extends Controller {
 				'recentJobs' => []
 			];
 
-			// Fast statistics using simple file system queries
-			$cacheLocations = [
-				'/.cached_hls',
-				'/cached_hls'
-			];
+			// Get user's cache locations (uses PersonalSettings defaults)
+			$cacheLocations = $this->getUserCacheLocations($user->getUID());
 
-			foreach ($cacheLocations as $cacheLocation) {
-				if ($userFolder->nodeExists($cacheLocation)) {
-					$cacheFolder = $userFolder->get($cacheLocation);
+			foreach ($cacheLocations as $location) {
+				$resolvedPath = $this->resolveCachePath($location, $userFolder);
+				
+				if ($userFolder->nodeExists($resolvedPath)) {
+					$cacheFolder = $userFolder->get($resolvedPath);
 					if ($cacheFolder instanceof \OCP\Files\Folder) {
 						$this->gatherSimpleStatistics($cacheFolder, $stats);
 					}

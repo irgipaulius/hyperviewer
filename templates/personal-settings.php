@@ -65,6 +65,6 @@ style('hyperviewer', 'settings');
 		<strong><?php p($l->t('Examples:')); ?></strong><br>
 		<code>./.cached_hls/</code> - <?php p($l->t('Relative to video file')); ?><br>
 		<code>~/.cached_hls/</code> - <?php p($l->t('User home directory')); ?><br>
-		<code>/mnt/cache/.cached_hls/</code> - <?php p($l->t('Absolute path')); ?>
+		<code>/mnt/cache/.cached_hls/</code> - <?php p($l->t('Absolute path within the jail')); ?>
 	</p>
 </div>
