@@ -166,23 +166,27 @@ function refreshActiveJobs() {
 				container.innerHTML = jobs.map(job => `
 					<div class="job-card">
 						<div class="job-header">
-							<span class="job-filename">${escapeHtml(job.filename)}</span>
-							<span class="job-status">${escapeHtml(job.status)}</span>
+							<span class="job-filename">${escapeHtml(job.filename || 'Unknown')}</span>
+							<span class="job-status">${escapeHtml(job.status || 'Processing')}</span>
 						</div>
 						<div class="job-progress">
-							<progress value="${job.progress}" max="100"></progress>
-							<span style="font-size: 12px; margin-left: 8px;">${job.progress}%</span>
+							<progress value="${job.progress || 0}" max="100"></progress>
+							<span style="font-size: 12px; margin-left: 8px;">${job.progress || 0}%</span>
 						</div>
 						<div class="job-details">
-							<span>Time: ${escapeHtml(job.time)}</span>
-							<span>Frames: ${job.frame}</span>
-							<span>Speed: ${escapeHtml(job.speed)}</span>
-							<span>FPS: ${escapeHtml(job.fps)}</span>
+							<span>Time: ${escapeHtml(job.time || '00:00:00')}</span>
+							<span>Frames: ${job.frame || 0}</span>
+							<span>Speed: ${escapeHtml(job.speed || '0x')}</span>
+							<span>FPS: ${escapeHtml(job.fps || '0')}</span>
 							${job.cacheSize ? `<span>Size: ${escapeHtml(job.cacheSize)}</span>` : ''}
 						</div>
-						<div class="job-resolutions">
-							${job.resolutions.map(res => `<span class="resolution-tag">${escapeHtml(res)}</span>`).join('')}
-						</div>
+						${job.resolutions && job.resolutions.length > 0
+							? `
+							<div class="job-resolutions">
+								${job.resolutions.map(res => `<span class="resolution-tag">${escapeHtml(res)}</span>`).join('')}
+							</div>
+						`
+							: ''}
 					</div>
 				`).join('')
 			}
@@ -212,18 +216,22 @@ function refreshAutoGeneration() {
 				container.innerHTML = dirs.map(dir => `
 					<div class="auto-gen-card">
 						<div class="auto-gen-header">
-							<span class="auto-gen-path">${escapeHtml(dir.directory)}</span>
+							<span class="auto-gen-path">${escapeHtml(dir.directory || 'Unknown')}</span>
 							<span class="auto-gen-status ${dir.enabled ? 'enabled' : 'disabled'}">
 								${dir.enabled ? 'Enabled' : 'Disabled'}
 							</span>
 						</div>
 						<div class="auto-gen-details">
-							<span>Cache: ${escapeHtml(dir.cacheLocation)}</span>
-							<span>Registered: ${formatDate(dir.registeredAt)}</span>
+							<span>Cache: ${escapeHtml(dir.cachePath || dir.cacheLocation || 'Not set')}</span>
+							<span>Registered: ${formatDate(dir.createdAt || dir.registeredAt)}</span>
 						</div>
-						<div class="auto-gen-resolutions">
-							${dir.resolutions.map(res => `<span class="resolution-tag">${escapeHtml(res)}</span>`).join('')}
-						</div>
+						${dir.resolutions && dir.resolutions.length > 0
+							? `
+							<div class="auto-gen-resolutions">
+								${dir.resolutions.map(res => `<span class="resolution-tag">${escapeHtml(res)}</span>`).join('')}
+							</div>
+						`
+							: ''}
 						<div class="auto-gen-actions">
 							<button class="button remove-autogen" data-config-key="${escapeHtml(dir.configKey)}">
 								Remove
