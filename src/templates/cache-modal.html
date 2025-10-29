@@ -1,0 +1,85 @@
+<div class="hyper-viewer-overlay"></div>
+<div class="hyper-viewer-cache-container">
+	<div class="hyper-viewer-cache-header">
+		<h3 class="hyper-viewer-cache-title">${title}</h3>
+		<button class="hyper-viewer-close" aria-label="Close dialog">
+			<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<line x1="18" y1="6" x2="6" y2="18"></line>
+				<line x1="6" y1="6" x2="18" y2="18"></line>
+			</svg>
+		</button>
+	</div>
+	<div class="hyper-viewer-cache-content">
+		${infoContent}
+		
+		<div class="form-section">
+			<label class="section-title">Cache Location</label>
+			<div class="option-group" id="cache-locations-container">
+				<p style="color: #999; font-size: 13px;">Loading cache locations...</p>
+			</div>
+		</div>
+		
+		<div class="form-section">
+			<label class="section-title">Resolution Renditions</label>
+			<div class="resolution-grid">
+				<label class="resolution-item">
+					<input type="checkbox" name="resolution" value="720p" checked>
+					<div class="resolution-content">
+						<span class="resolution-name">720p</span>
+						<span class="resolution-desc">HD Quality</span>
+					</div>
+				</label>
+				<label class="resolution-item">
+					<input type="checkbox" name="resolution" value="480p" checked>
+					<div class="resolution-content">
+						<span class="resolution-name">480p</span>
+						<span class="resolution-desc">SD Quality</span>
+					</div>
+				</label>
+				<label class="resolution-item">
+					<input type="checkbox" name="resolution" value="360p">
+					<div class="resolution-content">
+						<span class="resolution-name">360p</span>
+						<span class="resolution-desc">Low Quality</span>
+					</div>
+				</label>
+				<label class="resolution-item">
+					<input type="checkbox" name="resolution" value="240p" checked>
+					<div class="resolution-content">
+						<span class="resolution-name">240p</span>
+						<span class="resolution-desc">Mobile</span>
+					</div>
+				</label>
+			</div>
+		</div>
+		
+		<div class="form-section">
+			<label class="section-title">Options</label>
+			<div class="option-group">
+				<label class="option-item">
+					<input type="checkbox" id="overwrite_existing">
+					<div class="option-content">
+						<span class="option-title">Overwrite existing cache</span>
+						<span class="option-desc">Replace existing HLS files</span>
+					</div>
+				</label>
+				${isDirectory
+					? `
+						<label class="option-item highlight">
+							<input type="checkbox" id="enable_auto_generation">
+							<div class="option-content">
+								<span class="option-title">Enable automatic generation</span>
+								<span class="option-desc">Monitor directory for new videos and auto-generate HLS cache</span>
+							</div>
+						</label>
+					`
+					: ''}
+			</div>
+		</div>
+		
+		<div class="dialog-actions">
+			<button class="btn-cancel">Cancel</button>
+			<button class="btn-confirm">Generate HLS Cache</button>
+		</div>
+	</div>
+</div>

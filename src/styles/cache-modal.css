@@ -1,0 +1,261 @@
+.hyper-viewer-cache-modal {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 10001;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+	box-sizing: border-box;
+	opacity: 0;
+	visibility: hidden;
+	transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.hyper-viewer-cache-modal.show {
+	opacity: 1;
+	visibility: visible;
+}
+
+.hyper-viewer-overlay {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.7);
+	backdrop-filter: blur(4px);
+}
+
+.hyper-viewer-cache-container {
+	position: relative;
+	background: #1a1a1a;
+	border-radius: 12px;
+	box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+	max-width: 600px;
+	width: 100%;
+	max-height: 90vh;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	transform: scale(0.95);
+	transition: transform 0.3s ease;
+}
+
+.hyper-viewer-cache-modal.show .hyper-viewer-cache-container {
+	transform: scale(1);
+}
+
+.hyper-viewer-cache-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 16px 20px;
+	background: #2a2a2a;
+	border-bottom: 1px solid #3a3a3a;
+}
+
+.hyper-viewer-cache-title {
+	margin: 0;
+	color: #ffffff;
+	font-size: 16px;
+	font-weight: 600;
+}
+
+.hyper-viewer-cache-content {
+	padding: 20px;
+	color: #ffffff;
+	overflow-y: auto;
+	flex: 1;
+}
+
+.directory-info-card {
+	background: #2a2a2a;
+	border-radius: 8px;
+	padding: 16px;
+	margin-bottom: 24px;
+	border: 1px solid #3a3a3a;
+}
+
+.info-item {
+	margin-bottom: 12px;
+}
+
+.info-item:last-child {
+	margin-bottom: 0;
+}
+
+.file-list {
+	margin-top: 8px;
+	padding: 8px 12px;
+	background: #1a1a1a;
+	border-radius: 4px;
+	font-size: 13px;
+	color: #cccccc;
+	max-height: 80px;
+	overflow-y: auto;
+}
+
+.no-videos-text {
+	margin-top: 8px;
+	padding: 8px 12px;
+	background: #2d1b1b;
+	border: 1px solid #4a3333;
+	border-radius: 4px;
+	font-size: 13px;
+	color: #ffcc99;
+}
+
+.form-section {
+	margin-bottom: 24px;
+}
+
+.section-title {
+	display: block;
+	font-weight: 600;
+	margin-bottom: 12px;
+	color: #ffffff;
+	font-size: 14px;
+}
+
+.option-group {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.option-item {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	padding: 12px;
+	background: #2a2a2a;
+	border: 1px solid #3a3a3a;
+	border-radius: 8px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.option-item:hover {
+	background: #333333;
+	border-color: #4a4a4a;
+}
+
+.option-item.highlight {
+	border-color: #4a9eff;
+	background: rgba(74, 158, 255, 0.1);
+}
+
+.option-content {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.option-title {
+	font-weight: 500;
+	color: #ffffff;
+}
+
+.option-desc {
+	font-size: 13px;
+	color: #999999;
+}
+
+.resolution-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+	gap: 8px;
+}
+
+.resolution-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 12px;
+	background: #2a2a2a;
+	border: 1px solid #3a3a3a;
+	border-radius: 8px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.resolution-item:hover {
+	background: #333333;
+	border-color: #4a4a4a;
+}
+
+.resolution-content {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.resolution-name {
+	font-weight: 500;
+	color: #ffffff;
+	font-size: 14px;
+}
+
+.resolution-desc {
+	font-size: 12px;
+	color: #999999;
+}
+
+.dialog-actions {
+	display: flex;
+	gap: 12px;
+	justify-content: flex-end;
+	margin-top: 24px;
+	padding-top: 20px;
+	border-top: 1px solid #3a3a3a;
+}
+
+.btn-cancel, .btn-confirm {
+	padding: 10px 20px;
+	border: none;
+	border-radius: 6px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.btn-cancel {
+	background: #3a3a3a;
+	color: #ffffff;
+}
+
+.btn-cancel:hover {
+	background: #4a4a4a;
+}
+
+.btn-confirm {
+	background: #4a9eff;
+	color: #ffffff;
+}
+
+.btn-confirm:hover {
+	background: #0066cc;
+}
+
+.hyper-viewer-close {
+	background: transparent;
+	border: none;
+	color: #ffffff;
+	cursor: pointer;
+	padding: 8px;
+	border-radius: 6px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.hyper-viewer-close:hover {
+	background: rgba(255, 255, 255, 0.1);
+	color: #ff6b6b;
+}

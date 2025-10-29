@@ -13,4 +13,13 @@ webpackConfig.output = {
 	filename: '[name].js'
 }
 
+// Add html-loader for importing HTML files as strings
+webpackConfig.module.rules.push({
+	test: /\.html$/i,
+	loader: 'html-loader',
+	options: {
+		minimize: false
+	}
+})
+
 module.exports = webpackConfig
