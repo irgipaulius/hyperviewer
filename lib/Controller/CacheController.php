@@ -1222,6 +1222,13 @@ class CacheController extends Controller {
 	}
 
 	private function resolveCachePath(string $path, $userFolder): string {
+		// Handle tilde (~) as reference to user home directory
+		if ($path === '~' || str_starts_with($path, '~/')) {
+			// Remove ~ and leading slash - we're already in user folder context
+			$path = substr($path, 1);
+		}
+		
+		// Remove leading slash
 		return ltrim($path, '/');
 	}
 }

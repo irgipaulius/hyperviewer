@@ -177,7 +177,8 @@ class HlsCacheGenerationJob extends QueuedJob {
 		// Acquire FFmpeg concurrency lock with retry mechanism
 		$ffmpegLockId = $this->acquireFFmpegLock();
 		if ($ffmpegLockId === false) {
-			throw new \Exception("Failed to acquire FFmpeg concurrency lock after maximum retries");
+			// All slots busy - will retry on next cron run (this is expected behavior)
+			return;
 		}
 
 		// Generate adaptive bitrate HLS ladder with fallback
@@ -922,9 +923,10 @@ class HlsCacheGenerationJob extends QueuedJob {
 			}
 		}
 
-		$this->logger->error('Failed to acquire FFmpeg lock after maximum retries', [
-			'maxRetries' => $maxRetries,
-			'totalWaitTime' => $maxRetries * $retryDelay
+		// This is expected behavior - job will retry on next cron run
+		$this->logger->info('FFmpeg concurrency limit reached, will retry on next cron run', [
+			'attemptsThisRun' => $maxRetries,
+			'waitedSeconds' => $maxRetries * $retryDelay
 		]);
 		return false;
 	}
