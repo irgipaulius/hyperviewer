@@ -114,23 +114,6 @@ class HlsCacheGenerationJob extends QueuedJob {
 				$this->sendCompletionNotification($user, $filename, true);
 			}
 			return;
-		}
-
-		// Generate HLS cache with adaptive bitrate ladder
-		$resolutions = $argument['resolutions'] ?? ['720p', '480p', '240p'];
-		$this->generateHlsCache($videoLocalPath, $cacheOutputPath, $filename, $overwriteExisting, $userId, $resolutions);
-
-		$this->logger->info('HLS cache generation completed', [
-			'jobId' => $jobId,
-			'filename' => $filename,
-			'cachePath' => $cacheOutputPath
-		]);
-
-		// Send notification if requested
-		if ($notifyCompletion) {
-			$this->sendCompletionNotification($user, $filename, true);
-		}
-
 		} catch (\Exception $e) {
 			$this->logger->error('HLS cache generation failed', [
 				'jobId' => $jobId,
