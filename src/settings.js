@@ -225,12 +225,19 @@ function refreshAutoGeneration() {
 							${dir.resolutions.map(res => `<span class="resolution-tag">${escapeHtml(res)}</span>`).join('')}
 						</div>
 						<div class="auto-gen-actions">
-							<button class="button" onclick="removeAutoGeneration('${escapeHtml(dir.configKey)}')">
+							<button class="button remove-autogen" data-config-key="${escapeHtml(dir.configKey)}">
 								Remove
 							</button>
 						</div>
 					</div>
 				`).join('')
+				
+				// Attach event listeners after rendering (CSP-safe)
+				container.querySelectorAll('.remove-autogen').forEach(btn => {
+					btn.addEventListener('click', () => {
+						removeAutoGeneration(btn.dataset.configKey);
+					});
+				});
 			}
 		})
 		.catch(error => {
@@ -241,7 +248,7 @@ function refreshAutoGeneration() {
 /**
  * Remove auto-generation directory
  */
-window.removeAutoGeneration = function(configKey) {
+function removeAutoGeneration(configKey) {
 	if (!confirm('Remove this auto-generation directory?')) {
 		return
 	}
