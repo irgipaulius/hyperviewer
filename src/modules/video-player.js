@@ -154,10 +154,8 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
         padding: 20px; box-sizing: border-box;
     `;
 
-	// eslint-disable-next-line no-new-func
-	modal.innerHTML = new Function('videoId', 
-		'return `' + playerModalTemplate + '`'
-	)(videoId);
+	// Replace template variables using string replacement (CSP-safe)
+	modal.innerHTML = playerModalTemplate.replace(/\$\{videoId\}/g, videoId);
 
 	const closeModal = () => {
 		modal.remove();
@@ -589,10 +587,12 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 			background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center;
 		`;
 
-		// eslint-disable-next-line no-new-func
-		exportModal.innerHTML = new Function('defaultPath', 'formatTime', 'startTime', 'endTime', 
-			'return `' + exportModalTemplate + '`'
-		)(defaultPath, formatTime, startTime, endTime);
+		// Replace template variables using string replacement (CSP-safe)
+		exportModal.innerHTML = exportModalTemplate
+			.replace(/\$\{defaultPath\}/g, defaultPath)
+			.replace(/\$\{formatTime\(startTime\)\}/g, formatTime(startTime))
+			.replace(/\$\{formatTime\(endTime\)\}/g, formatTime(endTime))
+			.replace(/\$\{formatTime\(endTime - startTime\)\}/g, formatTime(endTime - startTime));
 
 		document.body.appendChild(exportModal);
 
