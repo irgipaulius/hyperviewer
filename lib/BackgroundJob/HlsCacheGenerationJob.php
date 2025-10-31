@@ -33,8 +33,6 @@ class HlsCacheGenerationJob extends QueuedJob {
 	}
 
 	protected function run($argument): void {
-		$this->logger->info('🚀 HLS cache generation job STARTED', ['argument' => $argument]);
-		
 		$jobId = $argument['jobId'] ?? 'unknown';
 		$userId = $argument['userId'] ?? null;
 		$filename = $argument['filename'] ?? null;
@@ -44,7 +42,6 @@ class HlsCacheGenerationJob extends QueuedJob {
 		$notifyCompletion = $argument['notifyCompletion'] ?? true;
 
 		if (!$userId || !$filename) {
-			$this->logger->error('HLS cache generation job missing required parameters', $argument);
 			return;
 		}
 
@@ -54,12 +51,6 @@ class HlsCacheGenerationJob extends QueuedJob {
 			return;
 		}
 
-		$this->logger->info('Starting HLS cache generation', [
-			'jobId' => $jobId,
-			'user' => $userId,
-			'filename' => $filename,
-			'directory' => $directory
-		]);
 
 		try {
 			$userFolder = $this->rootFolder->getUserFolder($userId);
@@ -86,11 +77,6 @@ class HlsCacheGenerationJob extends QueuedJob {
 
 			// Check if cache already exists and skip if not overwriting
 			if (!$overwriteExisting && $this->cacheAlreadyExists($userFolder, $cacheOutputPath)) {
-				$this->logger->info('HLS cache already exists, skipping generation', [
-					'jobId' => $jobId,
-					'filename' => $filename,
-					'cachePath' => $cacheOutputPath
-				]);
 
 				// Send notification if requested
 				if ($notifyCompletion) {
@@ -103,11 +89,6 @@ class HlsCacheGenerationJob extends QueuedJob {
 			$resolutions = $argument['resolutions'] ?? ['720p', '480p', '240p'];
 			$this->generateHlsCache($videoLocalPath, $cacheOutputPath, $filename, $overwriteExisting, $userId, $resolutions);
 
-			$this->logger->info('HLS cache generation completed', [
-				'jobId' => $jobId,
-				'filename' => $filename,
-				'cachePath' => $cacheOutputPath
-			]);
 
 			// Send notification if requested
 			if ($notifyCompletion) {
@@ -141,11 +122,6 @@ class HlsCacheGenerationJob extends QueuedJob {
 	 * Generate HLS cache using FFmpeg
 	 */
 	private function generateHlsCache(string $videoLocalPath, string $cacheOutputPath, string $filename, bool $overwriteExisting, string $userId, array $resolutions = ['720p', '480p', '240p']): void {
-		$this->logger->info('Generating HLS cache', [
-			'input' => $videoLocalPath,
-			'output' => $cacheOutputPath,
-			'overwrite' => $overwriteExisting
-		]);
 
 		// Create output directory in Nextcloud
 		$userFolder = $this->rootFolder->getUserFolder($userId);
@@ -153,15 +129,11 @@ class HlsCacheGenerationJob extends QueuedJob {
 		try {
 			// Check if cache directory exists
 			if ($userFolder->nodeExists($cacheOutputPath)) {
-				$this->logger->info('Cache directory already exists, using existing', ['path' => $cacheOutputPath]);
-				$cacheFolder = $userFolder->get($cacheOutputPath);
 				if (!($cacheFolder instanceof \OCP\Files\Folder)) {
 					throw new \Exception("Cache path exists but is not a folder");
 				}
 			} else {
 				// Create new cache directory
-				$this->logger->info('Creating new cache directory', ['path' => $cacheOutputPath]);
-				$cacheFolder = $userFolder->newFolder($cacheOutputPath);
 			}
 		} catch (\Exception $e) {
 			throw new \Exception("Failed to create cache directory: " . $e->getMessage());
@@ -185,10 +157,6 @@ class HlsCacheGenerationJob extends QueuedJob {
 		try {
 			$this->generateAdaptiveHls($videoLocalPath, $cacheLocalPath, $filename, $resolutions);
 		} catch (\Exception $e) {
-			$this->logger->warning('Adaptive HLS generation failed, falling back to single bitrate', [
-				'error' => $e->getMessage(),
-				'filename' => $filename
-			]);
 			
 			// Fallback to single bitrate (720p)
 			$this->generateSingleHls($videoLocalPath, $cacheLocalPath, $filename);
@@ -202,11 +170,6 @@ class HlsCacheGenerationJob extends QueuedJob {
 	 * Generate adaptive bitrate HLS ladder optimized for speed and storage
 	 */
 	private function generateAdaptiveHls(string $inputPath, string $outputPath, string $filename, array $resolutions): void {
-		$this->logger->info('Starting adaptive HLS generation', [
-			'input' => $inputPath,
-			'output' => $outputPath,
-			'resolutions' => $resolutions
-		]);
 
 		// Define optimized bitrate variants with resolution-specific presets
 		$allVariants = [
@@ -239,27 +202,12 @@ class HlsCacheGenerationJob extends QueuedJob {
 		if ($fileExtension === 'mp4') {
 			// MP4-specific optimizations: corruption handling, frame rate stabilization, GOP structure
 			$ffmpegCmd .= ' -threads 2 -fflags +discardcorrupt -err_detect ignore_err -use_wallclock_as_timestamps 1 -vf fps=30 -g 180 -keyint_min 60';
-			$this->logger->info('Applied MP4-specific FFmpeg optimizations', [
-				'threads' => 2,
-				'corruption_handling' => true,
-				'fps_stabilization' => '30fps',
-				'gop_structure' => '180/60'
-			]);
 		} elseif ($fileExtension === 'mov') {
 			// MOV-specific optimizations: enhanced probing for complex QuickTime structures
 			$ffmpegCmd .= ' -threads 4 -probesize 50M -analyzeduration 100M';
-			$this->logger->info('Applied MOV-specific FFmpeg optimizations', [
-				'threads' => 4,
-				'probesize' => '50MB',
-				'analyzeduration' => '100MB'
-			]);
 		} else {
 			// Default optimizations for other formats
 			$ffmpegCmd .= ' -threads 2';
-			$this->logger->info('Applied default FFmpeg optimizations', [
-				'format' => $fileExtension,
-				'threads' => 2
-			]);
 		}
 		
 		// Map video and audio streams for each variant (separate audio per variant for FFmpeg 4.4.x)
@@ -326,20 +274,6 @@ class HlsCacheGenerationJob extends QueuedJob {
 		// Add progress piping to FFmpeg command
 		$ffmpegCmd .= ' -progress ' . escapeshellarg($progressFile . '.raw') . ' 2>&1 | tee ' . escapeshellarg($logFile);
 
-		$this->logger->info('Executing optimized FFmpeg command', ['cmd' => $ffmpegCmd]);
-
-		// Execute FFmpeg with extended timeout for multi-bitrate encoding
-		$output = [];
-		$returnCode = 0;
-		set_time_limit(3600 * 3); // 3 hour timeout
-		
-		// Log the exact command being executed
-		$this->logger->info('Executing FFmpeg command', [
-			'command' => $ffmpegCmd,
-			'inputPath' => $inputPath,
-			'outputPath' => $outputPath,
-			'variants' => array_keys($variants)
-		]);
 		
 		// Execute FFmpeg with real-time progress monitoring
 		$this->executeFFmpegWithProgress($ffmpegCmd, $progressFile, $output, $returnCode);
@@ -363,16 +297,8 @@ class HlsCacheGenerationJob extends QueuedJob {
 			throw new \Exception("FFmpeg failed with return code $returnCode: $outputText");
 		} elseif ($returnCode !== 0 && $isActuallySuccessful) {
 			// FFmpeg succeeded but returned non-zero code (common with progress piping)
-			$this->logger->debug('FFmpeg completed successfully despite non-zero return code', [
-				'returnCode' => $returnCode,
-				'outputPath' => $outputPath,
-				'outputLines' => count($output)
-			]);
 		}
 
-		$this->logger->info('Adaptive HLS generation completed successfully', [
-			'output' => implode("\n", array_slice($output, -5))
-		]);
 
 		// Update progress file to indicate completion (clear any error field)
 		$this->updateProgressFileCompletion($progressFile, true);
@@ -451,19 +377,6 @@ class HlsCacheGenerationJob extends QueuedJob {
 		}
 		
 		file_put_contents($progressFile, json_encode($progressData, JSON_PRETTY_PRINT));
-		$this->logger->info('Progress file initialized', ['file' => $progressFile]);
-	}
-
-	/**
-	 * Update progress file when generation completes
-	 */
-	private function updateProgressFileCompletion(string $progressFile, bool $success, string $error = ''): void {
-		if (file_exists($progressFile)) {
-			$progressData = json_decode(file_get_contents($progressFile), true) ?: [];
-			$progressData['status'] = $success ? 'completed' : 'failed';
-			$progressData['completed'] = $success;
-			$progressData['progress'] = $success ? 100 : $progressData['progress'];
-			$progressData['lastUpdate'] = time();
 			
 			if ($success) {
 				// Clear error on success
@@ -514,10 +427,6 @@ class HlsCacheGenerationJob extends QueuedJob {
 	 * Generate single bitrate HLS as fallback (720p)
 	 */
 	private function generateSingleHls(string $inputPath, string $outputPath, string $filename): void {
-		$this->logger->info('Starting single bitrate HLS generation (fallback)', [
-			'input' => $inputPath,
-			'output' => $outputPath
-		]);
 
 		// Simple single-bitrate HLS command (720p with higher bitrate)
 		// Add flags to reduce file locking issues with WebDAV
@@ -527,11 +436,6 @@ class HlsCacheGenerationJob extends QueuedJob {
 			' -f hls -hls_time 6 -hls_playlist_type vod -hls_flags independent_segments' .
 			' ' . escapeshellarg($outputPath . '/playlist.m3u8');
 
-		$this->logger->info('Executing single HLS FFmpeg command', ['cmd' => $ffmpegCmd]);
-
-		$output = [];
-		$returnCode = 0;
-		exec($ffmpegCmd . ' 2>&1', $output, $returnCode);
 
 		// Check if FFmpeg actually succeeded by analyzing output
 		$outputText = implode("\n", $output);
@@ -546,21 +450,8 @@ class HlsCacheGenerationJob extends QueuedJob {
 			throw new \Exception("Single HLS generation failed with return code $returnCode: $outputText");
 		} elseif ($returnCode !== 0 && $isActuallySuccessful) {
 			// FFmpeg succeeded but returned non-zero code (common with progress piping)
-			$this->logger->debug('Single HLS generation completed successfully despite non-zero return code', [
-				'returnCode' => $returnCode,
-				'outputPath' => $outputPath
-			]);
 		}
 
-		$this->logger->info('Single HLS generation completed successfully');
-	}
-
-	/**
-	 * Send completion notification to user
-	 */
-	private function sendCompletionNotification($user, string $filename, bool $success, string $error = ''): void {
-		try {
-			$notification = $this->notificationManager->createNotification();
 			$notification->setApp('hyperviewer')
 				->setUser($user->getUID())
 				->setDateTime(new \DateTime())
@@ -730,18 +621,6 @@ class HlsCacheGenerationJob extends QueuedJob {
 								$progressData['completed'] = true;
 								$progressData['progress'] = 100;
 								$updated = true;
-								$this->logger->info('FFmpeg progress detected completion');
-							}
-							break;
-					}
-				}
-			}
-		}
-		
-		// Calculate progress percentage based on time and frame count
-		if ($currentFrame && $progressData['time'] !== '00:00:00') {
-			// Convert time to seconds for calculation
-			$timeParts = explode(':', $progressData['time']);
 			$currentSeconds = ($timeParts[0] * 3600) + ($timeParts[1] * 60) + $timeParts[2];
 			
 			// Estimate total duration based on typical video lengths
@@ -835,12 +714,6 @@ class HlsCacheGenerationJob extends QueuedJob {
 				$progressData['completed'] = true;
 				$progressData['progress'] = 100;
 				$updated = true;
-				$this->logger->info('FFmpeg progress detected completion');
-			}
-		}
-		
-		if ($updated) {
-			$progressData['lastUpdate'] = time();
 			if (!isset($progressData['status']) || $progressData['status'] !== 'completed') {
 				$progressData['status'] = 'processing';
 			}
@@ -861,24 +734,6 @@ class HlsCacheGenerationJob extends QueuedJob {
 				}
 			}
 		} catch (\Exception $e) {
-			$this->logger->debug('Error checking cache existence', ['error' => $e->getMessage()]);
-		}
-		return false;
-	}
-
-	/**
-	 * Acquire FFmpeg concurrency lock (max 4 simultaneous processes)
-	 * @return string|false Lock ID on success, false on failure
-	 */
-	private function acquireFFmpegLock() {
-		$lockDir = '/tmp/hyper_ffmpeg_locks';
-		$maxConcurrency = 4;
-		$maxRetries = 18; // 18 * 10 seconds = 3 minutes max wait
-		$retryDelay = 10; // seconds
-
-		// Create lock directory if it doesn't exist
-		if (!is_dir($lockDir)) {
-			mkdir($lockDir, 0755, true);
 		}
 
 		for ($attempt = 0; $attempt < $maxRetries; $attempt++) {
@@ -902,32 +757,17 @@ class HlsCacheGenerationJob extends QueuedJob {
 				];
 
 				if (file_put_contents($lockFile, json_encode($lockData)) !== false) {
-					$this->logger->info('Acquired FFmpeg concurrency lock', [
-						'lockId' => $lockId,
-						'currentConcurrency' => $currentCount + 1,
-						'maxConcurrency' => $maxConcurrency
-					]);
 					return $lockId;
 				}
 			}
 
 			// Wait before retrying if we haven't reached max concurrency
 			if ($attempt < $maxRetries - 1) {
-				$this->logger->info('FFmpeg concurrency limit reached, waiting for slot', [
-					'currentConcurrency' => $currentCount,
-					'maxConcurrency' => $maxConcurrency,
-					'attempt' => $attempt + 1,
-					'waitTime' => $retryDelay
-				]);
 				sleep($retryDelay);
 			}
 		}
 
 		// This is expected behavior - job will retry on next cron run
-		$this->logger->info('FFmpeg concurrency limit reached, will retry on next cron run', [
-			'attemptsThisRun' => $maxRetries,
-			'waitedSeconds' => $maxRetries * $retryDelay
-		]);
 		return false;
 	}
 
@@ -940,24 +780,10 @@ class HlsCacheGenerationJob extends QueuedJob {
 
 		if (file_exists($lockFile)) {
 			unlink($lockFile);
-			$this->logger->info('Released FFmpeg concurrency lock', ['lockId' => $lockId]);
-		}
-	}
-
-	/**
-	 * Clean up stale FFmpeg locks (older than 4 hours)
-	 */
-	private function cleanupStaleLocks(string $lockDir): void {
-		$staleThreshold = time() - (4 * 3600); // 4 hours
-		$lockFiles = glob($lockDir . '/ffmpeg_*.lock');
 
 		foreach ($lockFiles as $lockFile) {
 			$mtime = filemtime($lockFile);
 			if ($mtime && $mtime < $staleThreshold) {
-				$this->logger->info('Removing stale FFmpeg lock', [
-					'lockFile' => basename($lockFile),
-					'age' => time() - $mtime
-				]);
 				unlink($lockFile);
 			}
 		}

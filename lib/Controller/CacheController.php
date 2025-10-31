@@ -60,12 +60,6 @@ class CacheController extends Controller {
 			return new JSONResponse(['error' => 'Cache path is required'], 400);
 		}
 
-		$this->logger->info('HLS cache generation requested', [
-			'user' => $user->getUID(),
-			'files' => count($files),
-			'cachePath' => $cachePath,
-			'resolutions' => $resolutions
-		]);
 
 		$jobId = uniqid('hls_cache_', true);
 		
@@ -81,10 +75,6 @@ class CacheController extends Controller {
 				'resolutions' => $resolutions
 			];
 			
-			$this->logger->info('Adding HLS cache generation job to queue', [
-				'jobId' => $jobId,
-				'jobData' => $jobData
-			]);
 			
 			$this->jobList->add(HlsCacheGenerationJob::class, $jobData);
 		}
@@ -320,10 +310,6 @@ class CacheController extends Controller {
 			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 			$videoFiles = $this->scanDirectoryForVideos($userFolder, $directory);
 
-			$this->logger->info('Video discovery completed', [
-				'directory' => $directory,
-				'filesFound' => count($videoFiles)
-			]);
 
 			return new JSONResponse([
 				'success' => true,
@@ -378,11 +364,6 @@ class CacheController extends Controller {
 			$configKey = 'auto_gen_' . md5($user->getUID() . '_' . $directory);
 			\OC::$server->getConfig()->setAppValue('hyperviewer', $configKey, json_encode($autoGenSettings));
 
-			$this->logger->info('Directory registered for auto-generation', [
-				'userId' => $user->getUID(),
-				'directory' => $directory,
-				'options' => $options
-			]);
 
 			return new JSONResponse([
 				'success' => true,
@@ -479,16 +460,9 @@ class CacheController extends Controller {
 			// Construct the full path to the HLS file
 			$fullPath = $decodedCachePath . '/' . $decodedFilename;
 			
-			$this->logger->debug('Serving HLS file', [
-				'cachePath' => $decodedCachePath,
-				'filename' => $decodedFilename,
-				'fullPath' => $fullPath
-			]);
 
 			// Check if the file exists
 			if (!$userFolder->nodeExists($fullPath)) {
-				$this->logger->warning('HLS file not found', ['path' => $fullPath]);
-				return new Response('File not found', 404);
 			}
 
 			$file = $userFolder->get($fullPath);
@@ -792,11 +766,6 @@ class CacheController extends Controller {
 			// Remove the configuration
 			$this->config->deleteAppValue('hyperviewer', $configKey);
 
-			$this->logger->info('Auto-generation removed', [
-				'configKey' => $configKey,
-				'directory' => $settings['directory'] ?? 'unknown',
-				'userId' => $user->getUID()
-			]);
 
 			return new JSONResponse(['success' => true]);
 
@@ -964,12 +933,6 @@ class CacheController extends Controller {
 			}
 			
 			// Debug logging to see what we're getting
-			$this->logger->debug('Cache size calculation', [
-				'folder' => $jobFolder->getName(),
-				'path' => $folderPath ?? 'virtual',
-				'size' => $size,
-				'formatted' => $this->formatBytes($size)
-			]);
 			
 			return $this->formatBytes($size);
 			
