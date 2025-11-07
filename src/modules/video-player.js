@@ -334,6 +334,47 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		const ui = new shaka.ui.Overlay(player, videoContainer, video);
 		ui.configure(uiConfig);
 
+		// Override save_video_frame button to extract from original file
+		setTimeout(() => {
+			const saveFrameBtn = videoContainer.querySelector('button[aria-label*="Save"]') || 
+								 videoContainer.querySelector('button[title*="Save"]');
+			if (saveFrameBtn) {
+				saveFrameBtn.addEventListener("click", async (e) => {
+					e.preventDefault();
+					e.stopPropagation();
+					
+					try {
+						const response = await fetch(OC.generateUrl("/apps/hyperviewer/api/extract-frame"), {
+							method: "POST",
+							headers: {
+								"Content-Type": "application/json",
+								requesttoken: OC.requestToken
+							},
+							body: JSON.stringify({
+								filename,
+								directory,
+								timestamp: video.currentTime
+							})
+						});
+
+						if (response.ok) {
+							const blob = await response.blob();
+							const url = URL.createObjectURL(blob);
+							const a = document.createElement("a");
+							a.href = url;
+							a.download = `${filename.split('.')[0]}_frame_${Math.floor(video.currentTime)}s.png`;
+							document.body.appendChild(a);
+							a.click();
+							document.body.removeChild(a);
+							URL.revokeObjectURL(url);
+						}
+					} catch (error) {
+						console.error("Failed to save frame:", error);
+					}
+				}, true);
+			}
+		}, 500);
+
 		// Build manifest URL
 		const encodedCachePath = encodeURIComponent(cachePath);
 		const masterUrl = `${OC.generateUrl(
@@ -358,6 +399,73 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 			if (isClipMode) {
 				updateTimelineProgress();
 			}
+		});
+
+		// Extract frame from original file and display it
+		async function extractAndDisplayFrame(timestamp) {
+			try {
+				const response = await fetch(OC.generateUrl("/apps/hyperviewer/api/extract-frame"), {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						requesttoken: OC.requestToken
+					},
+					body: JSON.stringify({
+						filename,
+						directory,
+						timestamp
+					})
+				});
+
+				if (response.ok) {
+					const blob = await response.blob();
+					const frameUrl = URL.createObjectURL(blob);
+					
+					// Replace video with frame image
+					const frameImg = document.createElement("img");
+					frameImg.src = frameUrl;
+					frameImg.style.cssText = `
+						width: 100%;
+						height: 100%;
+						object-fit: contain;
+						background: #000;
+					`;
+					frameImg.id = "pause-frame-display";
+					
+					// Store original video display
+					video.style.display = "none";
+					videoContainer.appendChild(frameImg);
+					
+					// Store frame data for cleanup
+					video._pauseFrameUrl = frameUrl;
+					video._pauseFrameImg = frameImg;
+				}
+			} catch (error) {
+				console.error("Failed to extract frame:", error);
+			}
+		}
+
+		// Handle pause event - extract high-res frame from original
+		video.addEventListener("pause", () => {
+			// Clear previous frame if exists
+			if (video._pauseFrameImg) {
+				video._pauseFrameImg.remove();
+				URL.revokeObjectURL(video._pauseFrameUrl);
+			}
+			
+			// Extract and display frame from original file
+			extractAndDisplayFrame(video.currentTime);
+		});
+
+		// Handle play event - restore video stream
+		video.addEventListener("play", () => {
+			if (video._pauseFrameImg) {
+				video._pauseFrameImg.remove();
+				URL.revokeObjectURL(video._pauseFrameUrl);
+				video._pauseFrameImg = null;
+				video._pauseFrameUrl = null;
+			}
+			video.style.display = "";
 		});
 	}
 

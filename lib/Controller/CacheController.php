@@ -1194,4 +1194,71 @@ class CacheController extends Controller {
 		// Remove leading slash
 		return ltrim($path, '/');
 	}
+
+	/**
+	 * Extract a frame from the original video file at a specific timestamp
+	 * 
+	 * @NoAdminRequired
+	 */
+	public function extractFrame(): Response {
+		$user = $this->userSession->getUser();
+		if (!$user) {
+			return new Response('Unauthorized', 401);
+		}
+
+		$filename = $this->request->getParam('filename');
+		$directory = $this->request->getParam('directory', '/');
+		$timestamp = (float)$this->request->getParam('timestamp', 0);
+
+		if (!$filename) {
+			return new Response('Missing filename', 400);
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+			$targetDir = $directory === '/' ? $userFolder : $userFolder->get(ltrim($directory, '/'));
+			$videoFile = $targetDir->get($filename);
+
+			$filePath = $videoFile->getStorage()->getLocalFile($videoFile->getInternalPath());
+			if (!file_exists($filePath)) {
+				return new Response('File not found', 404);
+			}
+
+			// Extract frame using FFmpeg
+			$tempFile = tempnam(sys_get_temp_dir(), 'frame_');
+			$cmd = sprintf(
+				'ffmpeg -ss %f -i %s -vframes 1 -f image2 %s 2>&1',
+				$timestamp,
+				escapeshellarg($filePath),
+				escapeshellarg($tempFile)
+			);
+
+			exec($cmd, $output, $returnCode);
+
+			if ($returnCode !== 0 || !file_exists($tempFile)) {
+				@unlink($tempFile);
+				return new Response('Frame extraction failed', 500);
+			}
+
+			// Read and return the frame
+			$frameData = file_get_contents($tempFile);
+			@unlink($tempFile);
+
+			if (!$frameData) {
+				return new Response('Failed to read frame', 500);
+			}
+
+			// Return as direct output
+			@ob_end_clean();
+			header('HTTP/1.1 200 OK');
+			header('Content-Type: image/png');
+			header('Content-Length: ' . strlen($frameData));
+			header('Cache-Control: max-age=3600');
+			echo $frameData;
+			exit;
+
+		} catch (\Exception $e) {
+			return new Response('Error: ' . $e->getMessage(), 500);
+		}
+	}
 }

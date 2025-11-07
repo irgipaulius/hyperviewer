@@ -11,6 +11,7 @@ return [
 		['name' => 'cache#discoverVideos', 'url' => '/cache/discover-videos', 'verb' => 'POST'],
 		['name' => 'cache#registerAutoGeneration', 'url' => '/cache/register-auto-generation', 'verb' => 'POST'],
 		['name' => 'cache#serveHlsFile', 'url' => '/hls/{cachePath}/{filename}', 'verb' => 'GET', 'requirements' => ['cachePath' => '.+', 'filename' => '.+']],
+		['name' => 'cache#extractFrame', 'url' => '/api/extract-frame', 'verb' => 'POST'],
 		
 		// Video Clipping
 		['name' => 'clip#exportClip', 'url' => '/api/export-clip', 'verb' => 'POST'],
