@@ -1224,38 +1224,38 @@ class CacheController extends Controller {
 				return new Response('File not found', 404);
 			}
 
-			// Extract frame using FFmpeg
+			// Extract frame using FFmpeg into PNG
 			$tempFile = tempnam(sys_get_temp_dir(), 'frame_');
+			$pngFile = $tempFile . '.png';
+
 			$cmd = sprintf(
-				'ffmpeg -ss %f -i %s -vframes 1 -f image2 %s 2>&1',
+				'ffmpeg -y -ss %F -i %s -frames:v 1 -vcodec png -f image2 %s 2>&1',
 				$timestamp,
 				escapeshellarg($filePath),
-				escapeshellarg($tempFile)
+				escapeshellarg($pngFile)
 			);
 
 			exec($cmd, $output, $returnCode);
 
-			if ($returnCode !== 0 || !file_exists($tempFile)) {
+			if ($returnCode !== 0 || !file_exists($pngFile) || filesize($pngFile) === 0) {
+				@unlink($pngFile);
 				@unlink($tempFile);
 				return new Response('Frame extraction failed', 500);
 			}
 
-			// Read and return the frame
-			$frameData = file_get_contents($tempFile);
+			$frameData = file_get_contents($pngFile);
+			@unlink($pngFile);
 			@unlink($tempFile);
 
-			if (!$frameData) {
+			if ($frameData === false) {
 				return new Response('Failed to read frame', 500);
 			}
 
-			// Return as direct output
-			@ob_end_clean();
-			header('HTTP/1.1 200 OK');
-			header('Content-Type: image/png');
-			header('Content-Length: ' . strlen($frameData));
-			header('Cache-Control: max-age=3600');
-			echo $frameData;
-			exit;
+			return new Response($frameData, 200, [
+				'Content-Type' => 'image/png',
+				'Content-Length' => (string) strlen($frameData),
+				'Cache-Control' => 'max-age=3600'
+			]);
 
 		} catch (\Exception $e) {
 			return new Response('Error: ' . $e->getMessage(), 500);
