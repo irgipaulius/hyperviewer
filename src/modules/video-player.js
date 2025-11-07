@@ -386,7 +386,7 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 			overflowMenuButtons: [
 				"picture_in_picture",
 				"quality",
-				"playback_speed",
+				"playback_rate",
 				"save_video_frame",
 				"statistics"
 			],
