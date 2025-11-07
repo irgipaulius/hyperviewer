@@ -417,6 +417,8 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 					})
 				});
 
+				console.log("Extracted frame at:", response)
+				
 				if (response.ok) {
 					const blob = await response.blob();
 					const frameUrl = URL.createObjectURL(blob);
@@ -447,6 +449,7 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 
 		// Handle pause event - extract high-res frame from original
 		video.addEventListener("pause", () => {
+			console.log("Video paused at:", video.currentTime);
 			// Clear previous frame if exists
 			if (video._pauseFrameImg) {
 				video._pauseFrameImg.remove();
