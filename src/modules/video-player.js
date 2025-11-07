@@ -228,29 +228,6 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		}
 	}
 
-	// Handle pause event - extract high-res frame from original
-	video.addEventListener("pause", () => {
-		console.log("Video paused at:", video.currentTime);
-		// Clear previous frame if exists
-		if (video._pauseFrameImg) {
-			video._pauseFrameImg.remove();
-			URL.revokeObjectURL(video._pauseFrameUrl);
-		}
-		
-		// Extract and display frame from original file
-		extractAndDisplayFrame(video.currentTime);
-	});
-
-	// Handle play event - restore video stream
-	video.addEventListener("play", () => {
-		if (video._pauseFrameImg) {
-			video._pauseFrameImg.remove();
-			URL.revokeObjectURL(video._pauseFrameUrl);
-			video._pauseFrameImg = null;
-			video._pauseFrameUrl = null;
-		}
-		video.style.display = "";
-	});
 
 	// Clipping state
 	let isClipMode = false;
@@ -468,6 +445,32 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		video.addEventListener("timeupdate", () => {
 			if (isClipMode) {
 				updateTimelineProgress();
+			}
+		});
+
+		// Listen to Shaka Player state changes for pause/play events
+		player.addEventListener("onstatechange", (e) => {
+			console.log("Shaka state changed:", e.state);
+			
+			if (e.state === "paused") {
+				console.log("Video paused at:", video.currentTime);
+				// Clear previous frame if exists
+				if (video._pauseFrameImg) {
+					video._pauseFrameImg.remove();
+					URL.revokeObjectURL(video._pauseFrameUrl);
+				}
+				
+				// Extract and display frame from original file
+				extractAndDisplayFrame(video.currentTime);
+			} else if (e.state === "playing") {
+				console.log("Video playing");
+				if (video._pauseFrameImg) {
+					video._pauseFrameImg.remove();
+					URL.revokeObjectURL(video._pauseFrameUrl);
+					video._pauseFrameImg = null;
+					video._pauseFrameUrl = null;
+				}
+				video.style.display = "";
 			}
 		});
 	}
