@@ -182,6 +182,76 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 
 	const video = document.getElementById(videoId);
 
+	// Extract frame from original file and display it
+	async function extractAndDisplayFrame(timestamp) {
+		try {
+			const response = await fetch(OC.generateUrl("/apps/hyperviewer/api/extract-frame"), {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					requesttoken: OC.requestToken
+				},
+				body: JSON.stringify({
+					filename,
+					directory,
+					timestamp
+				})
+			});
+
+			console.log("Extracted frame at:", response);
+			
+			if (response.ok) {
+				const blob = await response.blob();
+				const frameUrl = URL.createObjectURL(blob);
+				
+				// Replace video with frame image
+				const frameImg = document.createElement("img");
+				frameImg.src = frameUrl;
+				frameImg.style.cssText = `
+					width: 100%;
+					height: 100%;
+					object-fit: contain;
+					background: #000;
+				`;
+				frameImg.id = "pause-frame-display";
+				
+				// Store original video display
+				video.style.display = "none";
+				videoContainer.appendChild(frameImg);
+				
+				// Store frame data for cleanup
+				video._pauseFrameUrl = frameUrl;
+				video._pauseFrameImg = frameImg;
+			}
+		} catch (error) {
+			console.error("Failed to extract frame:", error);
+		}
+	}
+
+	// Handle pause event - extract high-res frame from original
+	video.addEventListener("pause", () => {
+		console.log("Video paused at:", video.currentTime);
+		// Clear previous frame if exists
+		if (video._pauseFrameImg) {
+			video._pauseFrameImg.remove();
+			URL.revokeObjectURL(video._pauseFrameUrl);
+		}
+		
+		// Extract and display frame from original file
+		extractAndDisplayFrame(video.currentTime);
+	});
+
+	// Handle play event - restore video stream
+	video.addEventListener("play", () => {
+		if (video._pauseFrameImg) {
+			video._pauseFrameImg.remove();
+			URL.revokeObjectURL(video._pauseFrameUrl);
+			video._pauseFrameImg = null;
+			video._pauseFrameUrl = null;
+		}
+		video.style.display = "";
+	});
+
 	// Clipping state
 	let isClipMode = false;
 	let startTime = 0;
@@ -399,76 +469,6 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 			if (isClipMode) {
 				updateTimelineProgress();
 			}
-		});
-
-		// Extract frame from original file and display it
-		async function extractAndDisplayFrame(timestamp) {
-			try {
-				const response = await fetch(OC.generateUrl("/apps/hyperviewer/api/extract-frame"), {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						requesttoken: OC.requestToken
-					},
-					body: JSON.stringify({
-						filename,
-						directory,
-						timestamp
-					})
-				});
-
-				console.log("Extracted frame at:", response)
-				
-				if (response.ok) {
-					const blob = await response.blob();
-					const frameUrl = URL.createObjectURL(blob);
-					
-					// Replace video with frame image
-					const frameImg = document.createElement("img");
-					frameImg.src = frameUrl;
-					frameImg.style.cssText = `
-						width: 100%;
-						height: 100%;
-						object-fit: contain;
-						background: #000;
-					`;
-					frameImg.id = "pause-frame-display";
-					
-					// Store original video display
-					video.style.display = "none";
-					videoContainer.appendChild(frameImg);
-					
-					// Store frame data for cleanup
-					video._pauseFrameUrl = frameUrl;
-					video._pauseFrameImg = frameImg;
-				}
-			} catch (error) {
-				console.error("Failed to extract frame:", error);
-			}
-		}
-
-		// Handle pause event - extract high-res frame from original
-		video.addEventListener("pause", () => {
-			console.log("Video paused at:", video.currentTime);
-			// Clear previous frame if exists
-			if (video._pauseFrameImg) {
-				video._pauseFrameImg.remove();
-				URL.revokeObjectURL(video._pauseFrameUrl);
-			}
-			
-			// Extract and display frame from original file
-			extractAndDisplayFrame(video.currentTime);
-		});
-
-		// Handle play event - restore video stream
-		video.addEventListener("play", () => {
-			if (video._pauseFrameImg) {
-				video._pauseFrameImg.remove();
-				URL.revokeObjectURL(video._pauseFrameUrl);
-				video._pauseFrameImg = null;
-				video._pauseFrameUrl = null;
-			}
-			video.style.display = "";
 		});
 	}
 
