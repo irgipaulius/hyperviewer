@@ -1224,38 +1224,55 @@ class CacheController extends Controller {
 				return new Response('File not found', 404);
 			}
 
-			// Extract frame using FFmpeg into PNG
-			$tempFile = tempnam(sys_get_temp_dir(), 'frame_');
-			$pngFile = $tempFile . '.png';
-
 			$cmd = sprintf(
-				'ffmpeg -y -ss %F -i %s -frames:v 1 -vcodec png -f image2 %s 2>&1',
+				'ffmpeg -hide_banner -loglevel error -ss %F -i %s -frames:v 1 -f image2 -vcodec png pipe:1',
 				$timestamp,
-				escapeshellarg($filePath),
-				escapeshellarg($pngFile)
+				escapeshellarg($filePath)
 			);
 
-			exec($cmd, $output, $returnCode);
+			$descriptorSpec = [
+				0 => ['pipe', 'r'],
+				1 => ['pipe', 'w'],
+				2 => ['pipe', 'w'],
+			];
 
-			if ($returnCode !== 0 || !file_exists($pngFile) || filesize($pngFile) === 0) {
-				@unlink($pngFile);
-				@unlink($tempFile);
+			$process = proc_open($cmd, $descriptorSpec, $pipes);
+			if (!is_resource($process)) {
+				return new Response('Unable to start frame extraction', 500);
+			}
+
+			fclose($pipes[0]);
+			stream_set_blocking($pipes[1], true);
+			stream_set_blocking($pipes[2], true);
+
+			$frameData = stream_get_contents($pipes[1]);
+			$stderr = stream_get_contents($pipes[2]);
+
+			fclose($pipes[1]);
+			fclose($pipes[2]);
+
+			$status = proc_close($process);
+
+			if ($status !== 0 || $frameData === false || $frameData === '') {
+				$this->logger->error('FFmpeg frame extraction failed', [
+					'command' => $cmd,
+					'ffmpeg_error' => $stderr,
+				]);
 				return new Response('Frame extraction failed', 500);
 			}
 
-			$frameData = file_get_contents($pngFile);
-			@unlink($pngFile);
-			@unlink($tempFile);
+			$length = strlen($frameData);
 
-			if ($frameData === false) {
-				return new Response('Failed to read frame', 500);
-			}
-
-			return new Response($frameData, 200, [
+			$response = new StreamResponse(static function () use ($frameData) {
+				echo $frameData;
+			});
+			$response->setHeaders([
 				'Content-Type' => 'image/png',
-				'Content-Length' => (string) strlen($frameData),
+				'Content-Length' => (string) $length,
 				'Cache-Control' => 'max-age=3600'
 			]);
+
+			return $response;
 
 		} catch (\Exception $e) {
 			return new Response('Error: ' . $e->getMessage(), 500);
