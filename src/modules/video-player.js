@@ -448,31 +448,29 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 			}
 		});
 
-		// Listen to Shaka Player state changes for pause/play events
-		player.addEventListener("onstatechange", (e) => {
-			console.log("Shaka state changed:", e.state);
-			
-			if (e.state === "paused") {
-				console.log("Video paused at:", video.currentTime);
-				// Clear previous frame if exists
-				if (video._pauseFrameImg) {
-					video._pauseFrameImg.remove();
-					URL.revokeObjectURL(video._pauseFrameUrl);
-				}
-				
-				// Extract and display frame from original file
-				extractAndDisplayFrame(video.currentTime);
-			} else if (e.state === "playing") {
-				console.log("Video playing");
-				if (video._pauseFrameImg) {
-					video._pauseFrameImg.remove();
-					URL.revokeObjectURL(video._pauseFrameUrl);
-					video._pauseFrameImg = null;
-					video._pauseFrameUrl = null;
-				}
-				video.style.display = "";
+		// Listen to native HTML5 video pause/play events
+		video.addEventListener("pause", () => {
+			console.log("🎬 Video paused at:", video.currentTime);
+			// Clear previous frame if exists
+			if (video._pauseFrameImg) {
+				video._pauseFrameImg.remove();
+				URL.revokeObjectURL(video._pauseFrameUrl);
 			}
-		});
+			
+			// Extract and display frame from original file
+			extractAndDisplayFrame(video.currentTime);
+		}, false);
+
+		video.addEventListener("play", () => {
+			console.log("▶️ Video playing");
+			if (video._pauseFrameImg) {
+				video._pauseFrameImg.remove();
+				URL.revokeObjectURL(video._pauseFrameUrl);
+				video._pauseFrameImg = null;
+				video._pauseFrameUrl = null;
+			}
+			video.style.display = "";
+		}, false);
 	}
 
 	// Clipping functionality
