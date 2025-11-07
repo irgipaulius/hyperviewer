@@ -228,7 +228,6 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		}
 	}
 
-
 	// Clipping state
 	let isClipMode = false;
 	let startTime = 0;
