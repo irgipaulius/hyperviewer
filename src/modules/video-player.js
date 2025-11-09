@@ -250,6 +250,11 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 				try {
 					const data = JSON.parse(text);
 					console.log("✅ Frame extracted, base64 length:", data.frame?.length || 0);
+					if (data.benchmarks) {
+						console.log("⏱️ Benchmarks (ms):", data.benchmarks);
+						const total = Object.values(data.benchmarks).reduce((a, b) => a + b, 0);
+						console.log("⏱️ Total backend time:", total.toFixed(2), "ms");
+					}
 					
 					if (data.success && data.frame) {
 						// Create data URL from base64

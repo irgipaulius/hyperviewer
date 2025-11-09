@@ -1234,13 +1234,16 @@ class CacheController extends Controller {
 				escapeshellarg($tempFile)
 			);
 
+			// Benchmark: FFmpeg execution
+			$startFfmpeg = microtime(true);
 			exec($cmd, $output, $status);
+			$ffmpegTime = round((microtime(true) - $startFfmpeg) * 1000, 2);
 		
-		// Debug: Check what happened
-		$fileExists = file_exists($tempFile);
-		$fileSize = $fileExists ? filesize($tempFile) : 0;
+			// Debug: Check what happened
+			$fileExists = file_exists($tempFile);
+			$fileSize = $fileExists ? filesize($tempFile) : 0;
 
-		if ($status !== 0 || !$fileExists || $fileSize === 0) {
+			if ($status !== 0 || !$fileExists || $fileSize === 0) {
 				$this->logger->error('FFmpeg frame extraction failed', [
 					'command' => $cmd,
 					'exit_status' => $status,
@@ -1254,22 +1257,36 @@ class CacheController extends Controller {
 				return new JSONResponse(['error' => 'Frame extraction failed: ' . implode("\n", $output)], 500);
 			}
 
-			// Read frame data and encode as base64
+			// Benchmark: Read file
+			$startRead = microtime(true);
 			$frameData = file_get_contents($tempFile);
+			$readTime = round((microtime(true) - $startRead) * 1000, 2);
+			
 			if ($frameData === false) {
 				unlink($tempFile);
 				return new JSONResponse(['error' => 'Failed to read frame file'], 500);
 			}
 			
+			// Benchmark: Base64 encoding
+			$startEncode = microtime(true);
 			$base64Frame = base64_encode($frameData);
+			$encodeTime = round((microtime(true) - $startEncode) * 1000, 2);
 			
 			// Clean up temp file
+			$startCleanup = microtime(true);
 			unlink($tempFile);
+			$cleanupTime = round((microtime(true) - $startCleanup) * 1000, 2);
 
 			return new JSONResponse([
 				'success' => true,
 				'frame' => $base64Frame,
-				'mimeType' => 'image/png'
+				'mimeType' => 'image/png',
+				'benchmarks' => [
+					'ffmpeg' => $ffmpegTime,
+					'read' => $readTime,
+					'encode' => $encodeTime,
+					'cleanup' => $cleanupTime,
+				]
 			]);
 
 		} catch (\Exception $e) {
