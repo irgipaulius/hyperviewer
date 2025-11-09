@@ -201,22 +201,47 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 			console.log("Extracted frame at:", response);
 			
 			if (response.ok) {
-				const blob = await response.blob();
-				const frameUrl = URL.createObjectURL(blob);
-				
+				const arrayBuffer = await response.arrayBuffer();
+				if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+					console.warn("Received empty frame buffer");
+					return;
+				}
+
+				const base64 = btoa(
+					Array.from(new Uint8Array(arrayBuffer))
+						.map(byte => String.fromCharCode(byte))
+						.join("")
+				);
+				const frameUrl = `data:image/png;base64,${base64}`;
+				console.log(frameUrl)
+
+				// Remove any previous pause frame before inserting the new one
+				const existingPauseFrame = videoContainer.querySelector("#pause-frame-display");
+				if (existingPauseFrame) {
+					existingPauseFrame.remove();
+				}
+
 				// Replace video with frame image
 				const frameImg = document.createElement("img");
 				frameImg.src = frameUrl;
+				frameImg.alt = "Paused frame";
 				frameImg.style.cssText = `
 					width: 100%;
 					height: 100%;
 					object-fit: contain;
 					background: #000;
+					position: absolute;
+					top: 0;
+					left: 0;
 				`;
 				frameImg.id = "pause-frame-display";
-				
+
+				frameImg.onload = () => {
+					targetVideo.style.display = "none";
+				};
+
 				// Store original video display
-				targetVideo.style.display = "none";
+				videoContainer.style.position = videoContainer.style.position || "relative";
 				videoContainer.appendChild(frameImg);
 				
 				// Store frame data for cleanup
