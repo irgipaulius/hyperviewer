@@ -1226,9 +1226,9 @@ class CacheController extends Controller {
 
 			// Use temporary file for frame extraction (more reliable than piping)
 			$tempFile = sys_get_temp_dir() . '/hyperviewer_frame_' . uniqid() . '.png';
-			
+		
 			$cmd = sprintf(
-				'ffmpeg -hide_banner -loglevel error -accurate_seek -ss %F -i %s -frames:v 1 -f image2 -c:v png %s 2>&1',
+				'/usr/local/bin/ffmpeg -hide_banner -loglevel error -accurate_seek -ss %F -i %s -frames:v 1 -f image2 -c:v png %s 2>&1',
 				$timestamp,
 				escapeshellarg($filePath),
 				escapeshellarg($tempFile)
