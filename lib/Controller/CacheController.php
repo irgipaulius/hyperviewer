@@ -1224,70 +1224,51 @@ class CacheController extends Controller {
 				return new JSONResponse(['error' => 'File not found'], 404);
 			}
 
-			// Use temporary file for frame extraction (more reliable than piping)
-			$tempFile = sys_get_temp_dir() . '/hyperviewer_frame_' . uniqid() . '.png';
-		
+			// Stream PNG directly from FFmpeg to stdout
 			$cmd = sprintf(
-				'/usr/local/bin/ffmpeg -hide_banner -loglevel error -accurate_seek -ss %F -i %s -frames:v 1 -f image2 -c:v png %s 2>&1',
+				'/usr/local/bin/ffmpeg -hide_banner -loglevel error -accurate_seek -ss %F -i %s -frames:v 1 -f image2 -c:v png pipe:1',
 				$timestamp,
-				escapeshellarg($filePath),
-				escapeshellarg($tempFile)
+				escapeshellarg($filePath)
 			);
 
-			// Benchmark: FFmpeg execution
-			$startFfmpeg = microtime(true);
-			exec($cmd, $output, $status);
-			$ffmpegTime = round((microtime(true) - $startFfmpeg) * 1000, 2);
-		
-			// Debug: Check what happened
-			$fileExists = file_exists($tempFile);
-			$fileSize = $fileExists ? filesize($tempFile) : 0;
+			$descriptorSpec = [
+				0 => ['pipe', 'r'],  // stdin
+				1 => ['pipe', 'w'],  // stdout
+				2 => ['pipe', 'w'],  // stderr
+			];
 
-			if ($status !== 0 || !$fileExists || $fileSize === 0) {
+			$process = proc_open($cmd, $descriptorSpec, $pipes);
+			if (!is_resource($process)) {
+				return new JSONResponse(['error' => 'Unable to start frame extraction'], 500);
+			}
+
+			fclose($pipes[0]);
+			
+			// Read PNG data from stdout
+			$frameData = stream_get_contents($pipes[1]);
+			$stderr = stream_get_contents($pipes[2]);
+			
+			fclose($pipes[1]);
+			fclose($pipes[2]);
+			
+			$status = proc_close($process);
+
+			if ($status !== 0 || $frameData === false || $frameData === '') {
 				$this->logger->error('FFmpeg frame extraction failed', [
 					'command' => $cmd,
 					'exit_status' => $status,
-					'output' => implode("\n", $output),
-					'temp_file_exists' => $fileExists,
-					'temp_file_size' => $fileSize,
+					'stderr' => $stderr,
 				]);
-				if (file_exists($tempFile)) {
-					unlink($tempFile);
-				}
-				return new JSONResponse(['error' => 'Frame extraction failed: ' . implode("\n", $output)], 500);
+				return new JSONResponse(['error' => 'Frame extraction failed: ' . $stderr], 500);
 			}
 
-			// Benchmark: Read file
-			$startRead = microtime(true);
-			$frameData = file_get_contents($tempFile);
-			$readTime = round((microtime(true) - $startRead) * 1000, 2);
+			// Return raw PNG data
+			$response = new Response($frameData, 200);
+			$response->addHeader('Content-Type', 'image/png');
+			$response->addHeader('Content-Length', (string)strlen($frameData));
+			$response->addHeader('Cache-Control', 'public, max-age=3600');
 			
-			if ($frameData === false) {
-				unlink($tempFile);
-				return new JSONResponse(['error' => 'Failed to read frame file'], 500);
-			}
-			
-			// Benchmark: Base64 encoding
-			$startEncode = microtime(true);
-			$base64Frame = base64_encode($frameData);
-			$encodeTime = round((microtime(true) - $startEncode) * 1000, 2);
-			
-			// Clean up temp file
-			$startCleanup = microtime(true);
-			unlink($tempFile);
-			$cleanupTime = round((microtime(true) - $startCleanup) * 1000, 2);
-
-			return new JSONResponse([
-				'success' => true,
-				'frame' => $base64Frame,
-				'mimeType' => 'image/png',
-				'benchmarks' => [
-					'ffmpeg' => $ffmpegTime,
-					'read' => $readTime,
-					'encode' => $encodeTime,
-					'cleanup' => $cleanupTime,
-				]
-			]);
+			return $response;
 
 		} catch (\Exception $e) {
 			return new JSONResponse(['error' => $e->getMessage()], 500);
