@@ -1224,47 +1224,37 @@ class CacheController extends Controller {
 				return new Response('File not found', 404);
 			}
 
-			// Use accurate seeking for precise frame extraction
+			// Use temporary file for frame extraction (more reliable than piping)
+			$tempFile = sys_get_temp_dir() . '/hyperviewer_frame_' . uniqid() . '.png';
+			
 			$cmd = sprintf(
-				'ffmpeg -hide_banner -loglevel error -accurate_seek -ss %F -i %s -frames:v 1 -f image2 -c:v png -pix_fmt rgb24 pipe:1',
+				'ffmpeg -hide_banner -loglevel error -accurate_seek -ss %F -i %s -frames:v 1 -f image2 -c:v png %s 2>&1',
 				$timestamp,
-				escapeshellarg($filePath)
+				escapeshellarg($filePath),
+				escapeshellarg($tempFile)
 			);
 
-			$descriptorSpec = [
-				0 => ['pipe', 'r'],
-				1 => ['pipe', 'w'],
-				2 => ['pipe', 'w'],
-			];
+			exec($cmd, $output, $status);
 
-			$process = proc_open($cmd, $descriptorSpec, $pipes);
-			if (!is_resource($process)) {
-				return new Response('Unable to start frame extraction', 500);
-			}
-
-			fclose($pipes[0]);
-			stream_set_blocking($pipes[1], true);
-			stream_set_blocking($pipes[2], true);
-
-			$frameData = stream_get_contents($pipes[1]);
-			$stderr = stream_get_contents($pipes[2]);
-
-			fclose($pipes[1]);
-			fclose($pipes[2]);
-
-			$status = proc_close($process);
-
-			if ($status !== 0 || $frameData === false || $frameData === '') {
+			if ($status !== 0 || !file_exists($tempFile) || filesize($tempFile) === 0) {
 				$this->logger->error('FFmpeg frame extraction failed', [
 					'command' => $cmd,
 					'exit_status' => $status,
-					'ffmpeg_error' => $stderr,
-					'data_length' => $frameData === false ? 'false' : strlen($frameData),
+					'output' => implode("\n", $output),
+					'temp_file_exists' => file_exists($tempFile),
+					'temp_file_size' => file_exists($tempFile) ? filesize($tempFile) : 0,
 				]);
-				return new Response('Frame extraction failed: ' . $stderr, 500);
+				if (file_exists($tempFile)) {
+					unlink($tempFile);
+				}
+				return new Response('Frame extraction failed: ' . implode("\n", $output), 500);
 			}
 
+			$frameData = file_get_contents($tempFile);
 			$length = strlen($frameData);
+			
+			// Clean up temp file
+			unlink($tempFile);
 
 			$response = new StreamResponse(static function () use ($frameData) {
 				echo $frameData;
