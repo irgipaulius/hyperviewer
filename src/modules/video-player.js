@@ -264,14 +264,15 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 					// Create and display frame image overlay
 					const frameImg = document.createElement("img");
 					frameImg.src = frameUrl;
+					// Use the exact same styles as the video element for precise alignment
 					frameImg.style.cssText = `
+						width: 100%;
+						height: calc(100% - 50px);
+						object-fit: contain;
+						background: #000;
 						position: absolute;
 						top: 0;
 						left: 0;
-						width: 100%;
-						height: 100%;
-						object-fit: contain;
-						background: #000;
 						pointer-events: none;
 					`;
 					frameImg.id = "pause-frame-display";
