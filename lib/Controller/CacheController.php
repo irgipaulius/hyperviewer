@@ -1215,27 +1215,50 @@ class CacheController extends Controller {
 		}
 
 		try {
+			$t1 = microtime(true);
 			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+			$t2 = microtime(true);
+			
 			$targetDir = $directory === '/' ? $userFolder : $userFolder->get(ltrim($directory, '/'));
+			$t3 = microtime(true);
+			
 			$videoFile = $targetDir->get($filename);
+			$t4 = microtime(true);
+			
 			$filePath = $videoFile->getStorage()->getLocalFile($videoFile->getInternalPath());
+			$t5 = microtime(true);
 
 			$tempFile = sys_get_temp_dir() . '/hyperviewer_frame_' . uniqid() . '.jpg';
 			$cmd = sprintf(
-				'/usr/local/bin/ffmpeg -ss %F -i %s -frames:v 1 -q:v 2 %s 2>&1',
+				'/usr/local/bin/ffmpeg -ss %F -i %s -frames:v 1 -q:v 1 %s 2>&1',
 				$timestamp,
 				escapeshellarg($filePath),
 				escapeshellarg($tempFile)
 			);
 
+			$t6 = microtime(true);
 			exec($cmd, $output, $status);
+			$t7 = microtime(true);
 
 			if ($status !== 0 || !file_exists($tempFile)) {
 				return new JSONResponse(['error' => 'FFmpeg failed: ' . implode(' ', $output)], 500);
 			}
 
+			$t8 = microtime(true);
 			$response = new StreamResponse(fopen($tempFile, 'r'));
+			$t9 = microtime(true);
+			
 			$response->addHeader('Content-Type', 'image/jpeg');
+			
+			$this->logger->error('Frame extraction benchmarks (ms)', [
+				'getUserFolder' => round(($t2 - $t1) * 1000, 2),
+				'getTargetDir' => round(($t3 - $t2) * 1000, 2),
+				'getVideoFile' => round(($t4 - $t3) * 1000, 2),
+				'getLocalFile' => round(($t5 - $t4) * 1000, 2),
+				'ffmpeg' => round(($t7 - $t6) * 1000, 2),
+				'createResponse' => round(($t9 - $t8) * 1000, 2),
+				'total' => round(($t9 - $t1) * 1000, 2)
+			]);
 			
 			register_shutdown_function(function() use ($tempFile) {
 				if (file_exists($tempFile)) {
