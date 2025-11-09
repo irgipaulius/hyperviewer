@@ -1258,7 +1258,7 @@ class CacheController extends Controller {
 			$frameData = file_get_contents($tempFile);
 			if ($frameData === false) {
 				unlink($tempFile);
-				return new Response('Failed to read frame file', 500);
+				return new DataResponse(['success' => false, 'error' => 'Failed to read frame file'], 500);
 			}
 			
 			$base64Frame = base64_encode($frameData);
@@ -1266,16 +1266,11 @@ class CacheController extends Controller {
 			// Clean up temp file
 			unlink($tempFile);
 
-			// Return as plain JSON with proper headers
-			$json = json_encode([
+			return new DataResponse([
 				'success' => true,
 				'frame' => $base64Frame,
 				'mimeType' => 'image/png'
 			]);
-			
-			$response = new Response($json);
-			$response->addHeader('Content-Type', 'application/json');
-			return $response;
 
 		} catch (\Exception $e) {
 			return new Response('Error: ' . $e->getMessage(), 500);
