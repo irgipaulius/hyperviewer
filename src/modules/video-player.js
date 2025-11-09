@@ -244,31 +244,37 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 			console.log(response)
 			
 			if (response.ok) {
-				const blob = await response.blob();
-				console.log("✅ Frame extracted, blob size:", blob.size);
-				const frameUrl = URL.createObjectURL(blob);
+				const data = await response.json();
+				console.log("✅ Frame extracted, base64 length:", data.frame?.length || 0);
 				
-				// Create and display frame image overlay
-				const frameImg = document.createElement("img");
-				frameImg.src = frameUrl;
-				frameImg.style.cssText = `
-					position: absolute;
-					top: 0;
-					left: 0;
-					width: 100%;
-					height: 100%;
-					object-fit: contain;
-					background: #000;
-					pointer-events: none;
-				`;
-				frameImg.id = "pause-frame-display";
-				
-				// Append to videoContainer (not hide video, overlay it)
-				videoContainer.appendChild(frameImg);
-				
-				// Store frame data for cleanup
-				targetVideo._pauseFrameUrl = frameUrl;
-				targetVideo._pauseFrameImg = frameImg;
+				if (data.success && data.frame) {
+					// Create data URL from base64
+					const frameUrl = `data:${data.mimeType};base64,${data.frame}`;
+					
+					// Create and display frame image overlay
+					const frameImg = document.createElement("img");
+					frameImg.src = frameUrl;
+					frameImg.style.cssText = `
+						position: absolute;
+						top: 0;
+						left: 0;
+						width: 100%;
+						height: 100%;
+						object-fit: contain;
+						background: #000;
+						pointer-events: none;
+					`;
+					frameImg.id = "pause-frame-display";
+					
+					// Append to videoContainer (not hide video, overlay it)
+					videoContainer.appendChild(frameImg);
+					
+					// Store frame data for cleanup
+					targetVideo._pauseFrameUrl = frameUrl;
+					targetVideo._pauseFrameImg = frameImg;
+				} else {
+					console.error("❌ Invalid frame data received");
+				}
 			} else {
 				console.error("❌ Frame extraction failed:", response.status, response.statusText);
 			}
@@ -392,9 +398,8 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		const clearPauseFrame = (targetVideo = playbackElement) => {
 			if (targetVideo._pauseFrameImg) {
 				targetVideo._pauseFrameImg.remove();
-				URL.revokeObjectURL(targetVideo._pauseFrameUrl);
-				targetVideo._pauseFrameUrl = null;
 				targetVideo._pauseFrameImg = null;
+				targetVideo._pauseFrameUrl = null;
 			}
 		};
 

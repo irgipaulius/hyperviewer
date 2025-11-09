@@ -1250,22 +1250,18 @@ class CacheController extends Controller {
 				return new Response('Frame extraction failed: ' . implode("\n", $output), 500);
 			}
 
+			// Read frame data and encode as base64
 			$frameData = file_get_contents($tempFile);
-			$length = strlen($frameData);
+			$base64Frame = base64_encode($frameData);
 			
 			// Clean up temp file
 			unlink($tempFile);
 
-			$response = new StreamResponse(static function () use ($frameData) {
-				echo $frameData;
-			});
-			$response->setHeaders([
-				'Content-Type' => 'image/png',
-				'Content-Length' => (string) $length,
-				'Cache-Control' => 'max-age=3600'
+			return new JSONResponse([
+				'success' => true,
+				'frame' => $base64Frame,
+				'mimeType' => 'image/png'
 			]);
-
-			return $response;
 
 		} catch (\Exception $e) {
 			return new Response('Error: ' . $e->getMessage(), 500);
