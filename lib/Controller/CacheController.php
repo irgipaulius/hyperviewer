@@ -1200,7 +1200,7 @@ class CacheController extends Controller {
 	 * 
 	 * @NoAdminRequired
 	 */
-	public function extractFrame(): JSONResponse {
+	public function extractFrame(): Response {
 		$user = $this->userSession->getUser();
 		if (!$user) {
 			return new JSONResponse(['error' => 'Unauthorized'], 401);
@@ -1234,10 +1234,8 @@ class CacheController extends Controller {
 				return new JSONResponse(['error' => 'FFmpeg failed: ' . implode(' ', $output)], 500);
 			}
 
-			// StreamResponse can take a file path directly
-			$response = new StreamResponse($tempFile);
+			$response = new StreamResponse(fopen($tempFile, 'r'));
 			$response->addHeader('Content-Type', 'image/png');
-			$response->addHeader('Content-Length', (string)filesize($tempFile));
 			
 			register_shutdown_function(function() use ($tempFile) {
 				if (file_exists($tempFile)) {
