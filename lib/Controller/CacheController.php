@@ -1244,6 +1244,7 @@ class CacheController extends Controller {
 			$fileSize = $fileExists ? filesize($tempFile) : 0;
 
 			if ($status !== 0 || !$fileExists || $fileSize === 0) {
+				$errorMsg = 'FFmpeg failed: exit=' . $status . ', exists=' . ($fileExists ? 'yes' : 'no') . ', size=' . $fileSize . ', output=' . implode("\n", $output);
 				$this->logger->error('FFmpeg frame extraction failed', [
 					'command' => $cmd,
 					'exit_status' => $status,
@@ -1254,14 +1255,15 @@ class CacheController extends Controller {
 				if (file_exists($tempFile)) {
 					unlink($tempFile);
 				}
-				return new JSONResponse(['error' => 'Frame extraction failed: ' . implode("\n", $output)], 500);
+				return new JSONResponse(['error' => $errorMsg], 500);
 			}
 
 			// Open file handle for streaming
-			$fileHandle = fopen($tempFile, 'r');
+			$fileHandle = @fopen($tempFile, 'r');
 			if ($fileHandle === false) {
+				$error = error_get_last();
 				unlink($tempFile);
-				return new JSONResponse(['error' => 'Failed to open frame file for streaming'], 500);
+				return new JSONResponse(['error' => 'Failed to open frame file: ' . ($error['message'] ?? 'unknown error')], 500);
 			}
 		
 			// Create StreamResponse with file handle
@@ -1283,7 +1285,12 @@ class CacheController extends Controller {
 			return $response;
 
 		} catch (\Exception $e) {
-			return new JSONResponse(['error' => $e->getMessage()], 500);
+			return new JSONResponse([
+				'error' => $e->getMessage(),
+				'trace' => $e->getTraceAsString(),
+				'file' => $e->getFile(),
+				'line' => $e->getLine()
+			], 500);
 		}
 	}
 }
