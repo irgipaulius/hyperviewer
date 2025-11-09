@@ -241,36 +241,59 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 					timestamp
 				})
 			});
-			console.log(response)
+			console.log("📡 Response status:", response.status, response.statusText);
+			console.log("📡 Response headers:", {
+				contentType: response.headers.get('Content-Type'),
+				contentLength: response.headers.get('Content-Length'),
+				ffmpegTime: response.headers.get('X-Frame-Extraction-Time')
+			});
 		
 			if (response.ok) {
-				const blob = await response.blob();
-				console.log("✅ Frame extracted, blob size:", blob.size, "bytes");
+				const contentType = response.headers.get('Content-Type');
 				
-				// Create object URL from blob
-				const frameUrl = URL.createObjectURL(blob);
-				
-				// Create and display frame image overlay
-				const frameImg = document.createElement("img");
-				frameImg.src = frameUrl;
-				frameImg.style.cssText = `
-					position: absolute;
-					top: 0;
-					left: 0;
-					width: 100%;
-					height: 100%;
-					object-fit: contain;
-					background: #000;
-					pointer-events: none;
-				`;
-				frameImg.id = "pause-frame-display";
-				
-				// Append to videoContainer (not hide video, overlay it)
-				videoContainer.appendChild(frameImg);
-				
-				// Store frame data for cleanup
-				targetVideo._pauseFrameUrl = frameUrl;
-				targetVideo._pauseFrameImg = frameImg;
+				// Check if it's an image or JSON error
+				if (contentType && contentType.startsWith('image/')) {
+					console.log("📦 Receiving binary image, content-length:", response.headers.get('Content-Length'));
+					
+					const blob = await response.blob();
+					console.log("✅ Blob received, size:", blob.size, "type:", blob.type);
+					
+					// Create object URL from blob
+					const frameUrl = URL.createObjectURL(blob);
+					
+					// Create and display frame image overlay
+					const frameImg = document.createElement("img");
+					frameImg.src = frameUrl;
+					frameImg.style.cssText = `
+						position: absolute;
+						top: 0;
+						left: 0;
+						width: 100%;
+						height: 100%;
+						object-fit: contain;
+						background: #000;
+						pointer-events: none;
+					`;
+					frameImg.id = "pause-frame-display";
+					
+					// Append to videoContainer (not hide video, overlay it)
+					videoContainer.appendChild(frameImg);
+					
+					// Store frame data for cleanup
+					targetVideo._pauseFrameUrl = frameUrl;
+					targetVideo._pauseFrameImg = frameImg;
+				} else {
+					// Might be JSON error response
+					const text = await response.text();
+					console.log("📦 Response text length:", text.length, "First 200 chars:", text.substring(0, 200));
+					
+					try {
+						const data = JSON.parse(text);
+						console.error("❌ Error from backend:", data);
+					} catch (parseError) {
+						console.error("❌ Failed to parse response:", parseError, "Response:", text);
+					}
+				}
 			} else {
 				const errorText = await response.text();
 				console.error("❌ Frame extraction failed:", response.status, response.statusText, "Body:", errorText);

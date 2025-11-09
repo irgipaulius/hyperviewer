@@ -1200,7 +1200,7 @@ class CacheController extends Controller {
 	 * 
 	 * @NoAdminRequired
 	 */
-	public function extractFrame(): Response {
+	public function extractFrame(): JSONResponse {
 		$user = $this->userSession->getUser();
 		if (!$user) {
 			return new JSONResponse(['error' => 'Unauthorized'], 401);
@@ -1257,13 +1257,24 @@ class CacheController extends Controller {
 				return new JSONResponse(['error' => 'Frame extraction failed: ' . implode("\n", $output)], 500);
 			}
 
-			// Stream raw image data directly
-			$response = new StreamResponse(fopen($tempFile, 'rb'));
+			// Open file handle for streaming
+			$fileHandle = fopen($tempFile, 'r');
+			if ($fileHandle === false) {
+				unlink($tempFile);
+				return new JSONResponse(['error' => 'Failed to open frame file for streaming'], 500);
+			}
+		
+			// Create StreamResponse with file handle
+			$response = new StreamResponse($fileHandle);
 			$response->addHeader('Content-Type', 'image/png');
 			$response->addHeader('Content-Length', (string)$fileSize);
+			$response->addHeader('X-Frame-Extraction-Time', (string)$ffmpegTime);
+			$response->addHeader('X-Benchmark-Read', (string)round((microtime(true) - $startFfmpeg) * 1000, 2));
+			$response->addHeader('X-Benchmark-Encode', '0');
+			$response->addHeader('X-Benchmark-Cleanup', '0');
 		
-			// Register cleanup callback to delete temp file after streaming
-			$response->setCallback(function() use ($tempFile) {
+			// Register shutdown function to clean up temp file after streaming
+			register_shutdown_function(function() use ($tempFile) {
 				if (file_exists($tempFile)) {
 					unlink($tempFile);
 				}
