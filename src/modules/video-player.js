@@ -182,77 +182,6 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 
 	const video = document.getElementById(videoId);
 
-	// Extract frame from original file and display it
-	async function extractAndDisplayFrame(timestamp, targetVideo = video) {
-		try {
-			const response = await fetch(OC.generateUrl("/apps/hyperviewer/api/extract-frame"), {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					requesttoken: OC.requestToken
-				},
-				body: JSON.stringify({
-					filename,
-					directory,
-					timestamp
-				})
-			});
-
-			console.log("Extracted frame at:", response);
-			
-			if (response.ok) {
-				const arrayBuffer = await response.arrayBuffer();
-				if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-					console.warn("Received empty frame buffer");
-					return;
-				}
-
-				const base64 = btoa(
-					Array.from(new Uint8Array(arrayBuffer))
-						.map(byte => String.fromCharCode(byte))
-						.join("")
-				);
-				const frameUrl = `data:image/png;base64,${base64}`;
-				console.log(frameUrl)
-
-				// Remove any previous pause frame before inserting the new one
-				const existingPauseFrame = videoContainer.querySelector("#pause-frame-display");
-				if (existingPauseFrame) {
-					existingPauseFrame.remove();
-				}
-
-				// Replace video with frame image
-				const frameImg = document.createElement("img");
-				frameImg.src = frameUrl;
-				frameImg.alt = "Paused frame";
-				frameImg.style.cssText = `
-					width: 100%;
-					height: 100%;
-					object-fit: contain;
-					background: #000;
-					position: absolute;
-					top: 0;
-					left: 0;
-				`;
-				frameImg.id = "pause-frame-display";
-
-				frameImg.onload = () => {
-					targetVideo.style.display = "none";
-				};
-
-				// Store original video display
-				videoContainer.style.position = videoContainer.style.position || "relative";
-				videoContainer.appendChild(frameImg);
-				
-				// Store frame data for cleanup
-				targetVideo._pauseFrameUrl = frameUrl;
-				targetVideo._pauseFrameImg = frameImg;
-			}
-		} catch (error) {
-			console.error("Failed to extract frame:", error);
-		}
-	}
-
 	// Clipping state
 	let isClipMode = false;
 	let startTime = 0;
@@ -295,6 +224,57 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 	const prevBtn = modal.querySelector("#prev-video-btn");
 	const nextBtn = modal.querySelector("#next-video-btn");
 	const videoContainer = modal.querySelector("#video-player-container");
+	
+	// Extract frame from original file and display it as overlay
+	async function extractAndDisplayFrame(timestamp, targetVideo = video) {
+		try {
+			console.log("🖼️ Extracting frame at:", timestamp);
+			const response = await fetch(OC.generateUrl("/apps/hyperviewer/api/extract-frame"), {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					requesttoken: OC.requestToken
+				},
+				body: JSON.stringify({
+					filename,
+					directory,
+					timestamp
+				})
+			});
+			
+			if (response.ok) {
+				const blob = await response.blob();
+				console.log("✅ Frame extracted, blob size:", blob.size);
+				const frameUrl = URL.createObjectURL(blob);
+				
+				// Create and display frame image overlay
+				const frameImg = document.createElement("img");
+				frameImg.src = frameUrl;
+				frameImg.style.cssText = `
+					position: absolute;
+					top: 0;
+					left: 0;
+					width: 100%;
+					height: 100%;
+					object-fit: contain;
+					background: #000;
+					z-index: 10;
+				`;
+				frameImg.id = "pause-frame-display";
+				
+				// Append to videoContainer (not hide video, overlay it)
+				videoContainer.appendChild(frameImg);
+				
+				// Store frame data for cleanup
+				targetVideo._pauseFrameUrl = frameUrl;
+				targetVideo._pauseFrameImg = frameImg;
+			} else {
+				console.error("❌ Frame extraction failed:", response.status, response.statusText);
+			}
+		} catch (error) {
+			console.error("❌ Failed to extract frame:", error);
+		}
+	}
 	
 	// Hide arrows if only one video
 	if (videoPlaylist.length <= 1) {
@@ -412,11 +392,9 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 			if (targetVideo._pauseFrameImg) {
 				targetVideo._pauseFrameImg.remove();
 				URL.revokeObjectURL(targetVideo._pauseFrameUrl);
-				targetVideo._pauseFrameImg = null;
 				targetVideo._pauseFrameUrl = null;
 				targetVideo._pauseFrameImg = null;
 			}
-			targetVideo.style.display = "";
 		};
 
 		const handlePause = event => {
