@@ -23,6 +23,13 @@
 	<video id="${videoId}" autoplay style="
 		width: 100%; height: 100%; object-fit: contain; background: #000;
 	"></video>
+	
+	<!-- High-resolution pause frame overlay -->
+	<img id="pause-frame-display" style="
+		width: 100%; height: 100%; object-fit: contain; background: #000;
+		position: absolute; top: 0; left: 0; pointer-events: none;
+		display: none;
+	">
 </div>
 
 <!-- Clipping Controls Panel (Outside Shaka Player scope) -->

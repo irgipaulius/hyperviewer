@@ -224,9 +224,11 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 	const prevBtn = modal.querySelector("#prev-video-btn");
 	const nextBtn = modal.querySelector("#next-video-btn");
 	const videoContainer = modal.querySelector("#video-player-container");
+	const pauseFrameImg = modal.querySelector("#pause-frame-display");
 	
 	// Track frame extraction state to allow cancellation
 	let frameExtractionId = 0;
+	let currentFrameUrl = null;
 	
 	// Extract frame from original file and display it as overlay
 	async function extractAndDisplayFrame(timestamp, targetVideo = video) {
@@ -269,31 +271,15 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 						return;
 					}
 				
-					// Create object URL from blob
-					const frameUrl = URL.createObjectURL(blob);
-					
-					// Create and display frame image overlay
-					const frameImg = document.createElement("img");
-					frameImg.src = frameUrl;
-					// Use the exact same styles as the video element for precise alignment
-					frameImg.style.cssText = `
-						width: 100%;
-						height: 100%;
-						object-fit: contain;
-						background: #000;
-						position: absolute;
-						top: 0;
-						left: 0;
-						pointer-events: none;
-					`;
-					frameImg.id = "pause-frame-display";
-					
-					// Append to videoContainer (not hide video, overlay it)
-					videoContainer.appendChild(frameImg);
-					
-					// Store frame data for cleanup
-					targetVideo._pauseFrameUrl = frameUrl;
-					targetVideo._pauseFrameImg = frameImg;
+					// Clean up previous frame URL if exists
+					if (currentFrameUrl) {
+						URL.revokeObjectURL(currentFrameUrl);
+					}
+				
+					// Create object URL from blob and display
+					currentFrameUrl = URL.createObjectURL(blob);
+					pauseFrameImg.src = currentFrameUrl;
+					pauseFrameImg.style.display = "block";
 				} else {
 					// Might be JSON error response
 					const text = await response.text();
@@ -427,24 +413,24 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		const controls = typeof ui.getControls === "function" ? ui.getControls() : null;
 		const playbackElement = controls?.getLocalVideo?.() || video;
 
-		const clearPauseFrame = (targetVideo = playbackElement) => {
+		const clearPauseFrame = () => {
 			// Cancel any pending frame extractions
 			frameExtractionId++;
 			
-			if (targetVideo._pauseFrameImg) {
-				targetVideo._pauseFrameImg.remove();
-				targetVideo._pauseFrameImg = null;
-			}
-			if (targetVideo._pauseFrameUrl) {
-				URL.revokeObjectURL(targetVideo._pauseFrameUrl);
-				targetVideo._pauseFrameUrl = null;
+			// Hide the pause frame overlay
+			pauseFrameImg.style.display = "none";
+			
+			// Clean up the object URL
+			if (currentFrameUrl) {
+				URL.revokeObjectURL(currentFrameUrl);
+				currentFrameUrl = null;
 			}
 		};
 
 		const handlePause = event => {
 			const target = event.currentTarget || playbackElement;
 			console.log("🎬 Video paused at:", target.currentTime);
-			clearPauseFrame(target);
+			clearPauseFrame();
 			
 			// Don't extract frame if paused at or beyond video end (prevents FFmpeg errors)
 			if (target.currentTime >= target.duration) {
@@ -458,7 +444,7 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		const handlePlay = event => {
 			const target = event.currentTarget || playbackElement;
 			console.log("▶️ Video playing");
-			clearPauseFrame(target);
+			clearPauseFrame();
 		};
 
 		// Override save_video_frame button to extract from original file
@@ -533,7 +519,7 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		playbackElement.addEventListener("play", handlePlay, false);
 		playbackElement.addEventListener("seeking", () => {
 			console.log("🔍 Video seeking - clearing pause frame");
-			clearPauseFrame(playbackElement);
+			clearPauseFrame();
 		}, false);
 	}
 
