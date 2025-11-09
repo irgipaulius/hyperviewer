@@ -1235,14 +1235,18 @@ class CacheController extends Controller {
 			);
 
 			exec($cmd, $output, $status);
+		
+		// Debug: Check what happened
+		$fileExists = file_exists($tempFile);
+		$fileSize = $fileExists ? filesize($tempFile) : 0;
 
-			if ($status !== 0 || !file_exists($tempFile) || filesize($tempFile) === 0) {
+		if ($status !== 0 || !$fileExists || $fileSize === 0) {
 				$this->logger->error('FFmpeg frame extraction failed', [
 					'command' => $cmd,
 					'exit_status' => $status,
 					'output' => implode("\n", $output),
-					'temp_file_exists' => file_exists($tempFile),
-					'temp_file_size' => file_exists($tempFile) ? filesize($tempFile) : 0,
+					'temp_file_exists' => $fileExists,
+					'temp_file_size' => $fileSize,
 				]);
 				if (file_exists($tempFile)) {
 					unlink($tempFile);
@@ -1254,26 +1258,24 @@ class CacheController extends Controller {
 			$frameData = file_get_contents($tempFile);
 			if ($frameData === false) {
 				unlink($tempFile);
-				$this->logger->error('Failed to read frame file', ['temp_file' => $tempFile]);
-				return new JSONResponse(['success' => false, 'error' => 'Failed to read frame file'], 500);
+				return new Response('Failed to read frame file', 500);
 			}
-			
-			$this->logger->info('Frame extracted successfully', [
-				'temp_file' => $tempFile,
-				'data_size' => strlen($frameData),
-			]);
 			
 			$base64Frame = base64_encode($frameData);
 			
 			// Clean up temp file
 			unlink($tempFile);
 
-			return new JSONResponse([
+			// Return as plain JSON with proper headers
+			$json = json_encode([
 				'success' => true,
 				'frame' => $base64Frame,
-				'mimeType' => 'image/png',
-				'size' => strlen($frameData)
+				'mimeType' => 'image/png'
 			]);
+			
+			$response = new Response($json);
+			$response->addHeader('Content-Type', 'application/json');
+			return $response;
 
 		} catch (\Exception $e) {
 			return new Response('Error: ' . $e->getMessage(), 500);
