@@ -1220,9 +1220,9 @@ class CacheController extends Controller {
 			$videoFile = $targetDir->get($filename);
 			$filePath = $videoFile->getStorage()->getLocalFile($videoFile->getInternalPath());
 
-			$tempFile = sys_get_temp_dir() . '/hyperviewer_frame_' . uniqid() . '.png';
+			$tempFile = sys_get_temp_dir() . '/hyperviewer_frame_' . uniqid() . '.jpg';
 			$cmd = sprintf(
-				'/usr/local/bin/ffmpeg -ss %F -i %s -frames:v 1 %s 2>&1',
+				'/usr/local/bin/ffmpeg -ss %F -i %s -frames:v 1 -q:v 1 %s 2>&1',
 				$timestamp,
 				escapeshellarg($filePath),
 				escapeshellarg($tempFile)
@@ -1235,7 +1235,7 @@ class CacheController extends Controller {
 			}
 
 			$response = new StreamResponse(fopen($tempFile, 'r'));
-			$response->addHeader('Content-Type', 'image/png');
+			$response->addHeader('Content-Type', 'image/jpeg');
 			
 			register_shutdown_function(function() use ($tempFile) {
 				if (file_exists($tempFile)) {
