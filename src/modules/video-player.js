@@ -259,7 +259,7 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 					height: 100%;
 					object-fit: contain;
 					background: #000;
-					z-index: 10;
+					pointer-events: none;
 				`;
 				frameImg.id = "pause-frame-display";
 				
