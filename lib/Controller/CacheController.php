@@ -1222,7 +1222,7 @@ class CacheController extends Controller {
 
 			$tempFile = sys_get_temp_dir() . '/hyperviewer_frame_' . uniqid() . '.jpg';
 			$cmd = sprintf(
-				'/usr/local/bin/ffmpeg -ss %F -i %s -frames:v 1 -q:v 1 %s 2>&1',
+				'/usr/local/bin/ffmpeg -ss %F -i %s -frames:v 1 -q:v 2 %s 2>&1',
 				$timestamp,
 				escapeshellarg($filePath),
 				escapeshellarg($tempFile)
