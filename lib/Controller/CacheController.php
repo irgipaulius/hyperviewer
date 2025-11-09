@@ -1252,6 +1252,17 @@ class CacheController extends Controller {
 
 			// Read frame data and encode as base64
 			$frameData = file_get_contents($tempFile);
+			if ($frameData === false) {
+				unlink($tempFile);
+				$this->logger->error('Failed to read frame file', ['temp_file' => $tempFile]);
+				return new JSONResponse(['success' => false, 'error' => 'Failed to read frame file'], 500);
+			}
+			
+			$this->logger->info('Frame extracted successfully', [
+				'temp_file' => $tempFile,
+				'data_size' => strlen($frameData),
+			]);
+			
 			$base64Frame = base64_encode($frameData);
 			
 			// Clean up temp file
@@ -1260,7 +1271,8 @@ class CacheController extends Controller {
 			return new JSONResponse([
 				'success' => true,
 				'frame' => $base64Frame,
-				'mimeType' => 'image/png'
+				'mimeType' => 'image/png',
+				'size' => strlen($frameData)
 			]);
 
 		} catch (\Exception $e) {

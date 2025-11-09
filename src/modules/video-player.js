@@ -244,39 +244,47 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 			console.log(response)
 			
 			if (response.ok) {
-				const data = await response.json();
-				console.log("✅ Frame extracted, base64 length:", data.frame?.length || 0);
+				const text = await response.text();
+				console.log("📦 Response text length:", text.length, "First 200 chars:", text.substring(0, 200));
 				
-				if (data.success && data.frame) {
-					// Create data URL from base64
-					const frameUrl = `data:${data.mimeType};base64,${data.frame}`;
+				try {
+					const data = JSON.parse(text);
+					console.log("✅ Frame extracted, base64 length:", data.frame?.length || 0);
 					
-					// Create and display frame image overlay
-					const frameImg = document.createElement("img");
-					frameImg.src = frameUrl;
-					frameImg.style.cssText = `
-						position: absolute;
-						top: 0;
-						left: 0;
-						width: 100%;
-						height: 100%;
-						object-fit: contain;
-						background: #000;
-						pointer-events: none;
-					`;
-					frameImg.id = "pause-frame-display";
-					
-					// Append to videoContainer (not hide video, overlay it)
-					videoContainer.appendChild(frameImg);
-					
-					// Store frame data for cleanup
-					targetVideo._pauseFrameUrl = frameUrl;
-					targetVideo._pauseFrameImg = frameImg;
-				} else {
-					console.error("❌ Invalid frame data received");
+					if (data.success && data.frame) {
+						// Create data URL from base64
+						const frameUrl = `data:${data.mimeType};base64,${data.frame}`;
+						
+						// Create and display frame image overlay
+						const frameImg = document.createElement("img");
+						frameImg.src = frameUrl;
+						frameImg.style.cssText = `
+							position: absolute;
+							top: 0;
+							left: 0;
+							width: 100%;
+							height: 100%;
+							object-fit: contain;
+							background: #000;
+							pointer-events: none;
+						`;
+						frameImg.id = "pause-frame-display";
+						
+						// Append to videoContainer (not hide video, overlay it)
+						videoContainer.appendChild(frameImg);
+						
+						// Store frame data for cleanup
+						targetVideo._pauseFrameUrl = frameUrl;
+						targetVideo._pauseFrameImg = frameImg;
+					} else {
+						console.error("❌ Invalid frame data received:", data);
+					}
+				} catch (parseError) {
+					console.error("❌ Failed to parse JSON response:", parseError, "Response:", text);
 				}
 			} else {
-				console.error("❌ Frame extraction failed:", response.status, response.statusText);
+				const errorText = await response.text();
+				console.error("❌ Frame extraction failed:", response.status, response.statusText, "Body:", errorText);
 			}
 		} catch (error) {
 			console.error("❌ Failed to extract frame:", error);
