@@ -241,6 +241,7 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 					timestamp
 				})
 			});
+			console.log(response)
 			
 			if (response.ok) {
 				const blob = await response.blob();
