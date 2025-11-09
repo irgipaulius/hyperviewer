@@ -1234,8 +1234,10 @@ class CacheController extends Controller {
 				return new JSONResponse(['error' => 'FFmpeg failed: ' . implode(' ', $output)], 500);
 			}
 
-			$response = new StreamResponse(fopen($tempFile, 'r'));
+			// StreamResponse can take a file path directly
+			$response = new StreamResponse($tempFile);
 			$response->addHeader('Content-Type', 'image/png');
+			$response->addHeader('Content-Length', (string)filesize($tempFile));
 			
 			register_shutdown_function(function() use ($tempFile) {
 				if (file_exists($tempFile)) {
