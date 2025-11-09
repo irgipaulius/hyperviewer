@@ -225,8 +225,13 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 	const nextBtn = modal.querySelector("#next-video-btn");
 	const videoContainer = modal.querySelector("#video-player-container");
 	
+	// Track frame extraction state to allow cancellation
+	let frameExtractionId = 0;
+	
 	// Extract frame from original file and display it as overlay
 	async function extractAndDisplayFrame(timestamp, targetVideo = video) {
+		// Create unique ID for this extraction request
+		const currentExtractionId = ++frameExtractionId;
 		try {
 			console.log("🖼️ Extracting frame at:", timestamp);
 			const response = await fetch(OC.generateUrl("/apps/hyperviewer/api/extract-frame"), {
@@ -257,7 +262,13 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 					
 					const blob = await response.blob();
 					console.log("✅ Blob received, size:", blob.size, "type:", blob.type);
-					
+				
+					// Check if this extraction was cancelled (video started playing)
+					if (currentExtractionId !== frameExtractionId) {
+						console.log("⚠️ Frame extraction cancelled - video is playing");
+						return;
+					}
+				
 					// Create object URL from blob
 					const frameUrl = URL.createObjectURL(blob);
 					
@@ -267,7 +278,7 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 					// Use the exact same styles as the video element for precise alignment
 					frameImg.style.cssText = `
 						width: 100%;
-						height: calc(100% - 50px);
+						height: 100%;
 						object-fit: contain;
 						background: #000;
 						position: absolute;
@@ -417,6 +428,9 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		const playbackElement = controls?.getLocalVideo?.() || video;
 
 		const clearPauseFrame = (targetVideo = playbackElement) => {
+			// Cancel any pending frame extractions
+			frameExtractionId++;
+			
 			if (targetVideo._pauseFrameImg) {
 				targetVideo._pauseFrameImg.remove();
 				targetVideo._pauseFrameImg = null;
@@ -431,6 +445,13 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 			const target = event.currentTarget || playbackElement;
 			console.log("🎬 Video paused at:", target.currentTime);
 			clearPauseFrame(target);
+			
+			// Don't extract frame if paused at or beyond video end (prevents FFmpeg errors)
+			if (target.currentTime >= target.duration) {
+				console.log("⚠️ Paused at video end, skipping frame extraction");
+				return;
+			}
+			
 			extractAndDisplayFrame(target.currentTime, target);
 		};
 
@@ -510,6 +531,10 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		// Listen to native HTML5 video pause/play events (Shaka playback element)
 		playbackElement.addEventListener("pause", handlePause, false);
 		playbackElement.addEventListener("play", handlePlay, false);
+		playbackElement.addEventListener("seeking", () => {
+			console.log("🔍 Video seeking - clearing pause frame");
+			clearPauseFrame(playbackElement);
+		}, false);
 	}
 
 	// Clipping functionality
