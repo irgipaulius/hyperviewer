@@ -1200,10 +1200,10 @@ class CacheController extends Controller {
 	 * 
 	 * @NoAdminRequired
 	 */
-	public function extractFrame(): Response {
+	public function extractFrame(): JSONResponse {
 		$user = $this->userSession->getUser();
 		if (!$user) {
-			return new Response('Unauthorized', 401);
+			return new JSONResponse(['error' => 'Unauthorized'], 401);
 		}
 
 		$filename = $this->request->getParam('filename');
@@ -1211,7 +1211,7 @@ class CacheController extends Controller {
 		$timestamp = (float)$this->request->getParam('timestamp', 0);
 
 		if (!$filename) {
-			return new Response('Missing filename', 400);
+			return new JSONResponse(['error' => 'Missing filename'], 400);
 		}
 
 		try {
@@ -1221,7 +1221,7 @@ class CacheController extends Controller {
 
 			$filePath = $videoFile->getStorage()->getLocalFile($videoFile->getInternalPath());
 			if (!file_exists($filePath)) {
-				return new Response('File not found', 404);
+				return new JSONResponse(['error' => 'File not found'], 404);
 			}
 
 			// Use temporary file for frame extraction (more reliable than piping)
@@ -1251,14 +1251,14 @@ class CacheController extends Controller {
 				if (file_exists($tempFile)) {
 					unlink($tempFile);
 				}
-				return new Response('Frame extraction failed: ' . implode("\n", $output), 500);
+				return new JSONResponse(['error' => 'Frame extraction failed: ' . implode("\n", $output)], 500);
 			}
 
 			// Read frame data and encode as base64
 			$frameData = file_get_contents($tempFile);
 			if ($frameData === false) {
 				unlink($tempFile);
-				return new DataResponse(['success' => false, 'error' => 'Failed to read frame file'], 500);
+				return new JSONResponse(['error' => 'Failed to read frame file'], 500);
 			}
 			
 			$base64Frame = base64_encode($frameData);
@@ -1266,14 +1266,14 @@ class CacheController extends Controller {
 			// Clean up temp file
 			unlink($tempFile);
 
-			return new DataResponse([
+			return new JSONResponse([
 				'success' => true,
 				'frame' => $base64Frame,
 				'mimeType' => 'image/png'
 			]);
 
 		} catch (\Exception $e) {
-			return new Response('Error: ' . $e->getMessage(), 500);
+			return new JSONResponse(['error' => $e->getMessage()], 500);
 		}
 	}
 }
