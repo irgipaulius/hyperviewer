@@ -1218,79 +1218,35 @@ class CacheController extends Controller {
 			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 			$targetDir = $directory === '/' ? $userFolder : $userFolder->get(ltrim($directory, '/'));
 			$videoFile = $targetDir->get($filename);
-
 			$filePath = $videoFile->getStorage()->getLocalFile($videoFile->getInternalPath());
-			if (!file_exists($filePath)) {
-				return new JSONResponse(['error' => 'File not found'], 404);
-			}
 
-			// Use temporary file for frame extraction (more reliable than piping)
 			$tempFile = sys_get_temp_dir() . '/hyperviewer_frame_' . uniqid() . '.png';
-		
 			$cmd = sprintf(
-				'/usr/local/bin/ffmpeg -hide_banner -loglevel error -accurate_seek -ss %F -i %s -frames:v 1 -f image2 -c:v png %s 2>&1',
+				'/usr/local/bin/ffmpeg -ss %F -i %s -frames:v 1 %s 2>&1',
 				$timestamp,
 				escapeshellarg($filePath),
 				escapeshellarg($tempFile)
 			);
 
-			// Benchmark: FFmpeg execution
-			$startFfmpeg = microtime(true);
 			exec($cmd, $output, $status);
-			$ffmpegTime = round((microtime(true) - $startFfmpeg) * 1000, 2);
-		
-			// Debug: Check what happened
-			$fileExists = file_exists($tempFile);
-			$fileSize = $fileExists ? filesize($tempFile) : 0;
 
-			if ($status !== 0 || !$fileExists || $fileSize === 0) {
-				$errorMsg = 'FFmpeg failed: exit=' . $status . ', exists=' . ($fileExists ? 'yes' : 'no') . ', size=' . $fileSize . ', output=' . implode("\n", $output);
-				$this->logger->error('FFmpeg frame extraction failed', [
-					'command' => $cmd,
-					'exit_status' => $status,
-					'output' => implode("\n", $output),
-					'temp_file_exists' => $fileExists,
-					'temp_file_size' => $fileSize,
-				]);
-				if (file_exists($tempFile)) {
-					unlink($tempFile);
-				}
-				return new JSONResponse(['error' => $errorMsg], 500);
+			if ($status !== 0 || !file_exists($tempFile)) {
+				return new JSONResponse(['error' => 'FFmpeg failed: ' . implode(' ', $output)], 500);
 			}
 
-			// Open file handle for streaming
-			$fileHandle = @fopen($tempFile, 'r');
-			if ($fileHandle === false) {
-				$error = error_get_last();
-				unlink($tempFile);
-				return new JSONResponse(['error' => 'Failed to open frame file: ' . ($error['message'] ?? 'unknown error')], 500);
-			}
-		
-			// Create StreamResponse with file handle
-			$response = new StreamResponse($fileHandle);
+			$response = new StreamResponse(fopen($tempFile, 'r'));
 			$response->addHeader('Content-Type', 'image/png');
-			$response->addHeader('Content-Length', (string)$fileSize);
-			$response->addHeader('X-Frame-Extraction-Time', (string)$ffmpegTime);
-			$response->addHeader('X-Benchmark-Read', (string)round((microtime(true) - $startFfmpeg) * 1000, 2));
-			$response->addHeader('X-Benchmark-Encode', '0');
-			$response->addHeader('X-Benchmark-Cleanup', '0');
-		
-			// Register shutdown function to clean up temp file after streaming
+			
 			register_shutdown_function(function() use ($tempFile) {
 				if (file_exists($tempFile)) {
-					unlink($tempFile);
+					@unlink($tempFile);
 				}
 			});
-		
+			
 			return $response;
 
 		} catch (\Exception $e) {
-			return new JSONResponse([
-				'error' => $e->getMessage(),
-				'trace' => $e->getTraceAsString(),
-				'file' => $e->getFile(),
-				'line' => $e->getLine()
-			], 500);
+			return new JSONResponse(['error' => $e->getMessage()], 500);
 		}
 	}
 }
