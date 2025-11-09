@@ -242,43 +242,35 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 				})
 			});
 			console.log(response)
-			
+		
 			if (response.ok) {
-				const contentType = response.headers.get('Content-Type');
+				const blob = await response.blob();
+				console.log("✅ Frame extracted, blob size:", blob.size, "bytes");
 				
-				// Check if it's an image or JSON error
-				if (contentType && contentType.includes('image/png')) {
-					const blob = await response.blob();
-					console.log("✅ Frame extracted, PNG size:", blob.size, "bytes");
-					
-					const frameUrl = URL.createObjectURL(blob);
-					
-					// Create and display frame image overlay
-					const frameImg = document.createElement("img");
-					frameImg.src = frameUrl;
-					frameImg.style.cssText = `
-						position: absolute;
-						top: 0;
-						left: 0;
-						width: 100%;
-						height: 100%;
-						object-fit: contain;
-						background: #000;
-						pointer-events: none;
-					`;
-					frameImg.id = "pause-frame-display";
-					
-					// Append to videoContainer (not hide video, overlay it)
-					videoContainer.appendChild(frameImg);
-					
-					// Store frame data for cleanup
-					targetVideo._pauseFrameUrl = frameUrl;
-					targetVideo._pauseFrameImg = frameImg;
-				} else {
-					// It's a JSON error response
-					const data = await response.json();
-					console.error("❌ Frame extraction error:", data.error);
-				}
+				// Create object URL from blob
+				const frameUrl = URL.createObjectURL(blob);
+				
+				// Create and display frame image overlay
+				const frameImg = document.createElement("img");
+				frameImg.src = frameUrl;
+				frameImg.style.cssText = `
+					position: absolute;
+					top: 0;
+					left: 0;
+					width: 100%;
+					height: 100%;
+					object-fit: contain;
+					background: #000;
+					pointer-events: none;
+				`;
+				frameImg.id = "pause-frame-display";
+				
+				// Append to videoContainer (not hide video, overlay it)
+				videoContainer.appendChild(frameImg);
+				
+				// Store frame data for cleanup
+				targetVideo._pauseFrameUrl = frameUrl;
+				targetVideo._pauseFrameImg = frameImg;
 			} else {
 				const errorText = await response.text();
 				console.error("❌ Frame extraction failed:", response.status, response.statusText, "Body:", errorText);
@@ -403,10 +395,10 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		const clearPauseFrame = (targetVideo = playbackElement) => {
 			if (targetVideo._pauseFrameImg) {
 				targetVideo._pauseFrameImg.remove();
-				if (targetVideo._pauseFrameUrl) {
-					URL.revokeObjectURL(targetVideo._pauseFrameUrl);
-				}
 				targetVideo._pauseFrameImg = null;
+			}
+			if (targetVideo._pauseFrameUrl) {
+				URL.revokeObjectURL(targetVideo._pauseFrameUrl);
 				targetVideo._pauseFrameUrl = null;
 			}
 		};

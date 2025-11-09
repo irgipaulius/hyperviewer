@@ -1200,7 +1200,7 @@ class CacheController extends Controller {
 	 * 
 	 * @NoAdminRequired
 	 */
-	public function extractFrame(): JSONResponse {
+	public function extractFrame(): Response {
 		$user = $this->userSession->getUser();
 		if (!$user) {
 			return new JSONResponse(['error' => 'Unauthorized'], 401);
@@ -1224,50 +1224,51 @@ class CacheController extends Controller {
 				return new JSONResponse(['error' => 'File not found'], 404);
 			}
 
-			// Stream PNG directly from FFmpeg to stdout
+			// Use temporary file for frame extraction (more reliable than piping)
+			$tempFile = sys_get_temp_dir() . '/hyperviewer_frame_' . uniqid() . '.png';
+		
 			$cmd = sprintf(
-				'/usr/local/bin/ffmpeg -hide_banner -loglevel error -accurate_seek -ss %F -i %s -frames:v 1 -f image2 -c:v png pipe:1',
+				'/usr/local/bin/ffmpeg -hide_banner -loglevel error -accurate_seek -ss %F -i %s -frames:v 1 -f image2 -c:v png %s 2>&1',
 				$timestamp,
-				escapeshellarg($filePath)
+				escapeshellarg($filePath),
+				escapeshellarg($tempFile)
 			);
 
-			$descriptorSpec = [
-				0 => ['pipe', 'r'],  // stdin
-				1 => ['pipe', 'w'],  // stdout
-				2 => ['pipe', 'w'],  // stderr
-			];
+			// Benchmark: FFmpeg execution
+			$startFfmpeg = microtime(true);
+			exec($cmd, $output, $status);
+			$ffmpegTime = round((microtime(true) - $startFfmpeg) * 1000, 2);
+		
+			// Debug: Check what happened
+			$fileExists = file_exists($tempFile);
+			$fileSize = $fileExists ? filesize($tempFile) : 0;
 
-			$process = proc_open($cmd, $descriptorSpec, $pipes);
-			if (!is_resource($process)) {
-				return new JSONResponse(['error' => 'Unable to start frame extraction'], 500);
-			}
-
-			fclose($pipes[0]);
-			
-			// Read PNG data from stdout
-			$frameData = stream_get_contents($pipes[1]);
-			$stderr = stream_get_contents($pipes[2]);
-			
-			fclose($pipes[1]);
-			fclose($pipes[2]);
-			
-			$status = proc_close($process);
-
-			if ($status !== 0 || $frameData === false || $frameData === '') {
+			if ($status !== 0 || !$fileExists || $fileSize === 0) {
 				$this->logger->error('FFmpeg frame extraction failed', [
 					'command' => $cmd,
 					'exit_status' => $status,
-					'stderr' => $stderr,
+					'output' => implode("\n", $output),
+					'temp_file_exists' => $fileExists,
+					'temp_file_size' => $fileSize,
 				]);
-				return new JSONResponse(['error' => 'Frame extraction failed: ' . $stderr], 500);
+				if (file_exists($tempFile)) {
+					unlink($tempFile);
+				}
+				return new JSONResponse(['error' => 'Frame extraction failed: ' . implode("\n", $output)], 500);
 			}
 
-			// Return raw PNG data
-			$response = new Response($frameData, 200);
+			// Stream raw image data directly
+			$response = new StreamResponse(fopen($tempFile, 'rb'));
 			$response->addHeader('Content-Type', 'image/png');
-			$response->addHeader('Content-Length', (string)strlen($frameData));
-			$response->addHeader('Cache-Control', 'public, max-age=3600');
-			
+			$response->addHeader('Content-Length', (string)$fileSize);
+		
+			// Register cleanup callback to delete temp file after streaming
+			$response->setCallback(function() use ($tempFile) {
+				if (file_exists($tempFile)) {
+					unlink($tempFile);
+				}
+			});
+		
 			return $response;
 
 		} catch (\Exception $e) {
