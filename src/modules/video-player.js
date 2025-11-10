@@ -535,6 +535,9 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 
 		if (isClipMode) {
 			panel.style.display = "block";
+			// Reduce size for clipping mode to fit screen better
+			videoContainer.style.width = "min(90vw, 1200px)";
+			videoContainer.style.height = "min(70vh, 600px)";
 			videoContainer.style.borderRadius = "8px 8px 0 0";
 			toggleBtn.textContent = "✂️ Exit Clip Mode";
 			toggleBtn.style.background = "rgba(244, 67, 54, 0.9)";
@@ -545,6 +548,9 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 			updateTimeDisplays();
 		} else {
 			panel.style.display = "none";
+			// Restore larger size when not clipping
+			videoContainer.style.width = "min(95vw, 1400px)";
+			videoContainer.style.height = "min(80vh, 800px)";
 			videoContainer.style.borderRadius = "8px";
 			toggleBtn.textContent = "✂️ Clip Video";
 			toggleBtn.style.background = "rgba(255, 152, 0, 0.9)";
