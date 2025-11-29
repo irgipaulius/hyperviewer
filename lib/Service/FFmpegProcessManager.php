@@ -229,4 +229,24 @@ class FFmpegProcessManager {
 			return $job['status'] === 'processing' || $job['status'] === 'pending';
 		});
 	}
+
+	public function getJobStatistics(): array {
+		$queue = $this->readQueue();
+		$stats = [
+			'active' => 0,
+			'pending' => 0,
+			'completed' => 0,
+			'failed' => 0,
+			'total' => count($queue)
+		];
+
+		foreach ($queue as $job) {
+			$status = $job['status'] ?? 'unknown';
+			if (isset($stats[$status])) {
+				$stats[$status]++;
+			}
+		}
+
+		return $stats;
+	}
 }

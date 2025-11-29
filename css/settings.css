@@ -80,17 +80,31 @@
 }
 
 /* Job Cards */
-#active-jobs-container,
+#active-jobs-container {
+	margin: 15px 0;
+	max-height: 300px;
+	overflow-y: auto;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	background-color: var(--color-main-background);
+}
+
 #autogen-container {
 	margin: 15px 0;
 }
 
 .job-card {
-	background: var(--color-background-hover);
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
+	background: var(--color-main-background);
+	border-bottom: 1px solid var(--color-border);
 	padding: 15px;
-	margin-bottom: 10px;
+}
+
+.job-card:last-child {
+	border-bottom: none;
+}
+
+.job-card:hover {
+	background-color: var(--color-background-hover);
 }
 
 .job-header {

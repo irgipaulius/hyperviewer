@@ -849,12 +849,18 @@ class CacheController extends Controller {
 				}
 			}
 
-			// Get active jobs count (use existing method for consistency)
-			$activeJobsResponse = $this->getActiveJobs();
-			$activeJobsData = $activeJobsResponse->getData();
-			if (isset($activeJobsData['jobs'])) {
-				$stats['activeJobs'] = count($activeJobsData['jobs']);
-			}
+			// Get accurate job stats from ProcessManager
+			$managerStats = $this->ffmpegProcessManager->getJobStatistics();
+			
+			// Overwrite active and pending with accurate data from manager
+			$stats['activeJobs'] = $managerStats['active'];
+			$stats['pendingJobs'] = $managerStats['pending'];
+			
+			// Recalculate total jobs to include pending ones that aren't on disk yet
+			// Note: totalJobs from filesystem includes active ones on disk, so we need to be careful not to double count.
+			// However, for the UI, we mostly care about the specific counters.
+			// Let's just ensure total is at least the sum of the parts.
+			$stats['totalJobs'] = $stats['completedJobs'] + $stats['activeJobs'] + $stats['pendingJobs'];
 
 			return new JSONResponse(['stats' => $stats]);
 
