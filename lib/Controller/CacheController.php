@@ -1270,20 +1270,22 @@ class CacheController extends Controller {
 			}
 
 			$t8 = microtime(true);
-			$response = new StreamResponse(fopen($tempFile, 'r'));
+				$response = new StreamResponse(fopen($tempFile, 'r'));
 			$t9 = microtime(true);
 			
 			$response->addHeader('Content-Type', 'image/jpeg');
 			
-			$this->logger->error('Frame extraction benchmarks (ms)', [
-				'getUserFolder' => round(($t2 - $t1) * 1000, 2),
-				'getTargetDir' => round(($t3 - $t2) * 1000, 2),
-				'getVideoFile' => round(($t4 - $t3) * 1000, 2),
-				'getLocalFile' => round(($t5 - $t4) * 1000, 2),
-				'ffmpeg' => round(($t7 - $t6) * 1000, 2),
-				'createResponse' => round(($t9 - $t8) * 1000, 2),
-				'total' => round(($t9 - $t1) * 1000, 2)
-			]);
+			$benchmarks = sprintf(
+			'Frame extraction benchmarks (ms): getUserFolder=%.2f, getTargetDir=%.2f, getVideoFile=%.2f, getLocalFile=%.2f, ffmpeg=%.2f, createResponse=%.2f, total=%.2f',
+			round(($t2 - $t1) * 1000, 2),
+			round(($t3 - $t2) * 1000, 2),
+			round(($t4 - $t3) * 1000, 2),
+			round(($t5 - $t4) * 1000, 2),
+			round(($t7 - $t6) * 1000, 2),
+			round(($t9 - $t8) * 1000, 2),
+			round(($t9 - $t1) * 1000, 2)
+			);
+			$this->logger->error($benchmarks);
 			
 			register_shutdown_function(function() use ($tempFile) {
 				if (file_exists($tempFile)) {

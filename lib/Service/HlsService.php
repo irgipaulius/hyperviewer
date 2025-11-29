@@ -49,6 +49,15 @@ class HlsService {
 		$cacheFolder = $userFolder->get($cacheOutputPath);
 		$cacheLocalPath = $cacheFolder->getStorage()->getLocalFile($cacheFolder->getInternalPath());
 
+		$this->logger->error(sprintf(
+			'Transcoding: file=%s, videoPath=%s, videoLocalPath=%s, cacheOutputPath=%s, cacheLocalPath=%s',
+			$filename,
+			$videoPath,
+			$videoLocalPath,
+			$cacheOutputPath,
+			$cacheLocalPath
+		));
+
 		// Generate HLS
 		$resolutions = $settings['resolutions'] ?? ['720p', '480p', '240p'];
 		$this->generateAdaptiveHls($videoLocalPath, $cacheLocalPath, $filename, $resolutions);
@@ -112,6 +121,8 @@ class HlsService {
 	}
 
 	private function executeFFmpegWithProgress(string $cmd, string $progressFile): void {
+		$this->logger->error('FFmpeg command: ' . $cmd);
+		
 		$descriptors = [
 			0 => ['pipe', 'r'], // stdin
 			1 => ['pipe', 'w'], // stdout
@@ -128,6 +139,7 @@ class HlsService {
 			stream_set_blocking($pipes[2], false);
 
 			$rawProgressFile = $progressFile . '.raw';
+			$stderrOutput = '';
 
 			while (true) {
 				$status = proc_get_status($process);
@@ -135,6 +147,9 @@ class HlsService {
 				// Read output to prevent buffer filling
 				fread($pipes[1], 4096);
 				$stderr = fread($pipes[2], 4096);
+				if ($stderr) {
+					$stderrOutput .= $stderr;
+				}
 
 				// Update progress
 				$this->parseProgressFromRawFile($rawProgressFile, $progressFile);
@@ -152,9 +167,17 @@ class HlsService {
 			$returnCode = proc_close($process);
 
 			if ($returnCode !== 0) {
+				$errorMsg = sprintf(
+					'FFmpeg failed with code %d. Command: %s. Stderr: %s',
+					$returnCode,
+					$cmd,
+					substr($stderrOutput, -500) // Last 500 chars of stderr
+				);
+				$this->logger->error($errorMsg);
 				throw new \Exception("FFmpeg failed with code $returnCode");
 			}
 		} else {
+			$this->logger->error('Failed to start FFmpeg process. Command: ' . $cmd);
 			throw new \Exception("Failed to start FFmpeg process");
 		}
 	}
