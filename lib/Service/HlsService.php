@@ -39,8 +39,11 @@ class HlsService {
 			throw new \Exception('Cache path is required');
 		}
 
+		// Resolve tilde (~) in cache path
+		$resolvedCachePath = PathResolver::resolveCachePath($cachePath);
+
 		$baseFilename = pathinfo($filename, PATHINFO_FILENAME);
-		$cacheOutputPath = rtrim($cachePath, '/') . '/' . $baseFilename;
+		$cacheOutputPath = rtrim($resolvedCachePath, '/') . '/' . $baseFilename;
 
 		// Create cache directory if needed
 		if (!$userFolder->nodeExists($cacheOutputPath)) {
@@ -62,6 +65,7 @@ class HlsService {
 		$resolutions = $settings['resolutions'] ?? ['720p', '480p', '240p'];
 		$this->generateAdaptiveHls($videoLocalPath, $cacheLocalPath, $filename, $resolutions);
 	}
+
 
 	/**
 	 * Generate adaptive HLS
