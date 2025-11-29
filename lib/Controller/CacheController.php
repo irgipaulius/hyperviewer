@@ -850,7 +850,7 @@ class CacheController extends Controller {
 			}
 
 			// Get accurate job stats from ProcessManager
-			$managerStats = $this->ffmpegProcessManager->getJobStatistics();
+			$managerStats = $this->processManager->getJobStatistics();
 			
 			// Overwrite active and pending with accurate data from manager
 			$stats['activeJobs'] = $managerStats['active'];
