@@ -13,7 +13,7 @@ use OCP\IUserSession;
 use OCP\BackgroundJob\IJobList;
 use OCP\IConfig;
 use Psr\Log\LoggerInterface;
-use OCA\HyperViewer\BackgroundJob\HlsCacheGenerationJob;
+
 
 class CacheController extends Controller {
 	
@@ -22,6 +22,7 @@ class CacheController extends Controller {
 	private IJobList $jobList;
 	private IConfig $config;
 	private LoggerInterface $logger;
+	private \OCA\HyperViewer\Service\FFmpegProcessManager $processManager;
 
 	public function __construct(
 		string $appName,
@@ -30,7 +31,8 @@ class CacheController extends Controller {
 		IUserSession $userSession,
 		IJobList $jobList,
 		IConfig $config,
-		LoggerInterface $logger
+		LoggerInterface $logger,
+		\OCA\HyperViewer\Service\FFmpegProcessManager $processManager
 	) {
 		parent::__construct($appName, $request);
 		$this->rootFolder = $rootFolder;
@@ -38,6 +40,7 @@ class CacheController extends Controller {
 		$this->jobList = $jobList;
 		$this->config = $config;
 		$this->logger = $logger;
+		$this->processManager = $processManager;
 	}
 
 	/**
@@ -60,27 +63,28 @@ class CacheController extends Controller {
 			return new JSONResponse(['error' => 'Cache path is required'], 400);
 		}
 
-
-		$jobId = uniqid('hls_cache_', true);
+		$jobIds = [];
 		
 		// Add background job for each file
 		foreach ($files as $fileData) {
-			$jobData = [
-				'jobId' => $jobId,
-				'userId' => $user->getUID(),
-				'filename' => $fileData['filename'],
-				'directory' => $fileData['directory'] ?? '/',
+			$settings = [
 				'cachePath' => $cachePath,
 				'overwriteExisting' => $overwriteExisting,
 				'resolutions' => $resolutions
 			];
 			
-			
-			$this->jobList->add(HlsCacheGenerationJob::class, $jobData);
+			$jobId = $this->processManager->addJob(
+				$user->getUID(),
+				$fileData['filename'],
+				$fileData['directory'] ?? '/',
+				$settings
+			);
+			$jobIds[] = $jobId;
 		}
+
 		return new JSONResponse([
 			'success' => true,
-			'jobId' => $jobId,
+			'jobIds' => $jobIds,
 			'message' => 'HLS cache generation started',
 			'filesCount' => count($files)
 		]);
@@ -528,25 +532,40 @@ class CacheController extends Controller {
 		}
 
 		try {
+			$activeJobs = $this->processManager->getActiveJobs();
 			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-			$activeJobs = [];
+			
+			// Filter for current user and enrich with progress
+			$userJobs = [];
+			foreach ($activeJobs as $job) {
+				if ($job['userId'] !== $user->getUID()) {
+					continue;
+				}
 
-			// Get cache locations from user settings (uses PersonalSettings defaults)
-			$cacheLocations = $this->getUserCacheLocations($user->getUID());
-
-			// Scan each configured cache location
-			foreach ($cacheLocations as $location) {
-				$resolvedPath = $this->resolveCachePath($location, $userFolder);
-				
-				if ($userFolder->nodeExists($resolvedPath)) {
-					$cacheFolder = $userFolder->get($resolvedPath);
-					if ($cacheFolder instanceof \OCP\Files\Folder) {
-						$this->scanForActiveJobsOnly($cacheFolder, $activeJobs);
+				// Enrich with progress data if processing
+				if ($job['status'] === 'processing' && isset($job['settings']['cachePath'])) {
+					$cachePath = $job['settings']['cachePath'];
+					$filename = $job['filename'];
+					$baseFilename = pathinfo($filename, PATHINFO_FILENAME);
+					$progressFile = rtrim($cachePath, '/') . '/' . $baseFilename . '/progress.json';
+					
+					if ($userFolder->nodeExists($progressFile)) {
+						try {
+							$file = $userFolder->get($progressFile);
+							$progressData = json_decode($file->getContent(), true);
+							if ($progressData) {
+								$job = array_merge($job, $progressData);
+							}
+						} catch (\Exception $e) {
+							// Ignore read errors
+						}
 					}
 				}
+				
+				$userJobs[] = $job;
 			}
 
-			return new JSONResponse(['activeJobs' => $activeJobs]);
+			return new JSONResponse(['activeJobs' => $userJobs]);
 
 		} catch (\Exception $e) {
 			return new JSONResponse(['error' => 'Failed to get active jobs'], 500);

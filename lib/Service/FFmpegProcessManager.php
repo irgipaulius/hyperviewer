@@ -1,0 +1,215 @@
+<?php
+
+declare(strict_types=1);
+
+namespace OCA\HyperViewer\Service;
+
+use OCP\IConfig;
+use OCP\Files\IRootFolder;
+use OCP\IUserManager;
+use Psr\Log\LoggerInterface;
+use OCP\AppFramework\Utility\ITimeFactory;
+
+class FFmpegProcessManager {
+
+	private IConfig $config;
+	private IRootFolder $rootFolder;
+	private IUserManager $userManager;
+	private LoggerInterface $logger;
+	private ITimeFactory $timeFactory;
+	private HlsService $hlsService;
+
+	private string $appDataDir;
+	private string $queueFile;
+	private int $maxConcurrentJobs = 2;
+
+	public function __construct(
+		IConfig $config,
+		IRootFolder $rootFolder,
+		IUserManager $userManager,
+		LoggerInterface $logger,
+		ITimeFactory $timeFactory,
+		HlsService $hlsService
+	) {
+		$this->config = $config;
+		$this->rootFolder = $rootFolder;
+		$this->userManager = $userManager;
+		$this->logger = $logger;
+		$this->timeFactory = $timeFactory;
+		$this->hlsService = $hlsService;
+
+		// Setup queue file path
+		$this->appDataDir = \OC::$server->getAppDataDir('hyperviewer');
+		if (!is_dir($this->appDataDir)) {
+			mkdir($this->appDataDir, 0755, true);
+		}
+		$this->queueFile = $this->appDataDir . '/queue.json';
+	}
+
+	/**
+	 * Add a job to the queue
+	 */
+	public function addJob(string $userId, string $filename, string $directory, array $settings): string {
+		$queue = $this->readQueue();
+		
+		$jobId = uniqid('hls_', true);
+		$job = [
+			'id' => $jobId,
+			'userId' => $userId,
+			'filename' => $filename,
+			'directory' => $directory,
+			'settings' => $settings,
+			'status' => 'pending',
+			'addedAt' => time(),
+			'attempts' => 0
+		];
+
+		// Check for duplicates
+		foreach ($queue as $existingJob) {
+			if ($existingJob['userId'] === $userId && 
+				$existingJob['filename'] === $filename && 
+				$existingJob['directory'] === $directory &&
+				$existingJob['status'] !== 'failed') {
+				return $existingJob['id'];
+			}
+		}
+
+		$queue[] = $job;
+		$this->saveQueue($queue);
+		
+		return $jobId;
+	}
+
+	/**
+	 * Process the queue
+	 */
+	public function processQueue(): void {
+		$queue = $this->readQueue();
+		$activeJobs = 0;
+		$pendingJobs = [];
+
+		// Count active jobs and filter pending
+		foreach ($queue as $job) {
+			if ($job['status'] === 'processing') {
+				// Check if process is actually still running
+				if ($this->isJobRunning($job)) {
+					$activeJobs++;
+				} else {
+					// Job crashed or finished without updating status
+					$this->handleStaleJob($job['id']);
+				}
+			} elseif ($job['status'] === 'pending') {
+				$pendingJobs[] = $job;
+			}
+		}
+
+		// Start new jobs if slots available
+		if ($activeJobs < $this->maxConcurrentJobs && !empty($pendingJobs)) {
+			$slotsAvailable = $this->maxConcurrentJobs - $activeJobs;
+			$jobsToStart = array_slice($pendingJobs, 0, $slotsAvailable);
+
+			foreach ($jobsToStart as $job) {
+				$this->startJob($job['id']);
+			}
+		}
+	}
+
+	/**
+	 * Start a specific job
+	 */
+	private function startJob(string $jobId): void {
+		$queue = $this->readQueue();
+		$jobIndex = -1;
+		
+		foreach ($queue as $index => $job) {
+			if ($job['id'] === $jobId) {
+				$jobIndex = $index;
+				break;
+			}
+		}
+
+		if ($jobIndex === -1) return;
+
+		// Update status to processing
+		$queue[$jobIndex]['status'] = 'processing';
+		$queue[$jobIndex]['startedAt'] = time();
+		$queue[$jobIndex]['pid'] = getmypid(); 
+		$this->saveQueue($queue);
+
+		try {
+			// Delegate execution to HlsService
+			$this->hlsService->transcode(
+				$queue[$jobIndex]['userId'],
+				$queue[$jobIndex]['filename'],
+				$queue[$jobIndex]['directory'],
+				$queue[$jobIndex]['settings']
+			);
+			
+			// If we get here, transcoding finished successfully
+			$this->updateJobStatus($jobId, 'completed');
+		} catch (\Exception $e) {
+			$this->logger->error('Transcoding failed', [
+				'jobId' => $jobId,
+				'error' => $e->getMessage()
+			]);
+			$this->updateJobStatus($jobId, 'failed', $e->getMessage());
+		}
+	}
+
+	/**
+	 * Helper to read queue
+	 */
+	private function readQueue(): array {
+		if (!file_exists($this->queueFile)) {
+			return [];
+		}
+		$content = file_get_contents($this->queueFile);
+		return json_decode($content, true) ?: [];
+	}
+
+	/**
+	 * Helper to save queue
+	 */
+	private function saveQueue(array $queue): void {
+		file_put_contents($this->queueFile, json_encode($queue, JSON_PRETTY_PRINT));
+	}
+
+	/**
+	 * Update job status
+	 */
+	private function updateJobStatus(string $jobId, string $status, string $error = null): void {
+		$queue = $this->readQueue();
+		foreach ($queue as &$job) {
+			if ($job['id'] === $jobId) {
+				$job['status'] = $status;
+				if ($status === 'completed') {
+					$job['completedAt'] = time();
+				}
+				if ($error) {
+					$job['error'] = $error;
+				}
+				break;
+			}
+		}
+		$this->saveQueue($queue);
+	}
+
+	private function isJobRunning(array $job): bool {
+		// Simple check: if started more than 2 hours ago, assume dead
+		if (isset($job['startedAt']) && (time() - $job['startedAt']) > 7200) {
+			return false;
+		}
+		return true;
+	}
+
+	private function handleStaleJob(string $jobId): void {
+		$this->updateJobStatus($jobId, 'failed', 'Job timed out or crashed');
+	}
+	
+	public function getActiveJobs(): array {
+		$queue = $this->readQueue();
+		return array_filter($queue, function($job) {
+			return $job['status'] === 'processing' || $job['status'] === 'pending';
+		});
+	}
+}

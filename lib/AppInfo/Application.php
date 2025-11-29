@@ -22,6 +22,9 @@ class Application extends App implements IBootstrap {
 		$context->registerService('AutoHlsGenerationJob', function() {
 			return \OC::$server->get(AutoHlsGenerationJob::class);
 		});
+		$context->registerService('ProcessQueueJob', function() {
+			return \OC::$server->get(\OCA\HyperViewer\BackgroundJob\ProcessQueueJob::class);
+		});
 	}
 
 	public function boot(IBootContext $context): void {
@@ -36,6 +39,11 @@ class Application extends App implements IBootstrap {
 		$jobList = $context->getServerContainer()->get(\OCP\BackgroundJob\IJobList::class);
 		if (!$jobList->has(AutoHlsGenerationJob::class, null)) {
 			$jobList->add(AutoHlsGenerationJob::class);
+		}
+		
+		// Register process queue job
+		if (!$jobList->has(\OCA\HyperViewer\BackgroundJob\ProcessQueueJob::class, null)) {
+			$jobList->add(\OCA\HyperViewer\BackgroundJob\ProcessQueueJob::class);
 		}
 	}
 }
