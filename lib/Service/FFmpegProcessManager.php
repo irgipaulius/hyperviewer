@@ -19,8 +19,7 @@ class FFmpegProcessManager {
 	private ITimeFactory $timeFactory;
 	private HlsService $hlsService;
 
-	private string $appDataDir;
-	private string $queueFile;
+	private \OCP\Files\IAppData $appData;
 	private int $maxConcurrentJobs = 2;
 
 	public function __construct(
@@ -38,12 +37,8 @@ class FFmpegProcessManager {
 		$this->timeFactory = $timeFactory;
 		$this->hlsService = $hlsService;
 
-		// Setup queue file path
-		$this->appDataDir = \OC::$server->getAppDataDir('hyperviewer');
-		if (!is_dir($this->appDataDir)) {
-			mkdir($this->appDataDir, 0755, true);
-		}
-		$this->queueFile = $this->appDataDir . '/queue.json';
+		// Setup AppData
+		$this->appData = \OC::$server->getAppDataDir('hyperviewer');
 	}
 
 	/**
@@ -160,18 +155,40 @@ class FFmpegProcessManager {
 	 * Helper to read queue
 	 */
 	private function readQueue(): array {
-		if (!file_exists($this->queueFile)) {
+		try {
+			$folder = $this->appData->getFolder('/');
+			$file = $folder->getFile('queue.json');
+			$content = $file->getContent();
+			return json_decode($content, true) ?: [];
+		} catch (\OCP\Files\NotFoundException $e) {
+			return [];
+		} catch (\Exception $e) {
+			$this->logger->error('Failed to read queue: ' . $e->getMessage());
 			return [];
 		}
-		$content = file_get_contents($this->queueFile);
-		return json_decode($content, true) ?: [];
 	}
 
 	/**
 	 * Helper to save queue
 	 */
 	private function saveQueue(array $queue): void {
-		file_put_contents($this->queueFile, json_encode($queue, JSON_PRETTY_PRINT));
+		try {
+			try {
+				$folder = $this->appData->getFolder('/');
+			} catch (\OCP\Files\NotFoundException $e) {
+				$folder = $this->appData->newFolder('/');
+			}
+
+			try {
+				$file = $folder->getFile('queue.json');
+			} catch (\OCP\Files\NotFoundException $e) {
+				$file = $folder->newFile('queue.json');
+			}
+			
+			$file->putContent(json_encode($queue, JSON_PRETTY_PRINT));
+		} catch (\Exception $e) {
+			$this->logger->error('Failed to save queue: ' . $e->getMessage());
+		}
 	}
 
 	/**
