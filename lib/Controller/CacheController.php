@@ -54,7 +54,7 @@ class CacheController extends Controller {
 		$files = $this->request->getParam('files', []);
 		$cachePath = $this->request->getParam('cachePath', '');
 		$overwriteExisting = $this->request->getParam('overwriteExisting', false);
-		$resolutions = $this->request->getParam('resolutions', ['720p', '480p', '240p']);
+		$resolutions = $this->request->getParam('resolutions', ['720p', '480p', '360p', '240p']);
 
 		if (empty($cachePath)) {
 			return new JSONResponse(['error' => 'Cache path is required'], 400);

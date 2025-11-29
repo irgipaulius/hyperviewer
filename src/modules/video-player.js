@@ -6,6 +6,7 @@ import shaka from "shaka-player/dist/shaka-player.ui.js";
 import "shaka-player/dist/controls.css";
 import playerModalTemplate from "../templates/player-modal.html";
 import { ClipEditor } from "./clip-editor";
+import { extractFrameBlob } from "./frame-extractor";
 
 /**
  * Check if HLS cache exists for a video file
@@ -243,99 +244,31 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		const currentExtractionId = ++frameExtractionId;
 		try {
 			console.log("🖼️ Extracting frame at:", timestamp);
-			const response = await fetch(
-				OC.generateUrl("/apps/hyperviewer/api/extract-frame"),
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						requesttoken: OC.requestToken
-					},
-					body: JSON.stringify({
-						filename,
-						directory,
-						timestamp
-					})
-				}
-			);
+			const blob = await extractFrameBlob(filename, directory, timestamp);
 			console.log(
-				"📡 Response status:",
-				response.status,
-				response.statusText
+				"✅ Blob received, size:",
+				blob.size,
+				"type:",
+				blob.type
 			);
-			console.log("📡 Response headers:", {
-				contentType: response.headers.get("Content-Type"),
-				contentLength: response.headers.get("Content-Length"),
-				ffmpegTime: response.headers.get("X-Frame-Extraction-Time")
-			});
 
-			if (response.ok) {
-				const contentType = response.headers.get("Content-Type");
-
-				// Check if it's an image or JSON error
-				if (contentType && contentType.startsWith("image/")) {
-					console.log(
-						"📦 Receiving binary image, content-length:",
-						response.headers.get("Content-Length")
-					);
-
-					const blob = await response.blob();
-					console.log(
-						"✅ Blob received, size:",
-						blob.size,
-						"type:",
-						blob.type
-					);
-
-					// Check if this extraction was cancelled (video started playing)
-					if (currentExtractionId !== frameExtractionId) {
-						console.log(
-							"⚠️ Frame extraction cancelled - video is playing"
-						);
-						return;
-					}
-
-					// Clean up previous frame URL if exists
-					if (currentFrameUrl) {
-						URL.revokeObjectURL(currentFrameUrl);
-					}
-
-					// Create object URL from blob and display
-					currentFrameUrl = URL.createObjectURL(blob);
-					pauseFrameImg.src = currentFrameUrl;
-					pauseFrameImg.style.display = "block";
-				} else {
-					// Might be JSON error response
-					const text = await response.text();
-					console.log(
-						"📦 Response text length:",
-						text.length,
-						"First 200 chars:",
-						text.substring(0, 200)
-					);
-
-					try {
-						const data = JSON.parse(text);
-						console.error("❌ Error from backend:", data);
-					} catch (parseError) {
-						console.error(
-							"❌ Failed to parse response:",
-							parseError,
-							"Response:",
-							text
-						);
-					}
-				}
-			} else {
-				const errorText = await response.text();
-				console.error(
-					"❌ Frame extraction failed:",
-					response.status,
-					response.statusText,
-					"Body:",
-					errorText
+			// Check if this extraction was cancelled (video started playing)
+			if (currentExtractionId !== frameExtractionId) {
+				console.log(
+					"⚠️ Frame extraction cancelled - video is playing"
 				);
+				return;
 			}
+
+			// Clean up previous frame URL if exists
+			if (currentFrameUrl) {
+				URL.revokeObjectURL(currentFrameUrl);
+			}
+
+			// Create object URL from blob and display
+			currentFrameUrl = URL.createObjectURL(blob);
+			pauseFrameImg.src = currentFrameUrl;
+			pauseFrameImg.style.display = "block";
 		} catch (error) {
 			console.error("❌ Failed to extract frame:", error);
 		}
@@ -497,37 +430,21 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 						e.stopPropagation();
 
 						try {
-							const response = await fetch(
-								OC.generateUrl(
-									"/apps/hyperviewer/api/extract-frame"
-								),
-								{
-									method: "POST",
-									headers: {
-										"Content-Type": "application/json",
-										requesttoken: OC.requestToken
-									},
-									body: JSON.stringify({
-										filename,
-										directory,
-										timestamp: video.currentTime
-									})
-								}
+							const blob = await extractFrameBlob(
+								filename,
+								directory,
+								video.currentTime
 							);
-
-							if (response.ok) {
-								const blob = await response.blob();
-								const url = URL.createObjectURL(blob);
-								const a = document.createElement("a");
-								a.href = url;
-								a.download = `${
-									filename.split(".")[0]
-								}_frame_${Math.floor(video.currentTime)}s.png`;
-								document.body.appendChild(a);
-								a.click();
-								document.body.removeChild(a);
-								URL.revokeObjectURL(url);
-							}
+							const url = URL.createObjectURL(blob);
+							const a = document.createElement("a");
+							a.href = url;
+							a.download = `${
+								filename.split(".")[0]
+							}_frame_${Math.floor(video.currentTime)}s.png`;
+							document.body.appendChild(a);
+							a.click();
+							document.body.removeChild(a);
+							URL.revokeObjectURL(url);
 						} catch (error) {
 							console.error("Failed to save frame:", error);
 						}
