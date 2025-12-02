@@ -55,18 +55,19 @@ class CacheController extends Controller {
 		}
 
 		$files = $this->request->getParam('files', []);
-		$cachePath = $this->request->getParam('cachePath', '');
+		$locationType = $this->request->getParam('locationType', 'relative');
 		$overwriteExisting = $this->request->getParam('overwriteExisting', false);
 		$resolutions = $this->request->getParam('resolutions', ['720p', '480p', '360p', '240p']);
-
-		if (empty($cachePath)) {
-			return new JSONResponse(['error' => 'Cache path is required'], 400);
-		}
 
 		$jobIds = [];
 		
 		// Add background job for each file
 		foreach ($files as $fileData) {
+			$directory = $fileData['directory'] ?? '';
+			
+			// Calculate cache path based on location type
+			$cachePath = $this->calculateCachePath($locationType, $directory);
+			
 			$settings = [
 				'cachePath' => $cachePath,
 				'overwriteExisting' => $overwriteExisting,
@@ -76,7 +77,7 @@ class CacheController extends Controller {
 			$jobId = $this->processManager->addJob(
 				$user->getUID(),
 				$fileData['filename'],
-				$fileData['directory'] ?? '/',
+				$directory,
 				$settings
 			);
 			$jobIds[] = $jobId;
@@ -88,6 +89,34 @@ class CacheController extends Controller {
 			'message' => 'HLS cache generation started',
 			'filesCount' => count($files)
 		]);
+	}
+
+	/**
+	 * Calculate cache path based on location type
+	 * 
+	 * @param string $locationType Either 'relative' or 'home'
+	 * @param string $directory The directory containing the video file
+	 * @return string The calculated cache path
+	 */
+	private function calculateCachePath(string $locationType, string $directory): string {
+		if ($locationType === 'home') {
+			// Home: cache at user root
+			return '.cached_hls';
+		}
+		
+		// Relative: cache in parent directory of the video
+		// If directory is empty or root, use root level
+		if (empty($directory) || $directory === '/') {
+			return '.cached_hls';
+		}
+		
+		// Get parent directory
+		$parentDir = dirname($directory);
+		if ($parentDir === '.' || $parentDir === '/') {
+			return '.cached_hls';
+		}
+		
+		return $parentDir . '/.cached_hls';
 	}
 
 
@@ -238,29 +267,6 @@ class CacheController extends Controller {
 		]);
 	}
 
-	/**
-	 * Get cache locations from user settings
-	 */
-	/**
-	 * Get user's cache locations from settings
-	 * Uses PersonalSettings::getDefaultCacheLocations() as default
-	 * NO fallbacks - if JSON is invalid, throw error
-	 */
-	private function getUserCacheLocations(string $userId): array {
-		$cacheLocationsJson = $this->config->getUserValue(
-			$userId,
-			$this->appName,
-			'cache_locations',
-			json_encode(\OCA\HyperViewer\Settings\PersonalSettings::getDefaultCacheLocations())
-		);
-
-		$locations = json_decode($cacheLocationsJson, true);
-		if (!is_array($locations)) {
-			throw new \Exception('Invalid cache_locations configuration');
-		}
-
-		return $locations;
-	}
 
 	/**
 	 * Find HLS cache for a video file
@@ -268,30 +274,36 @@ class CacheController extends Controller {
 	private function findHlsCache($userFolder, string $filename, string $directory, string $userId): ?string {
 		$baseFilename = pathinfo($filename, PATHINFO_FILENAME);
 		
-		// Get user's cache locations (uses PersonalSettings defaults)
-		$userCacheLocations = $this->getUserCacheLocations($userId);
-		
-		// Resolve each location to actual paths
-		$cacheLocations = [];
-		foreach ($userCacheLocations as $location) {
-			$resolvedPath = $this->resolveCachePath($location . '/' . $baseFilename, $userFolder);
-			$cacheLocations[] = $resolvedPath;
+		// Check home location first (faster, usually on SSD)
+		$homePath = '.cached_hls/' . $baseFilename;
+		if ($this->cacheExistsAt($userFolder, $homePath)) {
+			return $homePath;
 		}
-
-		// Check each location for HLS files
-		foreach ($cacheLocations as $cachePath) {
-			try {
-				if ($userFolder->nodeExists($cachePath . '/master.m3u8')) {
-					return $cachePath;
-				} elseif ($userFolder->nodeExists($cachePath . '/playlist.m3u8')) {
-					return $cachePath;
-				}
-			} catch (\Exception $e) {
-				continue;
-			}
+		
+		// Check relative location (parent directory)
+		$relativePath = $this->calculateCachePath('relative', $directory) . '/' . $baseFilename;
+		if ($this->cacheExistsAt($userFolder, $relativePath)) {
+			return $relativePath;
 		}
 
 		return null;
+	}
+
+	/**
+	 * Check if cache exists at a specific path
+	 */
+	private function cacheExistsAt($userFolder, string $cachePath): bool {
+		try {
+			if ($userFolder->nodeExists($cachePath . '/master.m3u8')) {
+				return true;
+			}
+			if ($userFolder->nodeExists($cachePath . '/playlist.m3u8')) {
+				return true;
+			}
+		} catch (\Exception $e) {
+			// Ignore errors
+		}
+		return false;
 	}
 
 	/**
@@ -348,18 +360,19 @@ class CacheController extends Controller {
 			return new JSONResponse(['error' => 'Directory path required'], 400);
 		}
 
-		if (empty($options['cachePath'])) {
-			return new JSONResponse(['error' => 'Cache path is required'], 400);
-		}
-
 		try {
+			// Calculate cache path based on location type
+			$locationType = $options['locationType'] ?? 'relative';
+			$cachePath = $this->calculateCachePath($locationType, $directory);
+			
 			// Store auto-generation settings in app config
 			$autoGenSettings = [
 				'userId' => $user->getUID(),
 				'directory' => $directory,
-				'cachePath' => $options['cachePath'],
+				'cachePath' => $cachePath,
+				'locationType' => $locationType,
 				'overwriteExisting' => $options['overwriteExisting'] ?? false,
-				'resolutions' => $options['resolutions'] ?? ['720p', '480p', '240p'],
+				'resolutions' => $options['resolutions'] ?? ['720p', '480p', '360p', '240p'],
 				'enabled' => true,
 				'createdAt' => time()
 			];
@@ -389,7 +402,7 @@ class CacheController extends Controller {
 	 */
 	private function scanDirectoryForVideos($userFolder, string $directoryPath): array {
 		$videoFiles = [];
-		$supportedMimes = ['video/quicktime', 'video/mp4'];
+		$supportedExtensions = ['.mp4', '.MP4', '.mov', '.MOV'];
 
 		try {
 			if (!$userFolder->nodeExists($directoryPath)) {
@@ -401,7 +414,7 @@ class CacheController extends Controller {
 				throw new \Exception("Path is not a directory: $directoryPath");
 			}
 
-			$this->scanFolderRecursively($directory, $directoryPath, $supportedMimes, $videoFiles);
+			$this->scanFolderRecursively($directory, $directoryPath, $supportedExtensions, $videoFiles);
 
 		} catch (\Exception $e) {
 			$this->logger->error('Directory scanning failed', [
@@ -415,20 +428,29 @@ class CacheController extends Controller {
 	}
 
 	/**
-	 * Recursively scan folder for video files
+	 * Recursively scan folder for video files (optimized with extension matching)
 	 */
-	private function scanFolderRecursively($folder, string $basePath, array $supportedMimes, array &$videoFiles): void {
+	private function scanFolderRecursively($folder, string $basePath, array $supportedExtensions, array &$videoFiles): void {
 		foreach ($folder->getDirectoryListing() as $node) {
 			if ($node instanceof \OCP\Files\File) {
-				$mimeType = $node->getMimeType();
-				if (in_array($mimeType, $supportedMimes)) {
+				$filename = $node->getName();
+				
+				// Fast extension check - no MIME type lookup needed
+				$hasVideoExtension = false;
+				foreach ($supportedExtensions as $ext) {
+					if (substr($filename, -strlen($ext)) === $ext) {
+						$hasVideoExtension = true;
+						break;
+					}
+				}
+				
+				if ($hasVideoExtension) {
 					$relativePath = $basePath === '/' ? '/' : $basePath;
 					$videoFiles[] = [
-						'filename' => $node->getName(),
+						'filename' => $filename,
 						'directory' => $relativePath,
 						'size' => $node->getSize(),
-						'mimeType' => $mimeType,
-						'fullPath' => $relativePath . '/' . $node->getName()
+						'fullPath' => $relativePath . '/' . $filename
 					];
 				}
 			} elseif ($node instanceof \OCP\Files\Folder) {
@@ -436,7 +458,7 @@ class CacheController extends Controller {
 				$folderName = $node->getName();
 				if (strpos($folderName, '.') !== 0) {
 					$subPath = $basePath === '/' ? '/' . $folderName : $basePath . '/' . $folderName;
-					$this->scanFolderRecursively($node, $subPath, $supportedMimes, $videoFiles);
+					$this->scanFolderRecursively($node, $subPath, $supportedExtensions, $videoFiles);
 				}
 			}
 		}

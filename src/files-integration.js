@@ -801,29 +801,24 @@ function openUnifiedCacheDialog(options) {
 		modal.classList.add("show");
 	});
 
-	// Fetch cache locations from settings and populate
-	fetchCacheLocations().then(locations => {
-		const container = modal.querySelector("#cache-locations-container");
-		if (locations && locations.length > 0) {
-			container.innerHTML = locations
-				.map(
-					(location, index) => `
-				<label class="option-item">
-					<input type="radio" name="cache_location" data-path="${location}" ${
-						index === 0 ? "checked" : ""
-					}>
-					<div class="option-content">
-						<span class="option-title">${location}</span>
-					</div>
-				</label>
-			`
-				)
-				.join("");
-		} else {
-			container.innerHTML =
-				'<p style="color: #ff6b6b;">No cache locations configured. Please configure in personal settings.</p>';
-		}
-	});
+	// Populate cache location options with hardcoded choices
+	const container = modal.querySelector("#cache-locations-container");
+	container.innerHTML = `
+		<label class="option-item">
+			<input type="radio" name="cache_location" value="relative" checked>
+			<div class="option-content">
+				<span class="option-title">Relative (Parent Directory)</span>
+				<span class="option-desc">Cache stored alongside your videos. Best for large storage that may be slower (HDD, network drives).</span>
+			</div>
+		</label>
+		<label class="option-item">
+			<input type="radio" name="cache_location" value="home">
+			<div class="option-content">
+				<span class="option-title">Home (User Root)</span>
+				<span class="option-desc">Cache stored in your home directory. Usually faster due to SSD/RAM storage, ideal for frequently accessed videos.</span>
+			</div>
+		</label>
+	`;
 
 	// Handle escape key
 	const handleKeydown = e => {
@@ -863,32 +858,6 @@ function openUnifiedCacheDialog(options) {
 	});
 
 	document.addEventListener("keydown", handleKeydown);
-}
-
-/**
- * Fetch cache locations from personal settings
- */
-async function fetchCacheLocations() {
-	try {
-		const response = await fetch(
-			OC.generateUrl("/apps/hyperviewer/settings/cache-locations"),
-			{
-				headers: {
-					requesttoken: OC.requestToken
-				}
-			}
-		);
-
-		if (response.ok) {
-			const data = await response.json();
-			return data.locations || [];
-		}
-	} catch (error) {
-		console.error("Failed to fetch cache locations:", error);
-	}
-
-	// No fallbacks - must be configured in settings
-	return [];
 }
 
 /**
@@ -970,7 +939,7 @@ async function discoverVideoFilesInDirectory(directoryPath) {
 async function startDirectoryCacheGeneration(videoFiles, directoryPath) {
 	console.log("Starting directory HLS cache generation for:", directoryPath);
 
-	// Get selected cache location path from settings
+	// Get selected cache location type
 	const selectedLocationRadio = document.querySelector(
 		'input[name="cache_location"]:checked'
 	);
@@ -979,8 +948,8 @@ async function startDirectoryCacheGeneration(videoFiles, directoryPath) {
 		return;
 	}
 
-	const cachePath = selectedLocationRadio.dataset.path;
-	if (!cachePath) {
+	const locationType = selectedLocationRadio.value;
+	if (!locationType) {
 		OC.dialogs.alert("Invalid cache location selected", "Error");
 		return;
 	}
@@ -1002,7 +971,7 @@ async function startDirectoryCacheGeneration(videoFiles, directoryPath) {
 			: ["720p", "480p", "360p", "240p"];
 
 	const options = {
-		cachePath,
+		locationType,
 		overwriteExisting,
 		resolutions,
 		enableAutoGeneration,
@@ -1093,7 +1062,7 @@ async function startCacheGeneration(files) {
 		files.map(f => f.filename)
 	);
 
-	// Get selected cache location path from settings
+	// Get selected cache location type
 	const selectedLocationRadio = document.querySelector(
 		'input[name="cache_location"]:checked'
 	);
@@ -1102,8 +1071,8 @@ async function startCacheGeneration(files) {
 		return;
 	}
 
-	const cachePath = selectedLocationRadio.dataset.path;
-	if (!cachePath) {
+	const locationType = selectedLocationRadio.value;
+	if (!locationType) {
 		OC.dialogs.alert("Invalid cache location selected", "Error");
 		return;
 	}
@@ -1124,7 +1093,7 @@ async function startCacheGeneration(files) {
 			: ["720p", "480p", "240p"];
 
 	const options = {
-		cachePath,
+		locationType,
 		overwriteExisting,
 		resolutions
 	};
@@ -1152,7 +1121,7 @@ async function startCacheGeneration(files) {
 				},
 				body: JSON.stringify({
 					files: filesData,
-					cachePath: options.cachePath,
+					locationType: options.locationType,
 					overwriteExisting: options.overwriteExisting,
 					resolutions: options.resolutions
 				})

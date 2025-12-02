@@ -5,7 +5,7 @@ style('hyperviewer', 'settings');
 
 <div class="section" id="hyperviewer_settings">
 	<h2 class="inlineblock"><?php p($l->t('Hyper Viewer')); ?></h2>
-	<p class="settings-hint"><?php p($l->t('Monitor video processing jobs and configure HLS cache storage locations.')); ?></p>
+	<p class="settings-hint"><?php p($l->t('Monitor video processing jobs and auto-generation directories.')); ?></p>
 	
 	<!-- Job Statistics -->
 	<h3><?php p($l->t('Job Statistics')); ?></h3>
@@ -39,32 +39,4 @@ style('hyperviewer', 'settings');
 	<div id="autogen-container">
 		<p class="emptycontent-desc"><?php p($l->t('No auto-generation directories configured')); ?></p>
 	</div>
-	
-	<!-- Cache Locations Configuration -->
-	<h3><?php p($l->t('Cache Locations')); ?></h3>
-	<p class="settings-hint"><?php p($l->t('Locations are tried in order. First writable location is used.')); ?></p>
-	
-	<div id="cache-location-list">
-		<?php foreach ($_['cache_locations'] as $index => $location): ?>
-			<div class="cache-location-item" data-index="<?php p($index); ?>">
-				<input type="text" 
-					   class="cache-location-input" 
-					   value="<?php p($location); ?>" 
-					   placeholder="<?php p($l->t('Enter cache path...')); ?>" />
-				<button class="icon-delete remove-location" title="<?php p($l->t('Remove')); ?>"></button>
-			</div>
-		<?php endforeach; ?>
-	</div>
-	
-	<div class="cache-actions">
-		<button id="add-cache-location" class="icon-add"><?php p($l->t('Add Location')); ?></button>
-		<button id="save-cache-settings" class="primary"><?php p($l->t('Save')); ?></button>
-	</div>
-	
-	<p class="settings-hint">
-		<strong><?php p($l->t('Examples:')); ?></strong><br>
-		<code>./.cached_hls/</code> - <?php p($l->t('Relative to video file')); ?><br>
-		<code>~/.cached_hls/</code> - <?php p($l->t('User home directory')); ?><br>
-		<code>/mnt/cache/.cached_hls/</code> - <?php p($l->t('Absolute path within the jail')); ?>
-	</p>
 </div>
