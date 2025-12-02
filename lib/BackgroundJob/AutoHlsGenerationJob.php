@@ -107,11 +107,14 @@ class AutoHlsGenerationJob extends TimedJob {
 			if ($node instanceof \OCP\Files\File) {
 				if (in_array($node->getMimeType(), $supportedMimes)) {
 					if (!$this->hasHlsCache($userFolder, $node->getName(), $basePath, $userId)) {
+						// Normalize directory path - convert '/' to empty string for root
+						$normalizedDir = ($basePath === '/' || $basePath === '') ? '' : $basePath;
+						
 						// Add to queue via ProcessManager
 						$this->processManager->addJob(
 							$userId,
 							$node->getName(),
-							$basePath,
+							$normalizedDir,
 							$settings
 						);
 					}

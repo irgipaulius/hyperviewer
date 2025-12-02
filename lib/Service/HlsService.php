@@ -25,7 +25,11 @@ class HlsService {
 	 */
 	public function transcode(string $userId, string $filename, string $directory, array $settings): void {
 		$userFolder = $this->rootFolder->getUserFolder($userId);
-		$videoPath = $directory . '/' . $filename;
+		
+		// Handle empty directory (root) - avoid double slashes
+		$videoPath = ($directory === '' || $directory === '/') 
+			? $filename 
+			: $directory . '/' . $filename;
 		
 		if (!$userFolder->nodeExists($videoPath)) {
 			throw new \Exception("Video file not found: $videoPath");
