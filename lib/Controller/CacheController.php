@@ -959,7 +959,7 @@ class CacheController extends Controller {
 				$duCommand = 'du -sb ' . implode(' ', array_map('escapeshellarg', $dirPaths)) . ' 2>/dev/null';
 				$duOutput = @shell_exec($duCommand);
 				
-				// Parse du output into size map
+				// Parse du output into size map (normalize paths for matching)
 				$sizeMap = [];
 				if ($duOutput) {
 					$lines = explode("\n", trim($duOutput));
@@ -967,20 +967,24 @@ class CacheController extends Controller {
 						if (empty($line)) continue;
 						$parts = preg_split('/\s+/', $line, 2);
 						if (count($parts) === 2) {
+							// Store with both normalized and original path
+							$normalizedPath = rtrim($parts[1], '/');
+							$sizeMap[$normalizedPath] = (int)$parts[0];
 							$sizeMap[$parts[1]] = (int)$parts[0];
 						}
 					}
 				}
 				
-				// Get directory info with stat (more efficient than filemtime per dir)
+				// Get directory info with stat
 				foreach ($dirPaths as $dirPath) {
 					$basename = basename($dirPath);
 					
 					// Get modification time using stat
 					$timestamp = @filemtime($dirPath);
 					
-					// Get size from our batch du result
-					$sizeBytes = $sizeMap[$dirPath] ?? 0;
+					// Get size from our batch du result (try normalized path)
+					$normalizedPath = rtrim($dirPath, '/');
+					$sizeBytes = $sizeMap[$normalizedPath] ?? $sizeMap[$dirPath] ?? 0;
 					
 					$completedFilenames[] = [
 						'name' => $basename,
