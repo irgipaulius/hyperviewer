@@ -91,6 +91,7 @@ function refreshStatistics() {
 	})
 		.then(response => response.json())
 		.then(data => {
+			console.log(data)
 			const stats = data || {} // API returns stats directly now, or inside 'stats' key depending on controller
 			
 			// Handle both response formats (direct stats or wrapped in 'stats')
