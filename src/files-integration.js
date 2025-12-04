@@ -983,7 +983,7 @@ async function startDirectoryCacheGeneration(videoFiles, directoryPath) {
 	try {
 		// Only start cache generation if there are files to process
 		if (videoFiles.length > 0) {
-			await startCacheGeneration(videoFiles);
+			await startCacheGeneration(videoFiles, directoryPath);
 		}
 
 		// If auto-generation is enabled, register the directory for monitoring
@@ -1055,8 +1055,9 @@ async function startDirectoryCacheGeneration(videoFiles, directoryPath) {
  * Start the actual cache generation process
  *
  * @param files Array of file objects
+ * @param directoryPath Optional directory path (if called from directory cache generation)
  */
-async function startCacheGeneration(files) {
+async function startCacheGeneration(files, directoryPath = null) {
 	console.log(
 		"Starting HLS cache generation for:",
 		files.map(f => f.filename)
@@ -1101,7 +1102,9 @@ async function startCacheGeneration(files) {
 	// Prepare files data for backend
 	const filesData = files.map(file => ({
 		filename: file.filename,
+		// Use provided directoryPath, or fallback to file context, or default to "/"
 		directory:
+			directoryPath ||
 			file.context?.dir ||
 			file.context?.fileList?.getCurrentDirectory() ||
 			"/"

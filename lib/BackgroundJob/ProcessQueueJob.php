@@ -20,7 +20,7 @@ class ProcessQueueJob extends TimedJob {
 		$this->processManager = $processManager;
 		
 		// Run every minute
-		$this->setInterval(60);
+		$this->setInterval(15);
 	}
 
 	protected function run($argument): void {
