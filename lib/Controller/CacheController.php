@@ -890,9 +890,6 @@ class CacheController extends Controller {
 			// However, for the UI, we mostly care about the specific counters.
 			// Let's just ensure total is at least the sum of the parts.
 			$stats['totalJobs'] = $stats['completedJobs'] + $stats['activeJobs'] + $stats['pendingJobs'];
-			
-			// Add completed job filenames for the UI list
-			$stats['completedJobFilenames'] = $stats['recentJobs'];
 
 			return new JSONResponse(['stats' => $stats]);
 
