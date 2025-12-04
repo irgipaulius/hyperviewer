@@ -150,8 +150,8 @@ class FFmpegProcessManager {
 			
 			// If we get here, transcoding finished successfully
 			$this->updateJobStatus($jobId, 'completed');
-		} catch (\Exception $e) {
-			$this->logger->error('Transcoding failed: ' . $e->getMessage());
+		} catch (\Exception $e) {	
+			$this->logger->error('Transcoding failed: ' . $e->getMessage() . ' Job: ' . json_encode($queue[$jobIndex]));
 			$this->updateJobStatus($jobId, 'failed', $e->getMessage());
 		}
 	}
