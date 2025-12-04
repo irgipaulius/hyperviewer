@@ -101,46 +101,72 @@ class AutoHlsGenerationJob extends TimedJob {
 	}
 
 	private function scanAndQueue($folder, string $basePath, $userFolder, string $userId, array $settings): void {
-		$supportedMimes = ['video/quicktime', 'video/mp4'];
+		$supportedExtensions = ['.mp4', '.MP4', '.mov', '.MOV'];
+		
+		// Use iterative queue-based traversal
+		$queue = [['folder' => $folder, 'path' => $basePath]];
+		
+		while (!empty($queue)) {
+			$current = array_shift($queue);
+			$currentFolder = $current['folder'];
+			$currentPath = $current['path'];
 
-		foreach ($folder->getDirectoryListing() as $node) {
-			if ($node instanceof \OCP\Files\File) {
-				if (in_array($node->getMimeType(), $supportedMimes)) {
-					if (!$this->hasHlsCache($userFolder, $node->getName(), $basePath, $userId)) {
-						// Normalize directory path - convert '/' to empty string for root
-						$normalizedDir = ($basePath === '/' || $basePath === '') ? '' : $basePath;
-						
-						// Add to queue via ProcessManager
-						$this->processManager->addJob(
-							$userId,
-							$node->getName(),
-							$normalizedDir,
-							$settings
-						);
+			foreach ($currentFolder->getDirectoryListing() as $node) {
+				if ($node instanceof \OCP\Files\File) {
+					$filename = $node->getName();
+					
+					// Fast extension check
+					$hasVideoExtension = false;
+					foreach ($supportedExtensions as $ext) {
+						if (substr($filename, -strlen($ext)) === $ext) {
+							$hasVideoExtension = true;
+							break;
+						}
 					}
-				}
-			} elseif ($node instanceof \OCP\Files\Folder) {
-				$folderName = $node->getName();
-				if (strpos($folderName, '.') !== 0) {
-					$subPath = $basePath === '/' ? '/' . $folderName : $basePath . '/' . $folderName;
-					$this->scanAndQueue($node, $subPath, $userFolder, $userId, $settings);
+					
+					if ($hasVideoExtension) {
+						if (!$this->hasHlsCache($userFolder, $filename, $currentPath, $settings)) {
+							// Normalize directory path - convert '/' to empty string for root
+							$normalizedDir = ($currentPath === '/' || $currentPath === '') ? '' : $currentPath;
+							
+							// Add to queue via ProcessManager
+							$this->processManager->addJob(
+								$userId,
+								$filename,
+								$normalizedDir,
+								$settings
+							);
+						}
+					}
+				} elseif ($node instanceof \OCP\Files\Folder) {
+					$folderName = $node->getName();
+					if (strpos($folderName, '.') !== 0) {
+						$subPath = $currentPath === '/' ? '/' . $folderName : $currentPath . '/' . $folderName;
+						$queue[] = ['folder' => $node, 'path' => $subPath];
+					}
 				}
 			}
 		}
 	}
 
-	private function hasHlsCache($userFolder, string $filename, string $directory, string $userId): bool {
-		// Simplified check - check default location or configured location
-		// For now, assuming standard cache structure
-		$baseFilename = pathinfo($filename, PATHINFO_FILENAME);
-		// This logic needs to match where we actually put the cache
-		// In ProcessManager we put it in $settings['cachePath']
+	private function hasHlsCache($userFolder, string $filename, string $directory, array $settings): bool {
+		$locationType = $settings['locationType'] ?? 'relative';
+		$cacheBasePath = \OCA\HyperViewer\Service\PathResolver::calculateCachePath($locationType, $directory);
 		
-		// We can't easily know the exact cache path here without duplicating logic
-		// But we can check if the job is already in the queue (ProcessManager handles duplicates)
-		// So we mainly need to check if the *file* exists on disk
+		// Cache folder is named after the video file
+		$cachePath = $cacheBasePath . '/' . $filename;
 		
-		// TODO: Better cache existence check
+		try {
+			if ($userFolder->nodeExists($cachePath . '/master.m3u8')) {
+				return true;
+			}
+			if ($userFolder->nodeExists($cachePath . '/playlist.m3u8')) {
+				return true;
+			}
+		} catch (\Exception $e) {
+			// Ignore errors
+		}
+		
 		return false; 
 	}
 }

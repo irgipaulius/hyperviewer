@@ -609,56 +609,79 @@ class CacheController extends Controller {
 			$decodedFilename = urldecode($filename);
 			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 			
-			// Get user's cache locations (uses PersonalSettings defaults)
-			$cacheLocations = $this->getUserCacheLocations($user->getUID());
+			$targetCachePath = null;
 
-			foreach ($cacheLocations as $location) {
-				$resolvedPath = $this->resolveCachePath($location, $userFolder);
-				
+			// 1. Check active jobs first to find the directory
+			$activeJobs = $this->processManager->getActiveJobs();
+			foreach ($activeJobs as $job) {
+				if ($job['filename'] === $decodedFilename && $job['userId'] === $user->getUID()) {
+					// Found the job, calculate cache path
+					$locationType = $job['settings']['locationType'] ?? 'relative';
+					$directory = $job['directory'];
+					$targetCachePath = $this->calculateCachePath($locationType, $directory);
+					break;
+				}
+			}
+
+			// 2. If not found in active jobs, check Home cache (most likely default)
+			if (!$targetCachePath) {
+				$targetCachePath = '.cached_hls';
+			}
+
+			// 3. Try to read progress from the determined path
+			$locationsToCheck = [$targetCachePath];
+			if ($targetCachePath !== '.cached_hls') {
+				// If we found a specific relative path, check that AND home as fallback
+				$locationsToCheck[] = '.cached_hls';
+			}
+
+			foreach ($locationsToCheck as $basePath) {
+				$resolvedPath = $basePath;
 				if ($userFolder->nodeExists($resolvedPath)) {
 					$cacheFolder = $userFolder->get($resolvedPath);
 					if ($cacheFolder instanceof \OCP\Files\Folder) {
-						// Try to find the specific job directory using decoded filename
-						// First try exact match (directory name matches filename exactly)
+						// Try to find the specific job directory
+						// First try exact match
 						if ($cacheFolder->nodeExists($decodedFilename)) {
 							$jobFolder = $cacheFolder->get($decodedFilename);
 						} else {
-							// Fallback: try with extension removed (for files with extensions)
+							// Fallback: try with extension removed
 							$jobDirName = pathinfo($decodedFilename, PATHINFO_FILENAME);
 							if ($cacheFolder->nodeExists($jobDirName)) {
 								$jobFolder = $cacheFolder->get($jobDirName);
 							} else {
-								continue; // Try next cache location
+								continue;
 							}
 						}
-						
-						if (isset($jobFolder)) {
-							if ($jobFolder instanceof \OCP\Files\Folder && $jobFolder->nodeExists('progress.json')) {
-								try {
-									$progressFile = $jobFolder->get('progress.json');
-									$progressData = json_decode($progressFile->getContent(), true);
-									
-									if ($progressData && ($progressData['status'] ?? '') === 'processing') {
-										// Get cache directory size
+
+						if (isset($jobFolder) && $jobFolder instanceof \OCP\Files\Folder && $jobFolder->nodeExists('progress.json')) {
+							try {
+								$progressFile = $jobFolder->get('progress.json');
+								$content = $progressFile->getContent();
+								$data = json_decode($content, true);
+								if ($data) {
+									// Enrich with cache directory size if processing
+									$cacheSize = 0;
+									if (($data['status'] ?? '') === 'processing') {
 										$cacheSize = $this->getJobCacheSize($jobFolder);
-										
-										return new JSONResponse([
-											'cachePath' => $jobFolder->getPath(),
-											'filename' => $decodedFilename, // Return decoded filename
-											'progress' => $progressData['progress'] ?? 0,
-											'status' => $progressData['status'] ?? 'unknown',
-											'frame' => $progressData['frame'] ?? 0,
-											'fps' => $progressData['fps'] ?? 0,
-											'speed' => $progressData['speed'] ?? '0x',
-											'time' => $progressData['time'] ?? '00:00:00',
-											'bitrate' => $progressData['bitrate'] ?? '0kbits/s',
-											'size' => $progressData['size'] ?? '0kB',
-											'cacheSize' => $cacheSize, // Add cache directory size
-											'resolutions' => $progressData['resolutions'] ?? [],
-											'startTime' => $progressData['startTime'] ?? time(),
-											'lastUpdate' => $progressData['lastUpdate'] ?? time()
-										]);
 									}
+									
+									return new JSONResponse([
+										'cachePath' => $jobFolder->getPath(),
+										'filename' => $decodedFilename,
+										'progress' => $data['progress'] ?? 0,
+										'status' => $data['status'] ?? 'unknown',
+										'frame' => $data['frame'] ?? 0,
+										'fps' => $data['fps'] ?? 0,
+										'speed' => $data['speed'] ?? '0x',
+										'time' => $data['time'] ?? '00:00:00',
+										'bitrate' => $data['bitrate'] ?? '0kbits/s',
+										'size' => $data['size'] ?? '0kB',
+										'cacheSize' => $cacheSize,
+										'resolutions' => $data['resolutions'] ?? [],
+										'startTime' => $data['startTime'] ?? time(),
+										'lastUpdate' => $data['lastUpdate'] ?? time()
+									]);
 								} catch (\Exception $e) {
 									// Skip invalid progress files
 									continue;
@@ -843,17 +866,12 @@ class CacheController extends Controller {
 				'recentJobs' => []
 			];
 
-			// Get user's cache locations (uses PersonalSettings defaults)
-			$cacheLocations = $this->getUserCacheLocations($user->getUID());
-
-			foreach ($cacheLocations as $location) {
-				$resolvedPath = $this->resolveCachePath($location, $userFolder);
-				
-				if ($userFolder->nodeExists($resolvedPath)) {
-					$cacheFolder = $userFolder->get($resolvedPath);
-					if ($cacheFolder instanceof \OCP\Files\Folder) {
-						$this->gatherSimpleStatistics($cacheFolder, $stats);
-					}
+			// Check home cache location
+			$homeCachePath = '.cached_hls';
+			if ($userFolder->nodeExists($homeCachePath)) {
+				$cacheFolder = $userFolder->get($homeCachePath);
+				if ($cacheFolder instanceof \OCP\Files\Folder) {
+					$this->gatherSimpleStatistics($cacheFolder, $stats);
 				}
 			}
 
