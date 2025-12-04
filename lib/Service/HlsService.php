@@ -106,7 +106,8 @@ class HlsService {
 				' -map 0:v:0 -c:v:%d libx264 -preset superfast -crf 23 -maxrate %s -bufsize %s -s:v:%d %s',
 				$streamIndex, $variant['bitrate'], intval($variant['bitrate']) * 2 . 'k', $streamIndex, $variant['resolution']
 			);
-			$ffmpegCmd .= sprintf(' -map 0:a:0 -c:a:%d aac -b:a:%d 128k', $streamIndex, $streamIndex);
+			// Use 0:a:0? with trailing ? to gracefully handle videos without audio
+			$ffmpegCmd .= sprintf(' -map 0:a:0? -c:a:%d aac -b:a:%d 128k', $streamIndex, $streamIndex);
 			$streamMaps[] = "v:$streamIndex,a:$streamIndex,name:$name";
 			$streamIndex++;
 		}
