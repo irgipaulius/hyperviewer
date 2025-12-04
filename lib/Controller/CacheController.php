@@ -952,7 +952,7 @@ class CacheController extends Controller {
 			// Extract completed job filenames from directory names
 			$completedFilenames = [];
 			foreach (array_keys($completedDirs) as $dirPath) {
-				$completedFilenames[] = basename($dirPath);
+				$completedFilenames[] = $dirPath;
 			}
 			$stats['completedJobFilenames'] = $completedFilenames;
 			
