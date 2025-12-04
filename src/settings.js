@@ -144,23 +144,52 @@ function populateCompletedJobs(filenames) {
 /**
  * Render job list items
  */
-function renderJobList(filenames) {
+function renderJobList(jobs) {
 	const list = document.getElementById('completed-jobs-list')
 	if (!list) return
 
-	// Limit to 100 items for performance if needed, or render all
-	// For now, render all but maybe consider virtualization if list is huge
+	// Limit to 500 items for performance
 	const maxItems = 500
-	const items = filenames.slice(0, maxItems)
+	const items = jobs.slice(0, maxItems)
 	
-	list.innerHTML = items.map(filename => `
-		<li class="job-item">
-			<span class="job-name" title="${escapeHtml(filename)}">${escapeHtml(filename)}</span>
-		</li>
-	`).join('')
+	list.innerHTML = items.map(job => {
+		// Handle both old format (strings) and new format (objects)
+		if (typeof job === 'string') {
+			return `
+				<li class="job-item">
+					<span class="job-name" title="${escapeHtml(job)}">${escapeHtml(job)}</span>
+				</li>
+			`
+		}
+		
+		// New format with timestamp and size
+		const name = job.name || 'Unknown'
+		const timestamp = job.timestamp || 0
+		const sizeBytes = job.sizeBytes || 0
+		
+		// Format timestamp to local date/time
+		const date = timestamp > 0 ? new Date(timestamp * 1000) : null
+		const dateStr = date ? date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Unknown'
+		
+		// Format size in MB or GB
+		let sizeStr = '0 MB'
+		if (sizeBytes > 0) {
+			const mb = sizeBytes / (1024 * 1024)
+			const gb = sizeBytes / (1024 * 1024 * 1024)
+			sizeStr = gb >= 1 ? `${gb.toFixed(2)} GB` : `${mb.toFixed(2)} MB`
+		}
+		
+		const displayText = `${name}: ${dateStr} - ${sizeStr}`
+		
+		return `
+			<li class="job-item">
+				<span class="job-name" title="${escapeHtml(name)}">${escapeHtml(displayText)}</span>
+			</li>
+		`
+	}).join('')
 	
-	if (filenames.length > maxItems) {
-		list.innerHTML += `<li class="job-item more-items">...and ${filenames.length - maxItems} more</li>`
+	if (jobs.length > maxItems) {
+		list.innerHTML += `<li class="job-item more-items">...and ${jobs.length - maxItems} more</li>`
 	}
 }
 
@@ -179,9 +208,11 @@ function filterCompletedJobs(query) {
 		return
 	}
 
-	const filtered = allJobs.filter(job => 
-		job.toLowerCase().includes(normalizedQuery)
-	)
+	const filtered = allJobs.filter(job => {
+		// Handle both string format and object format
+		const searchText = typeof job === 'string' ? job : (job.name || '')
+		return searchText.toLowerCase().includes(normalizedQuery)
+	})
 	
 	renderJobList(filtered)
 	

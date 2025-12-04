@@ -949,11 +949,47 @@ class CacheController extends Controller {
 			
 			$stats['completedJobs'] = count($completedDirs);
 			
-			// Extract completed job filenames from directory names
+			// Get directory info efficiently with batch shell operations
 			$completedFilenames = [];
-			foreach (array_keys($completedDirs) as $dirPath) {
-				$completedFilenames[] = $dirPath;
+			
+			if (!empty($completedDirs)) {
+				$dirPaths = array_keys($completedDirs);
+				
+				// Batch get directory sizes (single du call for all directories)
+				$duCommand = 'du -sb ' . implode(' ', array_map('escapeshellarg', $dirPaths)) . ' 2>/dev/null';
+				$duOutput = @shell_exec($duCommand);
+				
+				// Parse du output into size map
+				$sizeMap = [];
+				if ($duOutput) {
+					$lines = explode("\n", trim($duOutput));
+					foreach ($lines as $line) {
+						if (empty($line)) continue;
+						$parts = preg_split('/\s+/', $line, 2);
+						if (count($parts) === 2) {
+							$sizeMap[$parts[1]] = (int)$parts[0];
+						}
+					}
+				}
+				
+				// Get directory info with stat (more efficient than filemtime per dir)
+				foreach ($dirPaths as $dirPath) {
+					$basename = basename($dirPath);
+					
+					// Get modification time using stat
+					$timestamp = @filemtime($dirPath);
+					
+					// Get size from our batch du result
+					$sizeBytes = $sizeMap[$dirPath] ?? 0;
+					
+					$completedFilenames[] = [
+						'name' => $basename,
+						'timestamp' => $timestamp ?: 0,
+						'sizeBytes' => $sizeBytes
+					];
+				}
 			}
+			
 			$stats['completedJobFilenames'] = $completedFilenames;
 			
 			// Calculate pending jobs: totalJobs - completedJobs
