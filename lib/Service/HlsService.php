@@ -158,20 +158,25 @@ class HlsService {
 			$rawProgressFile = $progressFile . '.raw';
 			$stderrOutput = '';
 
+			$exitCode = -1;
+
 			while (true) {
 				$status = proc_get_status($process);
 				
 				// Read output to prevent buffer filling
-				fread($pipes[1], 4096);
-				$stderr = fread($pipes[2], 4096);
-				if ($stderr) {
-					$stderrOutput .= $stderr;
+				// Read all available data
+				$out = stream_get_contents($pipes[1]);
+				$err = stream_get_contents($pipes[2]);
+				
+				if ($err) {
+					$stderrOutput .= $err;
 				}
 
 				// Update progress
 				$this->parseProgressFromRawFile($rawProgressFile, $progressFile);
 
 				if (!$status['running']) {
+					$exitCode = $status['exitcode'];
 					break;
 				}
 				
@@ -181,17 +186,18 @@ class HlsService {
 			fclose($pipes[1]);
 			fclose($pipes[2]);
 			
-			$returnCode = proc_close($process);
+			// proc_close will return -1 if status was already read, so we rely on $exitCode
+			proc_close($process);
 
-			if ($returnCode !== 0) {
+			if ($exitCode !== 0) {
 				$errorMsg = sprintf(
 					'FFmpeg failed with code %d. Command: %s. Stderr: %s',
-					$returnCode,
+					$exitCode,
 					$cmd,
-					substr($stderrOutput, -500) // Last 500 chars of stderr
+					substr($stderrOutput, -5000) // Last 1000 chars of stderr
 				);
 				$this->logger->error($errorMsg);
-				throw new \Exception("FFmpeg failed with code $returnCode");
+				throw new \Exception("FFmpeg failed with code $exitCode");
 			}
 		} else {
 			$this->logger->error('Failed to start FFmpeg process. Command: ' . $cmd);
