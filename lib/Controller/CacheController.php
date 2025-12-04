@@ -890,6 +890,9 @@ class CacheController extends Controller {
 			// However, for the UI, we mostly care about the specific counters.
 			// Let's just ensure total is at least the sum of the parts.
 			$stats['totalJobs'] = $stats['completedJobs'] + $stats['activeJobs'] + $stats['pendingJobs'];
+			
+			// Add completed job filenames for the UI list
+			$stats['completedJobFilenames'] = $stats['recentJobs'];
 
 			return new JSONResponse(['stats' => $stats]);
 
@@ -897,6 +900,21 @@ class CacheController extends Controller {
 			$this->logger->error('Error getting job statistics', ['error' => $e->getMessage()]);
 			return new JSONResponse(['error' => 'Failed to get statistics'], 500);
 		}
+	}
+
+	/**
+	 * Calculate total size of a directory recursively
+	 */
+	private function calculateDirectorySize(\OCP\Files\Folder $folder): int {
+		$size = 0;
+		foreach ($folder->getDirectoryListing() as $node) {
+			if ($node instanceof \OCP\Files\File) {
+				$size += $node->getSize();
+			} elseif ($node instanceof \OCP\Files\Folder) {
+				$size += $this->calculateDirectorySize($node);
+			}
+		}
+		return $size;
 	}
 
 	/**
