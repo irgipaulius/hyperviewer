@@ -127,7 +127,7 @@ function populateCompletedJobs(filenames) {
 	if (!list) return
 
 	// Store filenames for filtering
-	list.dataset.allJobs = JSON.stringify(filenames)
+	list.dataset.allJobs = filenames
 
 	if (!filenames || filenames.length === 0) {
 		list.innerHTML = ''
@@ -157,14 +157,14 @@ function renderJobList(jobs) {
 		if (typeof job === 'string') {
 			return `
 				<li class="job-item">
-					<span class="job-name" title="${escapeHtml(job)}">${escapeHtml(job)}</span>
+					<span class="job-name" title="${job.name}">${job.name}</span>
 				</li>
 			`
 		}
 		
 		// New format with timestamp and size
-		const name = job.name || 'Unknown'
-		const timestamp = job.timestamp || 0
+		const name = job.name
+		const timestamp = job.timestamp || new Date().getTime()
 		const sizeBytes = job.sizeBytes || 0
 		
 		// Format timestamp to local date/time

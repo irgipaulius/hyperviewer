@@ -21,6 +21,7 @@ class FFmpegProcessManager {
 
 	private \OCP\Files\IAppData $appData;
 	private int $maxConcurrentJobs = 2;
+	private int $maxAttempts = 3;
 
 	public function __construct(
 		IConfig $config,
@@ -96,6 +97,7 @@ class FFmpegProcessManager {
 			} elseif ($job['status'] === 'pending') {
 				$pendingJobs[] = $job;
 			}
+			// Note: failed jobs are handled in updateJobStatus - they get moved to end and reset to pending
 		}
 
 		// Start new jobs if slots available
@@ -125,10 +127,11 @@ class FFmpegProcessManager {
 
 		if ($jobIndex === -1) return;
 
-		// Update status to processing
+		// Update status to processing and increment attempts
 		$queue[$jobIndex]['status'] = 'processing';
 		$queue[$jobIndex]['startedAt'] = time();
-		$queue[$jobIndex]['pid'] = getmypid(); 
+		$queue[$jobIndex]['pid'] = getmypid();
+		$queue[$jobIndex]['attempts'] = ($queue[$jobIndex]['attempts'] ?? 0) + 1;
 		$this->saveQueue($queue);
 
 		try {
@@ -193,18 +196,54 @@ class FFmpegProcessManager {
 	 */
 	private function updateJobStatus(string $jobId, string $status, string $error = null): void {
 		$queue = $this->readQueue();
-		foreach ($queue as &$job) {
+		$jobIndex = -1;
+		
+		foreach ($queue as $index => $job) {
 			if ($job['id'] === $jobId) {
-				$job['status'] = $status;
-				if ($status === 'completed') {
-					$job['completedAt'] = time();
-				}
-				if ($error) {
-					$job['error'] = $error;
-				}
+				$jobIndex = $index;
 				break;
 			}
 		}
+		
+		if ($jobIndex === -1) {
+			$this->saveQueue($queue);
+			return;
+		}
+		
+		$job = &$queue[$jobIndex];
+		$job['status'] = $status;
+		
+		if ($status === 'completed') {
+			$job['completedAt'] = time();
+			unset($job['error']); // Clear any previous errors
+		} elseif ($status === 'failed') {
+			$job['failedAt'] = time();
+			$attempts = $job['attempts'] ?? 0;
+			
+			if ($error) {
+				$job['error'] = $error;
+			}
+			
+			// Check if job can be retried
+			if ($attempts < $this->maxAttempts) {
+				// Move to end of queue and reset to pending for later retry
+				$failedJob = $queue[$jobIndex];
+				$failedJob['status'] = 'pending'; // Reset to pending
+				$failedJob['lastFailedAt'] = $failedJob['failedAt']; // Keep track of last failure
+				unset($failedJob['failedAt']); // Clear failedAt since we're pending again
+				
+				// Remove from current position
+				array_splice($queue, $jobIndex, 1);
+				
+				// Add to end of queue
+				$queue[] = $failedJob;
+				
+				$this->logger->info("Job {$jobId} failed (attempt {$attempts}/{$this->maxAttempts}), moved to end of queue for retry");
+			} else {
+				$this->logger->error("Job {$jobId} permanently failed after {$attempts} attempts: {$error}");
+			}
+		}
+		
 		$this->saveQueue($queue);
 	}
 
