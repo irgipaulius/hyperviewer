@@ -687,7 +687,6 @@ class CacheController extends Controller {
 								// Skip invalid progress files
 								continue;
 							}
-							}
 						}
 					}
 				}
