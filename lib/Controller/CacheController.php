@@ -682,10 +682,11 @@ class CacheController extends Controller {
 										'startTime' => $data['startTime'] ?? time(),
 										'lastUpdate' => $data['lastUpdate'] ?? time()
 									]);
-								} catch (\Exception $e) {
-									// Skip invalid progress files
-									continue;
 								}
+							} catch (\Exception $e) {
+								// Skip invalid progress files
+								continue;
+							}
 							}
 						}
 					}
