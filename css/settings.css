@@ -226,3 +226,56 @@
 .auto-gen-actions {
 	margin-top: 10px;
 }
+
+/* Job Status Variants */
+.job-status.processing {
+	background: var(--color-primary-element);
+	color: var(--color-primary-text);
+}
+
+.job-status.retry-pending {
+	background: var(--color-warning);
+	color: #000;
+}
+
+/* Retry Pending Card styling */
+.job-card.retry-pending-card {
+	border-left: 4px solid var(--color-warning);
+	background: color-mix(in srgb, var(--color-warning) 5%, var(--color-main-background));
+}
+
+/* Job Directory */
+.job-directory {
+	font-size: 11px;
+	color: var(--color-text-maxcontrast);
+	margin-bottom: 8px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Job Timestamps */
+.job-timestamps {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin-top: 8px;
+	font-size: 11px;
+	color: var(--color-text-maxcontrast);
+}
+
+/* Job Error Message */
+.job-error {
+	margin-top: 10px;
+	padding: 8px 12px;
+	background: color-mix(in srgb, var(--color-error) 15%, var(--color-main-background));
+	border: 1px solid var(--color-error);
+	border-radius: var(--border-radius);
+	font-size: 12px;
+	color: var(--color-error);
+	word-break: break-word;
+}
+
+.job-error strong {
+	color: inherit;
+}

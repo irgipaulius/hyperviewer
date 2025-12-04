@@ -84,7 +84,7 @@ class FFmpegProcessManager {
 		$activeJobs = 0;
 		$pendingJobs = [];
 
-		// Count active jobs and filter pending
+		// Count active jobs and filter pending/failed jobs that can be retried
 		foreach ($queue as $job) {
 			if ($job['status'] === 'processing') {
 				// Check if process is actually still running
@@ -96,8 +96,13 @@ class FFmpegProcessManager {
 				}
 			} elseif ($job['status'] === 'pending') {
 				$pendingJobs[] = $job;
+			} elseif ($job['status'] === 'failed') {
+				// Failed jobs can be retried if they haven't reached max attempts
+				$attempts = $job['attempts'] ?? 0;
+				if ($attempts < $this->maxAttempts) {
+					$pendingJobs[] = $job;
+				}
 			}
-			// Note: failed jobs are handled in updateJobStatus - they get moved to end and reset to pending
 		}
 
 		// Start new jobs if slots available
@@ -226,11 +231,9 @@ class FFmpegProcessManager {
 			
 			// Check if job can be retried
 			if ($attempts < $this->maxAttempts) {
-				// Move to end of queue and reset to pending for later retry
+				// Keep status as 'failed', move to end of queue for retry
 				$failedJob = $queue[$jobIndex];
-				$failedJob['status'] = 'pending'; // Reset to pending
-				$failedJob['lastFailedAt'] = $failedJob['failedAt']; // Keep track of last failure
-				unset($failedJob['failedAt']); // Clear failedAt since we're pending again
+				$failedJob['status'] = 'failed'; // Keep as failed
 				
 				// Remove from current position
 				array_splice($queue, $jobIndex, 1);
@@ -240,7 +243,9 @@ class FFmpegProcessManager {
 				
 				$this->logger->info("Job {$jobId} failed (attempt {$attempts}/{$this->maxAttempts}), moved to end of queue for retry");
 			} else {
-				$this->logger->error("Job {$jobId} permanently failed after {$attempts} attempts: {$error}");
+				// Max attempts reached - delete the job entirely
+				$this->logger->error("Job {$jobId} permanently failed after {$attempts} attempts, removing from queue: {$error}");
+				array_splice($queue, $jobIndex, 1);
 			}
 		}
 		

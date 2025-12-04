@@ -244,12 +244,46 @@ function refreshActiveJobs() {
 			if (jobs.length === 0) {
 				container.innerHTML = '<p class="emptycontent-desc">No active jobs running</p>'
 			} else {
-				container.innerHTML = jobs.map(job => `
-					<div class="job-card">
-						<div class="job-header">
-							<span class="job-filename">${escapeHtml(job.filename || 'Unknown')}</span>
-							<span class="job-status">${escapeHtml(job.status || 'Processing')}</span>
-						</div>
+				container.innerHTML = jobs.map(job => {
+					// Determine status display and styling
+					const isFailed = job.status === 'failed'
+
+					let statusClass = 'job-status'
+					if (isFailed) {
+						statusClass = 'job-status retry-pending'
+					} else if (job.status === 'processing') {
+						statusClass = 'job-status processing'
+					}
+
+					let statusText = escapeHtml(job.status || 'Pending')
+					if (isFailed) {
+						statusText = `Failed (${job.attempts || 1}/3) - Retry pending`
+					} else if (job.status === 'processing') {
+						statusText = `Processing (attempt ${job.attempts || 1}/3)`
+					}
+					
+					// Format timestamps
+					const addedAt = job.addedAt
+						? formatDate(job.addedAt)
+						: null
+					const startedAt = job.startedAt
+						? formatDate(job.startedAt)
+						: null
+					const failedAt = job.failedAt
+						? formatDate(job.failedAt)
+						: null
+					
+					// Get resolutions from settings if available
+					const resolutions = job.settings?.resolutions || job.resolutions || []
+					
+					// Build directory display
+					const directoryHtml = job.directory
+						? `<div class="job-directory">📁 ${escapeHtml(job.directory)}</div>`
+						: ''
+
+					// Build progress section (only for processing jobs)
+					const progressHtml = job.status === 'processing'
+						? `
 						<div class="job-progress">
 							<progress value="${job.progress || 0}" max="100"></progress>
 							<span style="font-size: 12px; margin-left: 8px;">${job.progress || 0}%</span>
@@ -259,17 +293,59 @@ function refreshActiveJobs() {
 							<span>Frames: ${job.frame || 0}</span>
 							<span>Speed: ${escapeHtml(job.speed || '0x')}</span>
 							<span>FPS: ${escapeHtml(job.fps || '0')}</span>
-							${job.cacheSize ? `<span>Size: ${escapeHtml(job.cacheSize)}</span>` : ''}
+							${job.cacheSize
+		? `<span>Size: ${escapeHtml(job.cacheSize)}</span>`
+		: ''}
 						</div>
-						${job.resolutions && job.resolutions.length > 0
-							? `
-							<div class="job-resolutions">
-								${job.resolutions.map(res => `<span class="resolution-tag">${escapeHtml(res)}</span>`).join('')}
-							</div>
 						`
-							: ''}
+						: ''
+
+					// Build error display
+					const errorHtml = job.error
+						? `
+						<div class="job-error">
+							<strong>❌ Error:</strong> ${escapeHtml(job.error)}
+						</div>
+						`
+						: ''
+
+					// Build resolutions display
+					const resolutionsHtml = resolutions.length > 0
+						? `
+						<div class="job-resolutions">
+							${resolutions.map(res => `<span class="resolution-tag">${escapeHtml(res)}</span>`).join('')}
+						</div>
+						`
+						: ''
+
+					const cardClass = isFailed
+						? 'job-card retry-pending-card'
+						: 'job-card'
+
+					return `
+					<div class="${cardClass}">
+						<div class="job-header">
+							<span class="job-filename" title="${escapeHtml(job.directory || '/')}${escapeHtml(job.filename || '')}">${escapeHtml(job.filename || 'Unknown')}</span>
+							<span class="${statusClass}">${statusText}</span>
+						</div>
+						${directoryHtml}
+						${progressHtml}
+						<div class="job-timestamps">
+							${addedAt
+		? `<span title="When the job was added to the queue">📅 Queued: ${addedAt}</span>`
+		: ''}
+							${startedAt
+		? `<span title="When processing started">▶️ Started: ${startedAt}</span>`
+		: ''}
+							${failedAt
+		? `<span title="Failure time">⚠️ Failed: ${failedAt}</span>`
+		: ''}
+						</div>
+						${errorHtml}
+						${resolutionsHtml}
 					</div>
-				`).join('')
+				`
+				}).join('')
 			}
 		})
 		.catch(error => {
