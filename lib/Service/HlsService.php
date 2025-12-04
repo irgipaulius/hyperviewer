@@ -98,6 +98,9 @@ class HlsService {
 
 		$ffmpegCmd = '/usr/local/bin/ffmpeg -y -i ' . escapeshellarg($inputPath);
 		
+		// Check if input has audio
+		$hasAudio = $this->hasAudioStream($inputPath);
+		
 		$streamIndex = 0;
 		$streamMaps = [];
 		
@@ -106,9 +109,14 @@ class HlsService {
 				' -map 0:v:0 -c:v:%d libx264 -preset superfast -crf 23 -maxrate %s -bufsize %s -s:v:%d %s',
 				$streamIndex, $variant['bitrate'], intval($variant['bitrate']) * 2 . 'k', $streamIndex, $variant['resolution']
 			);
-			// Use 0:a:0? with trailing ? to gracefully handle videos without audio
-			$ffmpegCmd .= sprintf(' -map 0:a:0? -c:a:%d aac -b:a:%d 128k', $streamIndex, $streamIndex);
-			$streamMaps[] = "v:$streamIndex,a:$streamIndex,name:$name";
+			
+			if ($hasAudio) {
+				$ffmpegCmd .= sprintf(' -map 0:a:0 -c:a:%d aac -b:a:%d 128k', $streamIndex, $streamIndex);
+				$streamMaps[] = "v:$streamIndex,a:$streamIndex,name:$name";
+			} else {
+				$streamMaps[] = "v:$streamIndex,name:$name";
+			}
+			
 			$streamIndex++;
 		}
 
@@ -249,5 +257,15 @@ class HlsService {
 		$data['status'] = $success ? 'completed' : 'failed';
 		$data['progress'] = $success ? 100 : $data['progress'];
 		file_put_contents($progressFile, json_encode($data));
+	}
+
+	private function hasAudioStream(string $filePath): bool {
+		$cmd = '/usr/local/bin/ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 ' . escapeshellarg($filePath);
+		$output = [];
+		$returnCode = 0;
+		exec($cmd, $output, $returnCode);
+		
+		// If return code is 0 and we have output, there is an audio stream
+		return $returnCode === 0 && !empty($output);
 	}
 }
