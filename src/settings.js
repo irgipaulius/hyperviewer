@@ -5,8 +5,7 @@
 
 console.log('🎬 Hyper Viewer settings script loaded!')
 
-let refreshInterval = null
-let statsInterval = null
+console.log('🎬 Hyper Viewer settings script loaded!')
 
 document.addEventListener('DOMContentLoaded', function() {
 	// Initialize dashboard
@@ -29,19 +28,56 @@ function initializeDashboard() {
 	console.log('📊 Initializing dashboard...')
 	
 	// Initial data load
+	refreshAllData()
+	
+	// Refresh on window focus
+	window.addEventListener('focus', () => {
+		console.log('👀 Window focused, refreshing data...')
+		refreshAllData()
+	})
+
+	// Setup refresh button
+	const refreshBtn = document.getElementById('refresh-stats')
+	if (refreshBtn) {
+		refreshBtn.addEventListener('click', () => {
+			console.log('🔄 Manual refresh triggered')
+			refreshAllData()
+		})
+	}
+
+	// Setup search filter
+	const searchInput = document.getElementById('completed-jobs-search')
+	if (searchInput) {
+		searchInput.addEventListener('input', (e) => {
+			filterCompletedJobs(e.target.value)
+		})
+	}
+}
+
+/**
+ * Refresh all dashboard data
+ */
+function refreshAllData() {
 	refreshStatistics()
 	refreshActiveJobs()
 	refreshAutoGeneration()
-	
-	// Set up auto-refresh every 10 seconds
-	refreshInterval = setInterval(() => {
-		refreshActiveJobs()
-	}, 10000)
-	
-	statsInterval = setInterval(() => {
-		refreshStatistics()
-		refreshAutoGeneration()
-	}, 10000)
+	updateLastRefreshedTime()
+}
+
+/**
+ * Update the last refreshed timestamp
+ */
+function updateLastRefreshedTime() {
+	const timeSpan = document.getElementById('last-updated-time')
+	const refreshBtn = document.getElementById('refresh-stats')
+	if (timeSpan) {
+		const now = new Date()
+		const timeStr = now.toLocaleTimeString()
+		timeSpan.textContent = `Last updated: ${timeStr}`
+		if (refreshBtn) {
+			refreshBtn.title = `Last updated: ${now.toLocaleString()}`
+		}
+	}
 }
 
 /**
@@ -55,15 +91,105 @@ function refreshStatistics() {
 	})
 		.then(response => response.json())
 		.then(data => {
-			const stats = data.stats || {}
-			document.getElementById('stat-active').textContent = stats.activeJobs || 0
-			document.getElementById('stat-autogen').textContent = stats.autoGenDirectories || 0
-			document.getElementById('stat-completed').textContent = stats.completedJobs || 0
-			document.getElementById('stat-pending').textContent = stats.pendingJobs || 0
+			const stats = data || {} // API returns stats directly now, or inside 'stats' key depending on controller
+			
+			// Handle both response formats (direct stats or wrapped in 'stats')
+			const actualStats = stats.stats || stats
+
+			document.getElementById('stat-active').textContent = actualStats.activeJobs || 0
+			document.getElementById('stat-autogen').textContent = actualStats.autoGenDirectories || 0
+			document.getElementById('stat-completed').textContent = actualStats.completedJobs || 0
+			document.getElementById('stat-pending').textContent = actualStats.pendingJobs || 0
+			
+			// Update completed count badge
+			const countBadge = document.getElementById('completed-count-badge')
+			if (countBadge) {
+				countBadge.textContent = actualStats.completedJobs || 0
+			}
+
+			// Populate completed jobs list
+			if (actualStats.completedJobFilenames) {
+				populateCompletedJobs(actualStats.completedJobFilenames)
+			}
 		})
 		.catch(error => {
 			console.error('❌ Failed to fetch statistics:', error)
 		})
+}
+
+/**
+ * Populate completed jobs list
+ */
+function populateCompletedJobs(filenames) {
+	const list = document.getElementById('completed-jobs-list')
+	const emptyMsg = document.getElementById('no-completed-jobs')
+	
+	if (!list) return
+
+	// Store filenames for filtering
+	list.dataset.allJobs = JSON.stringify(filenames)
+
+	if (!filenames || filenames.length === 0) {
+		list.innerHTML = ''
+		if (emptyMsg) emptyMsg.style.display = 'block'
+		return
+	}
+
+	if (emptyMsg) emptyMsg.style.display = 'none'
+
+	// Render list
+	renderJobList(filenames)
+}
+
+/**
+ * Render job list items
+ */
+function renderJobList(filenames) {
+	const list = document.getElementById('completed-jobs-list')
+	if (!list) return
+
+	// Limit to 100 items for performance if needed, or render all
+	// For now, render all but maybe consider virtualization if list is huge
+	const maxItems = 500
+	const items = filenames.slice(0, maxItems)
+	
+	list.innerHTML = items.map(filename => `
+		<li class="job-item">
+			<span class="job-name" title="${escapeHtml(filename)}">${escapeHtml(filename)}</span>
+		</li>
+	`).join('')
+	
+	if (filenames.length > maxItems) {
+		list.innerHTML += `<li class="job-item more-items">...and ${filenames.length - maxItems} more</li>`
+	}
+}
+
+/**
+ * Filter completed jobs list
+ */
+function filterCompletedJobs(query) {
+	const list = document.getElementById('completed-jobs-list')
+	if (!list || !list.dataset.allJobs) return
+
+	const allJobs = JSON.parse(list.dataset.allJobs)
+	const normalizedQuery = query.toLowerCase().trim()
+
+	if (!normalizedQuery) {
+		renderJobList(allJobs)
+		return
+	}
+
+	const filtered = allJobs.filter(job => 
+		job.toLowerCase().includes(normalizedQuery)
+	)
+	
+	renderJobList(filtered)
+	
+	const emptyMsg = document.getElementById('no-completed-jobs')
+	if (emptyMsg) {
+		emptyMsg.style.display = filtered.length === 0 ? 'block' : 'none'
+		if (filtered.length === 0) emptyMsg.textContent = 'No matching jobs found'
+	}
 }
 
 /**

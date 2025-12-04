@@ -872,23 +872,12 @@ class CacheController extends Controller {
 				$cacheFolder = $userFolder->get($homeCachePath);
 				if ($cacheFolder instanceof \OCP\Files\Folder) {
 					$this->gatherSimpleStatistics($cacheFolder, $stats);
+					// Calculate total cache size
+					$stats['totalCacheSize'] = $this->calculateDirectorySize($cacheFolder);
 				}
 			}
 
 			// Count auto-generation directories
-			$allAppValues = $this->config->getAppKeys('hyperviewer');
-			foreach ($allAppValues as $key) {
-				if (strpos($key, 'auto_gen_') === 0) {
-					$settingsJson = $this->config->getAppValue('hyperviewer', $key, '');
-					if (!empty($settingsJson)) {
-						$settings = json_decode($settingsJson, true);
-						if ($settings && isset($settings['userId']) && $settings['userId'] === $user->getUID() && ($settings['enabled'] ?? false)) {
-							$stats['autoGenDirectories']++;
-						}
-					}
-				}
-			}
-
 			// Get accurate job stats from ProcessManager
 			$managerStats = $this->processManager->getJobStatistics();
 			

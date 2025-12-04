@@ -39,4 +39,29 @@ style('hyperviewer', 'settings');
 	<div id="autogen-container">
 		<p class="emptycontent-desc"><?php p($l->t('No auto-generation directories configured')); ?></p>
 	</div>
+
+	<!-- Completed Jobs -->
+	<h3><?php p($l->t('Completed Jobs')); ?></h3>
+	<details class="completed-jobs-section">
+		<summary>
+			<?php p($l->t('Show Completed Jobs')); ?> 
+			<span id="completed-count-badge" class="count-badge">0</span>
+		</summary>
+		<div class="completed-jobs-content">
+			<div class="search-box">
+				<input type="text" id="completed-jobs-search" placeholder="<?php p($l->t('Search completed jobs...')); ?>" />
+			</div>
+			<ul id="completed-jobs-list" class="job-list">
+				<!-- Populated by JS -->
+			</ul>
+			<p id="no-completed-jobs" class="emptycontent-desc" style="display:none;"><?php p($l->t('No completed jobs found')); ?></p>
+		</div>
+	</details>
+
+	<div class="section-footer">
+		<button id="refresh-stats" class="primary icon-refresh" title="<?php p($l->t('Last updated: Never')); ?>">
+			<?php p($l->t('Refresh Data')); ?>
+		</button>
+		<span id="last-updated-time" class="timestamp"></span>
+	</div>
 </div>
