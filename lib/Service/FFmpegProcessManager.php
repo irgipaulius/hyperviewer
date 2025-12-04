@@ -243,9 +243,10 @@ class FFmpegProcessManager {
 				
 				$this->logger->info("Job {$jobId} failed (attempt {$attempts}/{$this->maxAttempts}), moved to end of queue for retry");
 			} else {
-				// Max attempts reached - delete the job entirely
-				$this->logger->error("Job {$jobId} permanently failed after {$attempts} attempts, removing from queue: {$error}");
-				array_splice($queue, $jobIndex, 1);
+				// Max attempts reached - mark as aborted (keep in queue for history)
+				$job['status'] = 'aborted';
+				$job['abortedAt'] = time();
+				$this->logger->error("Job {$jobId} permanently failed after {$attempts} attempts, marked as aborted: {$error}");
 			}
 		}
 		
@@ -253,8 +254,8 @@ class FFmpegProcessManager {
 	}
 
 	private function isJobRunning(array $job): bool {
-		// Simple check: if started more than 2 hours ago, assume dead
-		if (isset($job['startedAt']) && (time() - $job['startedAt']) > 7200) {
+		// Simple check: if started more than 8 hours ago, assume dead
+		if (isset($job['startedAt']) && (time() - $job['startedAt']) > 4*7200) {
 			return false;
 		}
 		return true;
@@ -267,7 +268,8 @@ class FFmpegProcessManager {
 	public function getActiveJobs(): array {
 		$queue = $this->readQueue();
 		return array_filter($queue, function($job) {
-			return $job['status'] === 'processing' || $job['status'] === 'pending';
+			// Include processing, pending, failed (awaiting retry), and aborted jobs
+			return in_array($job['status'], ['processing', 'pending', 'failed', 'aborted']);
 		});
 	}
 

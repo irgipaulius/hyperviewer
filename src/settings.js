@@ -247,16 +247,21 @@ function refreshActiveJobs() {
 				container.innerHTML = jobs.map(job => {
 					// Determine status display and styling
 					const isFailed = job.status === 'failed'
+					const isAborted = job.status === 'aborted'
 
 					let statusClass = 'job-status'
-					if (isFailed) {
+					if (isAborted) {
+						statusClass = 'job-status aborted'
+					} else if (isFailed) {
 						statusClass = 'job-status retry-pending'
 					} else if (job.status === 'processing') {
 						statusClass = 'job-status processing'
 					}
 
 					let statusText = escapeHtml(job.status || 'Pending')
-					if (isFailed) {
+					if (isAborted) {
+						statusText = `Aborted (${job.attempts || 0}/3 attempts)`
+					} else if (isFailed) {
 						statusText = `Failed (${job.attempts || 1}/3) - Retry pending`
 					} else if (job.status === 'processing') {
 						statusText = `Processing (attempt ${job.attempts || 1}/3)`
