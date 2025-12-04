@@ -32,7 +32,7 @@ class HlsService {
 			: $directory . '/' . $filename;
 		
 		if (!$userFolder->nodeExists($videoPath)) {
-			throw new \Exception("Video file not found: $videoPath");
+			throw new \Exception("Video file not found: path: $videoPath dir: $directory file: $filename");
 		}
 
 		$videoFile = $userFolder->get($videoPath);
