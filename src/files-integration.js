@@ -1098,8 +1098,6 @@ async function startCacheGeneration(files) {
 		resolutions
 	};
 
-	console.log("Cache generation options:", options);
-
 	// Prepare files data for backend
 	const filesData = files.map(file => ({
 		filename: file.filename,
@@ -1109,6 +1107,9 @@ async function startCacheGeneration(files) {
 			"/"
 	}));
 
+	console.log("Cache generation options:", options);
+	console.log("Files data:", filesData);
+	
 	try {
 		// Send to backend for processing
 		const response = await fetch(
