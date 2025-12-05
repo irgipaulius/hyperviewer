@@ -148,17 +148,19 @@ class AutoHlsGenerationJob extends TimedJob {
 				$filename = basename($absPath);
 				$fileDir = dirname($relPath);
 				
-				// Normalize directory path
+				// Build full directory path
+				// If file is in the scanned directory root, use basePath
+				// Otherwise, append the subdirectory to basePath
 				if ($fileDir === '.') {
-					$fileDir = $basePath;
+					$directory = $basePath;
 				} else {
-					$fileDir = $basePath === '/' ? '/' . $fileDir : $basePath . '/' . $fileDir;
+					// Combine basePath with subdirectory
+					$directory = rtrim($basePath, '/') . '/' . $fileDir;
 				}
-				$normalizedDir = ($fileDir === '/' || $fileDir === '') ? '' : $fileDir;
 				
 				$videos[] = [
 					'filename' => $filename,
-					'directory' => $normalizedDir
+					'directory' => $directory
 				];
 			}
 
