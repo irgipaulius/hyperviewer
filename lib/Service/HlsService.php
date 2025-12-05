@@ -56,23 +56,8 @@ class HlsService {
 		if (!$userFolder->nodeExists($cacheOutputPath)) {
 			$userFolder->newFolder($cacheOutputPath);
 			
-			// Update cache with new directory
-			// Extract the parent .cached_hls directory path
-			$parts = explode('/', $cacheOutputPath);
-			$cachedHlsPath = '';
-			foreach ($parts as $part) {
-				if ($part === '.cached_hls') {
-					$cachedHlsPath = $cachedHlsPath ? $cachedHlsPath . '/' . $part : $part;
-					break;
-				}
-				if (!empty($part)) {
-					$cachedHlsPath = $cachedHlsPath ? $cachedHlsPath . '/' . $part : $part;
-				}
-			}
-			
-			if (!empty($cachedHlsPath)) {
-				$this->cachedHlsService->addDirectory($userId, $cachedHlsPath);
-			}
+			// Refresh cache to pick up new directory (maintains proper mount order)
+			$this->cachedHlsService->refreshCache($userId);
 		}
 		$cacheFolder = $userFolder->get($cacheOutputPath);
 		$cacheLocalPath = $cacheFolder->getStorage()->getLocalFile($cacheFolder->getInternalPath());

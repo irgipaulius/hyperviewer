@@ -66,7 +66,6 @@ class CachedHlsDirectoryService {
 			$pathsToScan = $this->getAllStoragePaths($userFolder);
 			
 			if (empty($pathsToScan)) {
-				$this->logger->warning('No storage paths found for user', ['userId' => $userId]);
 				return;
 			}
 
@@ -122,13 +121,6 @@ class CachedHlsDirectoryService {
 			
 			$this->config->setAppValue('hyperviewer', $cacheKey, json_encode($relativePaths));
 			$this->config->setAppValue('hyperviewer', $timestampKey, (string)time());
-
-			$this->logger->info('Refreshed .cached_hls directory cache', [
-				'userId' => $userId,
-				'dirCount' => count($relativePaths),
-				'mountPoints' => count($pathsToScan)
-			]);
-
 		} catch (\Exception $e) {
 			$this->logger->error('Failed to refresh cache', [
 				'userId' => $userId,
@@ -145,120 +137,55 @@ class CachedHlsDirectoryService {
 		$paths = [];
 		
 		try {
-			// Start with root user folder
+			// Add root user folder
 			$rootLocalPath = $userFolder->getStorage()->getLocalFile($userFolder->getInternalPath());
 			if ($rootLocalPath && is_dir($rootLocalPath)) {
-				$paths[] = [
-					'localPath' => $rootLocalPath,
-					'relativePath' => ''
-				];
+				$paths[] = ['localPath' => $rootLocalPath, 'relativePath' => ''];
 			}
 			
-			// Recursively check subdirectories for different storage mounts
-			$this->scanForMountPoints($userFolder, '', $paths);
+			// Check top-level directories for different storage mounts
+			$items = $userFolder->getDirectoryListing();
+			foreach ($items as $node) {
+				if (!($node instanceof \OCP\Files\Folder)) {
+					continue;
+				}
+				
+				$nodeName = $node->getName();
+				
+				// Skip hidden folders
+				if ($nodeName[0] === '.') {
+					continue;
+				}
+				
+				try {
+					$nodeLocalPath = $node->getStorage()->getLocalFile($node->getInternalPath());
+					
+					// If this folder has a different local path than root, it's a different mount
+					if ($nodeLocalPath && is_dir($nodeLocalPath) && $nodeLocalPath !== $rootLocalPath) {
+						// Make sure it's not a subdirectory of an existing mount
+						$isSubPath = false;
+						foreach ($paths as $existing) {
+							if (strpos($nodeLocalPath, $existing['localPath'] . '/') === 0) {
+								$isSubPath = true;
+								break;
+							}
+						}
+						
+						if (!$isSubPath) {
+							$paths[] = ['localPath' => $nodeLocalPath, 'relativePath' => $nodeName];
+						}
+					}
+				} catch (\Exception $e) {
+					// Skip folders we can't access
+					continue;
+				}
+			}
 			
 		} catch (\Exception $e) {
-			$this->logger->debug('Error getting storage paths', ['error' => $e->getMessage()]);
+			$this->logger->error('Error getting storage paths: ' . $e->getMessage());
 		}
 		
 		return $paths;
-	}
-
-	/**
-	 * Recursively scan for mount points (different storage backends)
-	 */
-	private function scanForMountPoints($folder, string $basePath, array &$paths): void {
-		try {
-			$items = $folder->getDirectoryListing();
-			
-			foreach ($items as $node) {
-				if ($node instanceof \OCP\Files\Folder) {
-					$nodeName = $node->getName();
-					
-					// Skip hidden folders
-					if ($nodeName[0] === '.') {
-						continue;
-					}
-					
-					$relativePath = $basePath ? $basePath . '/' . $nodeName : $nodeName;
-					
-					// Check if this folder is on a different storage mount
-					try {
-						$nodeLocalPath = $node->getStorage()->getLocalFile($node->getInternalPath());
-						
-						// If we got a different local path, it's likely a different mount
-						if ($nodeLocalPath && is_dir($nodeLocalPath)) {
-							// Check if this is a new mount point (different storage)
-							$isNewMount = true;
-							foreach ($paths as $existing) {
-								if (strpos($nodeLocalPath, $existing['localPath']) === 0) {
-									$isNewMount = false;
-									break;
-								}
-							}
-							
-							if ($isNewMount) {
-								$paths[] = [
-									'localPath' => $nodeLocalPath,
-									'relativePath' => $relativePath
-								];
-							}
-						}
-					} catch (\Exception $e) {
-						// Skip folders we can't access
-						continue;
-					}
-					
-					// Only recurse one level deep to find mount points
-					// Don't need to go deeper as find will handle subdirectories
-					if (substr_count($relativePath, '/') < 2) {
-						$this->scanForMountPoints($node, $relativePath, $paths);
-					}
-				}
-			}
-		} catch (\Exception $e) {
-			// Skip folders we can't access
-		}
-	}
-
-	/**
-	 * Add a single directory to the cache
-	 * Called when a new .cached_hls directory is created
-	 */
-	public function addDirectory(string $userId, string $path): void {
-		try {
-			$cacheKey = self::CACHE_KEY_PREFIX . $userId;
-			$cached = $this->config->getAppValue('hyperviewer', $cacheKey, '');
-
-			$dirs = [];
-			if (!empty($cached)) {
-				$dirs = json_decode($cached, true);
-				if (!is_array($dirs)) {
-					$dirs = [];
-				}
-			}
-
-			// Normalize path (remove leading/trailing slashes)
-			$normalizedPath = trim($path, '/');
-
-			// Add if not already in cache
-			if (!in_array($normalizedPath, $dirs, true)) {
-				$dirs[] = $normalizedPath;
-				$this->config->setAppValue('hyperviewer', $cacheKey, json_encode($dirs));
-				
-				$this->logger->debug('Added directory to cache', [
-					'userId' => $userId,
-					'path' => $normalizedPath
-				]);
-			}
-
-		} catch (\Exception $e) {
-			$this->logger->error('Failed to add directory to cache', [
-				'userId' => $userId,
-				'path' => $path,
-				'error' => $e->getMessage()
-			]);
-		}
 	}
 
 	/**
@@ -292,8 +219,6 @@ class CachedHlsDirectoryService {
 		
 		$this->config->deleteAppValue('hyperviewer', $cacheKey);
 		$this->config->deleteAppValue('hyperviewer', $timestampKey);
-		
-		$this->logger->info('Cleared cache', ['userId' => $userId]);
 	}
 
 	/**
