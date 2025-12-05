@@ -25,11 +25,17 @@ class Application extends App implements IBootstrap {
 		$context->registerService('ProcessQueueJob', function() {
 			return \OC::$server->get(\OCA\HyperViewer\BackgroundJob\ProcessQueueJob::class);
 		});
+		$context->registerService('ProcessQueueCommand', function() {
+			return \OC::$server->get(\OCA\HyperViewer\Command\ProcessQueue::class);
+		});
 	}
 
 	public function boot(IBootContext $context): void {
 		// Always inject our Files integration JS
 		Util::addScript(self::APP_ID, 'files-integration');
+		
+		// Register console commands
+		$context->registerCommand(\OCA\HyperViewer\Command\ProcessQueue::class);
 		
 		// Register auto-generation cron job
 		$jobList = $context->getServerContainer()->get(\OCP\BackgroundJob\IJobList::class);

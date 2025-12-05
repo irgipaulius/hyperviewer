@@ -26,16 +26,7 @@ class ProcessQueueJob extends TimedJob {
 	}
 
 	protected function run($argument): void {
-		$startTime = time();
-		$maxExecutionTime = 55; // Run for 55 seconds to allow frequent polling
-
-		// Loop to keep processing jobs while within the time limit
-		do {
-			$this->processManager->processQueue();
-			
-			// Sleep briefly to prevent CPU spinning if queue is empty
-			// But check frequently enough to pick up new jobs
-			sleep(2);
-		} while (time() - $startTime < $maxExecutionTime);
+		// Run synchronously as a fallback for the background worker
+		$this->processManager->processQueue();
 	}
 }
