@@ -102,6 +102,13 @@ function refreshStatistics() {
  * Refresh auto-generation directories
  */
 function refreshAutoGeneration() {
+	// Check if container exists first
+	const container = document.getElementById('autogen-container')
+	if (!container) {
+		console.log('Auto-generation container not found, skipping')
+		return
+	}
+
 	fetch(OC.generateUrl('/apps/hyperviewer/api/auto-generation'), {
 		headers: {
 			requesttoken: OC.requestToken
@@ -110,7 +117,6 @@ function refreshAutoGeneration() {
 		.then(response => response.json())
 		.then(data => {
 			const dirs = data.autoGenDirs || []
-			const container = document.getElementById('autogen-container')
 			
 			if (dirs.length === 0) {
 				container.innerHTML = '<p class="emptycontent-desc">No auto-generation directories configured</p>'
