@@ -3,6 +3,7 @@ module.exports = {
 		'@nextcloud'
 	],
 	rules: {
+		'padded-blocks': 'off',
 		'no-console': 'off', // Allow console.log for debugging
 		'indent': 'off',
 		'comma-dangle': 'off',

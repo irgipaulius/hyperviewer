@@ -4,6 +4,7 @@
  */
 
 class JobManager {
+
 	constructor() {
 		this.jobs = new Map() // jobId -> job data
 		this.lastId = ''

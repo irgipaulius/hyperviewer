@@ -3,8 +3,9 @@ const path = require('path')
 
 // Configure multiple entry points
 webpackConfig.entry = {
+	'files-integration': path.join(__dirname, 'src', 'files-integration.js'),
 	'settings': path.join(__dirname, 'src', 'settings.js'),
-	'files-integration': path.join(__dirname, 'src', 'files-integration.js')
+	'job-management': path.join(__dirname, 'src', 'job-management.js'),
 }
 
 // Fix output filename to avoid double app name
