@@ -73,29 +73,7 @@ class FFmpegProcessManager {
 		$queue[] = $job;
 		$this->saveQueue($queue);
 		
-		// Trigger background worker immediately
-		$this->triggerWorker();
-		
 		return $jobId;
-	}
-
-	/**
-	 * Trigger the background worker process
-	 */
-	private function triggerWorker(): void {
-		// Path to occ command
-		$occPath = \OC::$server->getAppRoot('core') . '/occ';
-		if (!file_exists($occPath)) {
-			// Fallback to trying to find occ relative to this app
-			$occPath = realpath(__DIR__ . '/../../../../occ');
-		}
-
-		if ($occPath && file_exists($occPath)) {
-			// Run in background, redirect output to null to not block
-			// Use flock in the command itself to prevent concurrent runs
-			$cmd = "php " . escapeshellarg($occPath) . " hyperviewer:process-queue > /dev/null 2>&1 &";
-			exec($cmd);
-		}
 	}
 
 	/**
