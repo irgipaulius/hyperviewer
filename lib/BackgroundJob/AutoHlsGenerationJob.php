@@ -19,6 +19,7 @@ class AutoHlsGenerationJob extends TimedJob {
 	private IConfig $config;
 	private LoggerInterface $logger;
 	private FFmpegProcessManager $processManager;
+	private \OCA\HyperViewer\Service\CachedHlsDirectoryService $cachedHlsService;
 
 	public function __construct(
 		ITimeFactory $timeFactory,
@@ -26,7 +27,8 @@ class AutoHlsGenerationJob extends TimedJob {
 		IUserManager $userManager,
 		IConfig $config,
 		LoggerInterface $logger,
-		FFmpegProcessManager $processManager
+		FFmpegProcessManager $processManager,
+		\OCA\HyperViewer\Service\CachedHlsDirectoryService $cachedHlsService
 	) {
 		parent::__construct($timeFactory);
 		$this->rootFolder = $rootFolder;
@@ -34,6 +36,7 @@ class AutoHlsGenerationJob extends TimedJob {
 		$this->config = $config;
 		$this->logger = $logger;
 		$this->processManager = $processManager;
+		$this->cachedHlsService = $cachedHlsService;
 
 		// Run every 10 minutes
 		$this->setInterval(60 * 10);
@@ -41,6 +44,9 @@ class AutoHlsGenerationJob extends TimedJob {
 
 	protected function run($argument): void {
 		try {
+			// Refresh cache if needed (once per day)
+			$this->refreshCacheIfNeeded();
+			
 			$autoGenDirs = $this->getAutoGenerationDirectories();
 			
 			foreach ($autoGenDirs as $settings) {
@@ -150,23 +156,22 @@ class AutoHlsGenerationJob extends TimedJob {
 	}
 
 	private function hasHlsCache($userFolder, string $filename, string $directory, array $settings): bool {
-		$locationType = $settings['locationType'] ?? 'relative';
-		$cacheBasePath = \OCA\HyperViewer\Service\PathResolver::calculateCachePath($locationType, $directory);
-		
-		// Cache folder is named after the video file
-		$cachePath = $cacheBasePath . '/' . $filename;
-		
+		return $this->cachedHlsService->hasHlsCache($userFolder, $filename, $directory, $settings);
+	}
+
+	/**
+	 * Refresh cache for all users if needed (once per day)
+	 */
+	private function refreshCacheIfNeeded(): void {
 		try {
-			if ($userFolder->nodeExists($cachePath . '/master.m3u8')) {
-				return true;
-			}
-			if ($userFolder->nodeExists($cachePath . '/playlist.m3u8')) {
-				return true;
-			}
+			$this->userManager->callForAllUsers(function($user) {
+				if ($this->cachedHlsService->shouldRefresh($user->getUID())) {
+					$this->logger->info('Refreshing .cached_hls directory cache', ['userId' => $user->getUID()]);
+					$this->cachedHlsService->refreshCache($user->getUID());
+				}
+			});
 		} catch (\Exception $e) {
-			// Ignore errors
+			$this->logger->error('Failed to refresh cache for users', ['error' => $e->getMessage()]);
 		}
-		
-		return false; 
 	}
 }

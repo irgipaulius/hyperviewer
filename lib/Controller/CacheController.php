@@ -23,6 +23,7 @@ class CacheController extends Controller {
 	private IConfig $config;
 	private LoggerInterface $logger;
 	private \OCA\HyperViewer\Service\FFmpegProcessManager $processManager;
+	private \OCA\HyperViewer\Service\CachedHlsDirectoryService $cachedHlsService;
 
 	public function __construct(
 		string $appName,
@@ -32,7 +33,8 @@ class CacheController extends Controller {
 		IJobList $jobList,
 		IConfig $config,
 		LoggerInterface $logger,
-		\OCA\HyperViewer\Service\FFmpegProcessManager $processManager
+		\OCA\HyperViewer\Service\FFmpegProcessManager $processManager,
+		\OCA\HyperViewer\Service\CachedHlsDirectoryService $cachedHlsService
 	) {
 		parent::__construct($appName, $request);
 		$this->rootFolder = $rootFolder;
@@ -41,6 +43,7 @@ class CacheController extends Controller {
 		$this->config = $config;
 		$this->logger = $logger;
 		$this->processManager = $processManager;
+		$this->cachedHlsService = $cachedHlsService;
 	}
 
 	/**
@@ -270,40 +273,17 @@ class CacheController extends Controller {
 
 	/**
 	 * Find HLS cache for a video file
+	 * Uses cached directory locations for fast lookup
 	 */
 	private function findHlsCache($userFolder, string $filename, string $directory, string $userId): ?string {
-		$baseFilename = pathinfo($filename, PATHINFO_FILENAME);
-		
-		// Check home location first (faster, usually on SSD)
-		$homePath = '.cached_hls/' . $baseFilename;
-		if ($this->cacheExistsAt($userFolder, $homePath)) {
-			return $homePath;
-		}
-		
-		// Check relative location (parent directory)
-		$relativePath = $this->calculateCachePath('relative', $directory) . '/' . $baseFilename;
-		if ($this->cacheExistsAt($userFolder, $relativePath)) {
-			return $relativePath;
-		}
-
-		return null;
+		return $this->cachedHlsService->findHlsCache($userFolder, $filename, $userId);
 	}
 
 	/**
 	 * Check if cache exists at a specific path
 	 */
 	private function cacheExistsAt($userFolder, string $cachePath): bool {
-		try {
-			if ($userFolder->nodeExists($cachePath . '/master.m3u8')) {
-				return true;
-			}
-			if ($userFolder->nodeExists($cachePath . '/playlist.m3u8')) {
-				return true;
-			}
-		} catch (\Exception $e) {
-			// Ignore errors
-		}
-		return false;
+		return $this->cachedHlsService->cacheExistsAt($userFolder, $cachePath);
 	}
 
 	/**

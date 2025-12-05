@@ -11,13 +11,16 @@ class HlsService {
 
 	private IRootFolder $rootFolder;
 	private LoggerInterface $logger;
+	private CachedHlsDirectoryService $cachedHlsService;
 
 	public function __construct(
 		IRootFolder $rootFolder,
-		LoggerInterface $logger
+		LoggerInterface $logger,
+		CachedHlsDirectoryService $cachedHlsService
 	) {
 		$this->rootFolder = $rootFolder;
 		$this->logger = $logger;
+		$this->cachedHlsService = $cachedHlsService;
 	}
 
 	/**
@@ -52,6 +55,24 @@ class HlsService {
 		// Create cache directory if needed
 		if (!$userFolder->nodeExists($cacheOutputPath)) {
 			$userFolder->newFolder($cacheOutputPath);
+			
+			// Update cache with new directory
+			// Extract the parent .cached_hls directory path
+			$parts = explode('/', $cacheOutputPath);
+			$cachedHlsPath = '';
+			foreach ($parts as $part) {
+				if ($part === '.cached_hls') {
+					$cachedHlsPath = $cachedHlsPath ? $cachedHlsPath . '/' . $part : $part;
+					break;
+				}
+				if (!empty($part)) {
+					$cachedHlsPath = $cachedHlsPath ? $cachedHlsPath . '/' . $part : $part;
+				}
+			}
+			
+			if (!empty($cachedHlsPath)) {
+				$this->cachedHlsService->addDirectory($userId, $cachedHlsPath);
+			}
 		}
 		$cacheFolder = $userFolder->get($cacheOutputPath);
 		$cacheLocalPath = $cacheFolder->getStorage()->getLocalFile($cacheFolder->getInternalPath());
