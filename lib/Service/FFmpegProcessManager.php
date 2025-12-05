@@ -319,10 +319,7 @@ class FFmpegProcessManager {
 	
 	public function getActiveJobs(): array {
 		$queue = $this->readQueue();
-		return array_filter($queue, function($job) {
-			// Include processing, pending, failed (awaiting retry), and aborted jobs
-			return in_array($job['status'], ['processing', 'pending', 'failed', 'aborted']);
-		});
+		return $queue;
 	}
 
 	public function getJobStatistics(): array {

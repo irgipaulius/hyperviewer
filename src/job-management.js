@@ -261,7 +261,10 @@ class JobManager {
 	 */
 	renderColumn(columnType, jobs) {
 		const container = document.getElementById(`jobs-${columnType}`)
-		if (!container) return
+		if (!container) {
+			console.warn(`Container not found: jobs-${columnType}`)
+			return
+		}
 
 		// Update count
 		const countEl = document.getElementById(`jobs-${columnType}-count`)
@@ -286,8 +289,11 @@ class JobManager {
 		// Add event listeners for action buttons
 		container.querySelectorAll('.job-action-btn').forEach(btn => {
 			btn.addEventListener('click', (e) => {
-				const action = e.target.dataset.action
-				const jobId = e.target.dataset.jobId
+				e.preventDefault()
+				e.stopPropagation()
+				const action = e.currentTarget.dataset.action
+				const jobId = e.currentTarget.dataset.jobId
+				console.log('Button clicked:', action, jobId)
 				if (action === 'refresh') {
 					this.refreshJob(jobId)
 				} else if (action === 'delete') {
@@ -402,6 +408,14 @@ class JobManager {
 // Initialize on page load
 let jobManager
 document.addEventListener('DOMContentLoaded', () => {
+	// Only initialize if we're on the settings page with job containers
+	const jobsGrid = document.querySelector('.jobs-grid')
+	if (!jobsGrid) {
+		console.log('Job management UI not found, skipping initialization')
+		return
+	}
+
+	console.log('Initializing job manager...')
 	jobManager = new JobManager()
 	jobManager.init()
 

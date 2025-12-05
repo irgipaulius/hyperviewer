@@ -44,14 +44,6 @@ function initializeDashboard() {
 			refreshAllData()
 		})
 	}
-
-	// Setup search filter
-	const searchInput = document.getElementById('completed-jobs-search')
-	if (searchInput) {
-		searchInput.addEventListener('input', (e) => {
-			filterCompletedJobs(e.target.value)
-		})
-	}
 }
 
 /**
@@ -91,7 +83,7 @@ function refreshStatistics() {
 		.then(response => response.json())
 		.then(data => {
 			console.log(data)
-			const stats = data || {} // API returns stats directly now, or inside 'stats' key depending on controller
+			const stats = data || {}
 			
 			// Handle both response formats (direct stats or wrapped in 'stats')
 			const actualStats = stats.stats || stats
@@ -100,130 +92,10 @@ function refreshStatistics() {
 			document.getElementById('stat-autogen').textContent = actualStats.autoGenDirectories || 0
 			document.getElementById('stat-completed').textContent = actualStats.completedJobs || 0
 			document.getElementById('stat-pending').textContent = actualStats.pendingJobs || 0
-			
-			// Update completed count badge
-			const countBadge = document.getElementById('completed-count-badge')
-			if (countBadge) {
-				countBadge.textContent = actualStats.completedJobs || 0
-			}
-
-			// Populate completed jobs list
-			if (actualStats.completedJobFilenames) {
-				populateCompletedJobs(actualStats.completedJobFilenames)
-			}
 		})
 		.catch(error => {
 			console.error('❌ Failed to fetch statistics:', error)
 		})
-}
-
-/**
- * Populate completed jobs list
- */
-function populateCompletedJobs(filenames) {
-	const list = document.getElementById('completed-jobs-list')
-	const emptyMsg = document.getElementById('no-completed-jobs')
-	
-	if (!list) return
-
-	console.log(filenames)
-
-	// Store filenames for filtering
-	list.dataset.allJobs = JSON.stringify(filenames.map(({ name }) => name))
-
-	if (!filenames || filenames.length === 0) {
-		list.innerHTML = ''
-		if (emptyMsg) emptyMsg.style.display = 'block'
-		return
-	}
-
-	if (emptyMsg) emptyMsg.style.display = 'none'
-
-	// Render list
-	renderJobList(filenames)
-}
-
-/**
- * Render job list items
- */
-function renderJobList(jobs) {
-	const list = document.getElementById('completed-jobs-list')
-	if (!list) return
-
-	// Limit to 500 items for performance
-	const maxItems = 500
-	const items = jobs.slice(0, maxItems)
-	
-	list.innerHTML = items.map(job => {
-		// Handle both old format (strings) and new format (objects)
-		if (typeof job === 'string') {
-			// Old format: job is just a string filename
-			return `
-				<li class="job-item">
-					<span class="job-name" title="${escapeHtml(job)}">${escapeHtml(job)}</span>
-				</li>
-			`
-		}
-		
-		// New format: job is an object with name, timestamp, and sizeBytes
-		const name = job.name || 'Unknown'
-		const timestamp = job.timestamp || 0
-		const sizeBytes = job.sizeBytes || 0
-		
-		// Format timestamp to local date/time
-		const date = timestamp > 0 ? new Date(timestamp * 1000) : null
-		const dateStr = date ? date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Unknown'
-		
-		// Format size in MB or GB
-		let sizeStr = '0 MB'
-		if (sizeBytes > 0) {
-			const mb = sizeBytes / (1024 * 1024)
-			const gb = sizeBytes / (1024 * 1024 * 1024)
-			sizeStr = gb >= 1 ? `${gb.toFixed(2)} GB` : `${mb.toFixed(2)} MB`
-		}
-		
-		const displayText = `${name}: ${dateStr} - ${sizeStr}`
-		
-		return `
-			<li class="job-item">
-				<span class="job-name" title="${escapeHtml(name)}">${escapeHtml(displayText)}</span>
-			</li>
-		`
-	}).join('')
-	
-	if (jobs.length > maxItems) {
-		list.innerHTML += `<li class="job-item more-items">...and ${jobs.length - maxItems} more</li>`
-	}
-}
-
-/**
- * Filter completed jobs list
- */
-function filterCompletedJobs(query) {
-	const list = document.getElementById('completed-jobs-list')
-	if (!list || !list.dataset.allJobs) return
-
-	const allJobs = JSON.parse(list.dataset.allJobs)
-	const normalizedQuery = query.toLowerCase().trim()
-
-	if (!normalizedQuery) {
-		renderJobList(allJobs)
-		return
-	}
-
-	const filtered = allJobs.filter(job => {
-		// Handle both string format and object format
-		const searchText = typeof job === 'string' ? job : (job.name || '')
-		return searchText.toLowerCase().includes(normalizedQuery)
-	})
-	
-	renderJobList(filtered)
-	
-	const emptyMsg = document.getElementById('no-completed-jobs')
-	if (emptyMsg) {
-		emptyMsg.style.display = filtered.length === 0 ? 'block' : 'none'
-		if (filtered.length === 0) emptyMsg.textContent = 'No matching jobs found'
-	}
 }
 
 /**
