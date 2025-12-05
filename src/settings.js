@@ -157,7 +157,7 @@ function refreshAutoGeneration() {
 			}
 		})
 		.catch(error => {
-			console.error('❌ Failed to fetch auto-generation settings:', error)
+			console.error('❌ Failed to fetch auto-generation settings 222222:', error)
 		})
 }
 
