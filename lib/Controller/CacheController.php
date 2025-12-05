@@ -520,6 +520,10 @@ class CacheController extends Controller {
 	 * 
 	 * @NoAdminRequired
 	 */
+	/**
+	 * Get jobs with pagination support
+	 * Returns raw queue data for current user
+	 */
 	public function getActiveJobs(): JSONResponse {
 		$user = $this->userSession->getUser();
 		if (!$user) {
@@ -527,43 +531,98 @@ class CacheController extends Controller {
 		}
 
 		try {
-			$activeJobs = $this->processManager->getActiveJobs();
-			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+			$lastId = $this->request->getParam('lastId', '');
+			$limit = min((int)$this->request->getParam('limit', 10), 50); // Max 50 items
 			
-			// Filter for current user and enrich with progress
+			$allJobs = $this->processManager->getQueue();
 			$userJobs = [];
-			foreach ($activeJobs as $job) {
+			$foundLastId = empty($lastId); // If no lastId, start from beginning
+			
+			// Filter for current user and paginate
+			foreach ($allJobs as $job) {
 				if ($job['userId'] !== $user->getUID()) {
 					continue;
 				}
-
-				// Enrich with progress data if processing
-				if ($job['status'] === 'processing' && isset($job['settings']['cachePath'])) {
-					$cachePath = $job['settings']['cachePath'];
-					$filename = $job['filename'];
-					$baseFilename = pathinfo($filename, PATHINFO_FILENAME);
-					$progressFile = rtrim($cachePath, '/') . '/' . $baseFilename . '/progress.json';
-					
-					if ($userFolder->nodeExists($progressFile)) {
-						try {
-							$file = $userFolder->get($progressFile);
-							$progressData = json_decode($file->getContent(), true);
-							if ($progressData) {
-								$job = array_merge($job, $progressData);
-							}
-						} catch (\Exception $e) {
-							// Ignore read errors
-						}
+				
+				// Skip until we find lastId
+				if (!$foundLastId) {
+					if ($job['id'] === $lastId) {
+						$foundLastId = true;
 					}
+					continue;
 				}
 				
 				$userJobs[] = $job;
+				
+				// Stop when we reach the limit
+				if (count($userJobs) >= $limit) {
+					break;
+				}
 			}
 
-			return new JSONResponse(['activeJobs' => $userJobs]);
+			return new JSONResponse([
+				'jobs' => $userJobs,
+				'hasMore' => count($userJobs) === $limit
+			]);
 
 		} catch (\Exception $e) {
-			return new JSONResponse(['error' => 'Failed to get active jobs'], 500);
+			return new JSONResponse(['error' => 'Failed to get jobs'], 500);
+		}
+	}
+
+	/**
+	 * Get individual job by ID with progress data
+	 * 
+	 * @NoAdminRequired
+	 */
+	public function getJobById(string $id): JSONResponse {
+		$user = $this->userSession->getUser();
+		if (!$user) {
+			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		}
+
+		try {
+			$queue = $this->processManager->getQueue();
+			
+			// Find the job
+			$job = null;
+			foreach ($queue as $queueJob) {
+				if ($queueJob['id'] === $id && $queueJob['userId'] === $user->getUID()) {
+					$job = $queueJob;
+					break;
+				}
+			}
+			
+			if (!$job) {
+				return new JSONResponse(['error' => 'Job not found'], 404);
+			}
+			
+			// Enrich with progress data if processing
+			if ($job['status'] === 'processing') {
+				$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+				$locationType = $job['settings']['locationType'] ?? 'relative';
+				$directory = $job['directory'] ?? '';
+				$cacheBasePath = \OCA\HyperViewer\Service\PathResolver::calculateCachePath($locationType, $directory);
+				$baseFilename = pathinfo($job['filename'], PATHINFO_FILENAME);
+				$progressFile = $cacheBasePath . '/' . $baseFilename . '/progress.json';
+				
+				if ($userFolder->nodeExists($progressFile)) {
+					try {
+						$file = $userFolder->get($progressFile);
+						$progressData = json_decode($file->getContent(), true);
+						if ($progressData) {
+							$job = array_merge($job, $progressData);
+						}
+					} catch (\Exception $e) {
+						// Ignore read errors
+					}
+				}
+			}
+
+			return new JSONResponse(['job' => $job]);
+
+		} catch (\Exception $e) {
+			return new JSONResponse(['error' => 'Failed to get job'], 500);
 		}
 	}
 
