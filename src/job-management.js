@@ -11,6 +11,7 @@ class JobManager {
 		this.isLoading = false
 		this.hasMore = true
 		this.pollInterval = null
+		this.activePollInterval = null
 	}
 
 	/**
@@ -31,9 +32,9 @@ class JobManager {
 
 		while (this.hasMore && !this.isLoading) {
 			await this.loadBatch()
+			// Render immediately after each batch for reactive UI
+			this.render()
 		}
-
-		this.render()
 	}
 
 	/**
@@ -46,7 +47,7 @@ class JobManager {
 		const url = OC.generateUrl('/apps/hyperviewer/api/jobs/active')
 		const params = new URLSearchParams({
 			lastId: this.lastId,
-			limit: '10'
+			limit: '100'
 		})
 
 		try {
@@ -70,13 +71,13 @@ class JobManager {
 	}
 
 	/**
-	 * Poll for new jobs
+	 * Poll for new jobs (only checks for new additions)
 	 */
 	async pollNewJobs() {
 		const url = OC.generateUrl('/apps/hyperviewer/api/jobs/active')
 		const params = new URLSearchParams({
 			lastId: this.lastId,
-			limit: '10'
+			limit: '100'
 		})
 
 		try {
@@ -103,17 +104,17 @@ class JobManager {
 	}
 
 	/**
-	 * Poll progress for processing jobs
+	 * Poll and update all pending and processing jobs
 	 */
-	async pollProcessingJobs() {
-		const processingJobs = Array.from(this.jobs.values()).filter(
-			job => job.status === 'processing'
+	async pollActiveJobs() {
+		const activeJobs = Array.from(this.jobs.values()).filter(
+			job => job.status === 'pending' || job.status === 'processing'
 		)
 
-		if (processingJobs.length === 0) return
+		if (activeJobs.length === 0) return
 
-		// Fetch each processing job individually
-		const promises = processingJobs.map(job => this.fetchJobProgress(job.id))
+		// Fetch each active job individually to get latest status
+		const promises = activeJobs.map(job => this.fetchJobProgress(job.id))
 		await Promise.all(promises)
 
 		this.render()
@@ -140,38 +141,18 @@ class JobManager {
 	}
 
 	/**
-	 * Start polling for new jobs and processing job progress
+	 * Start polling for new jobs and active job updates
 	 */
 	startPolling() {
 		if (this.pollInterval) {
 			clearInterval(this.pollInterval)
 		}
-		if (this.progressPollInterval) {
-			clearInterval(this.progressPollInterval)
-		}
 
-		// Poll for new jobs every 3 seconds
-		this.pollInterval = setInterval(() => this.pollNewJobs(), 3000)
+		// Poll for new jobs every 10 seconds
+		this.pollInterval = setInterval(() => this.pollNewJobs(), 10000)
 
-		// Poll processing jobs based on window focus
-		const pollFrequency = document.hasFocus() ? 3000 : 20000
-		this.progressPollInterval = setInterval(() => this.pollProcessingJobs(), pollFrequency)
-
-		// Adjust polling frequency on focus change
-		window.addEventListener('focus', () => this.adjustPollingFrequency(true))
-		window.addEventListener('blur', () => this.adjustPollingFrequency(false))
-	}
-
-	/**
-	 * Adjust polling frequency based on window focus
-	 */
-	adjustPollingFrequency(hasFocus) {
-		if (this.progressPollInterval) {
-			clearInterval(this.progressPollInterval)
-		}
-
-		const pollFrequency = hasFocus ? 3000 : 20000
-		this.progressPollInterval = setInterval(() => this.pollProcessingJobs(), pollFrequency)
+		// Poll active (pending/processing) jobs every 5 seconds
+		this.activePollInterval = setInterval(() => this.pollActiveJobs(), 5000)
 	}
 
 	/**
@@ -182,9 +163,9 @@ class JobManager {
 			clearInterval(this.pollInterval)
 			this.pollInterval = null
 		}
-		if (this.progressPollInterval) {
-			clearInterval(this.progressPollInterval)
-			this.progressPollInterval = null
+		if (this.activePollInterval) {
+			clearInterval(this.activePollInterval)
+			this.activePollInterval = null
 		}
 	}
 
