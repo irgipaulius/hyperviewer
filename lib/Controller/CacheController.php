@@ -523,6 +523,8 @@ class CacheController extends Controller {
 	/**
 	 * Get jobs with pagination support
 	 * Returns raw queue data for current user
+	 * 
+	 * @NoAdminRequired
 	 */
 	public function getActiveJobs(): JSONResponse {
 		$user = $this->userSession->getUser();
