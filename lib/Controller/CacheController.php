@@ -629,6 +629,44 @@ class CacheController extends Controller {
 	}
 
 	/**
+	 * Delete a job from the queue
+	 * 
+	 * @NoAdminRequired
+	 */
+	public function deleteJob(string $id): JSONResponse {
+		$user = $this->userSession->getUser();
+		if (!$user) {
+			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		}
+
+		try {
+			$queue = $this->processManager->getQueue();
+			$newQueue = [];
+			$found = false;
+
+			foreach ($queue as $job) {
+				if ($job['id'] === $id && $job['userId'] === $user->getUID()) {
+					$found = true;
+					continue; // Skip this job (delete it)
+				}
+				$newQueue[] = $job;
+			}
+
+			if (!$found) {
+				return new JSONResponse(['error' => 'Job not found'], 404);
+			}
+
+			// Save updated queue
+			$this->processManager->setQueue($newQueue);
+
+			return new JSONResponse(['success' => true]);
+
+		} catch (\Exception $e) {
+			return new JSONResponse(['error' => 'Failed to delete job'], 500);
+		}
+	}
+
+	/**
 	 * Get detailed progress for a specific active job
 	 * 
 	 * @NoAdminRequired

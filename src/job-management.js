@@ -198,6 +198,40 @@ class JobManager {
 	}
 
 	/**
+	 * Refresh a single job
+	 */
+	async refreshJob(jobId) {
+		await this.fetchJobProgress(jobId)
+		this.render()
+	}
+
+	/**
+	 * Delete a job from the queue
+	 */
+	async deleteJob(jobId) {
+		if (!confirm('Delete this job?')) return
+
+		const url = OC.generateUrl(`/apps/hyperviewer/api/jobs/active/${jobId}`)
+
+		try {
+			const response = await fetch(url, {
+				method: 'DELETE',
+				headers: { requesttoken: OC.requestToken }
+			})
+
+			if (response.ok) {
+				this.jobs.delete(jobId)
+				this.render()
+			} else {
+				alert('Failed to delete job')
+			}
+		} catch (error) {
+			console.error(`Failed to delete job ${jobId}:`, error)
+			alert('Failed to delete job')
+		}
+	}
+
+	/**
 	 * Filter jobs by status
 	 */
 	filterJobs(status) {
@@ -258,16 +292,22 @@ class JobManager {
 		return `
 			<div class="job-card ${job.status === 'failed' ? 'retry-pending-card' : ''}" data-job-id="${job.id}">
 				<div class="job-header">
-					<span class="job-filename" title="${this.escapeHtml(job.directory || '')}/${this.escapeHtml(job.filename || '')}">
+					<div class="job-filename" title="${this.escapeHtml(job.directory || '')}/${this.escapeHtml(job.filename || '')}">
 						${this.escapeHtml(job.filename || 'Unknown')}
-					</span>
-					<span class="job-status ${statusClass}">${statusText}</span>
+					</div>
+					<div class="job-actions">
+						<button class="job-action-btn" onclick="jobManager.refreshJob('${job.id}')" title="Refresh">🔄</button>
+						<button class="job-action-btn" onclick="jobManager.deleteJob('${job.id}')" title="Delete">🗑️</button>
+					</div>
 				</div>
 				${directoryHtml ? `<div class="job-directory">${directoryHtml}</div>` : ''}
 				${progressHtml}
 				${timestampsHtml ? `<div class="job-timestamps">${timestampsHtml}</div>` : ''}
 				${errorHtml ? `<div class="job-error">${errorHtml}</div>` : ''}
 				${resolutionsHtml ? `<div class="job-resolutions">${resolutionsHtml}</div>` : ''}
+				<div class="job-footer">
+					<span class="job-status ${statusClass}">${statusText}</span>
+				</div>
 			</div>
 		`
 	}

@@ -242,6 +242,13 @@ class FFmpegProcessManager {
 	}
 
 	/**
+	 * Set queue (public method for external updates)
+	 */
+	public function setQueue(array $queue): void {
+		$this->saveQueue($queue);
+	}
+
+	/**
 	 * Update job status
 	 */
 	private function updateJobStatus(string $jobId, string $status, string $error = null): void {
