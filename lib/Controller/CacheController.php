@@ -280,13 +280,6 @@ class CacheController extends Controller {
 	}
 
 	/**
-	 * Check if cache exists at a specific path
-	 */
-	private function cacheExistsAt($userFolder, string $cachePath): bool {
-		return $this->cachedHlsService->cacheExistsAt($userFolder, $cachePath);
-	}
-
-	/**
 	 * Discover video files recursively in a directory
 	 * 
 	 * @NoAdminRequired
@@ -846,18 +839,19 @@ class CacheController extends Controller {
 				'recentJobs' => []
 			];
 
-			// Check home cache location
-			$homeCachePath = '.cached_hls';
-			if ($userFolder->nodeExists($homeCachePath)) {
-				$cacheFolder = $userFolder->get($homeCachePath);
-				if ($cacheFolder instanceof \OCP\Files\Folder) {
-					$this->gatherSimpleStatistics($cacheFolder, $stats);
-					// Calculate total cache size
-					$stats['totalCacheSize'] = $this->calculateDirectorySize($cacheFolder);
+			// Get all cached .cached_hls directories
+			$cachedDirs = $this->cachedHlsService->getCachedDirectories($user->getUID());
+			
+			// Gather statistics from all cache locations
+			foreach ($cachedDirs as $cacheDirPath) {
+				if ($userFolder->nodeExists($cacheDirPath)) {
+					$cacheFolder = $userFolder->get($cacheDirPath);
+					if ($cacheFolder instanceof \OCP\Files\Folder) {
+						$this->gatherSimpleStatistics($cacheFolder, $stats);
+					}
 				}
 			}
 
-			// Count auto-generation directories
 			// Get accurate job stats from ProcessManager
 			$managerStats = $this->processManager->getJobStatistics();
 			
@@ -866,9 +860,6 @@ class CacheController extends Controller {
 			$stats['pendingJobs'] = $managerStats['pending'];
 			
 			// Recalculate total jobs to include pending ones that aren't on disk yet
-			// Note: totalJobs from filesystem includes active ones on disk, so we need to be careful not to double count.
-			// However, for the UI, we mostly care about the specific counters.
-			// Let's just ensure total is at least the sum of the parts.
 			$stats['totalJobs'] = $stats['completedJobs'] + $stats['activeJobs'] + $stats['pendingJobs'];
 
 			return new JSONResponse(['stats' => $stats]);
@@ -905,9 +896,9 @@ class CacheController extends Controller {
 				return;
 			}
 			
-			// Count total jobs: all directories in .cached_hls
+			// Count total jobs: all directories in this .cached_hls folder
 			$totalDirs = glob($folderPath . '/*', GLOB_ONLYDIR);
-			$stats['totalJobs'] = count($totalDirs);
+			$stats['totalJobs'] += count($totalDirs); // Accumulate instead of overwrite
 			
 			// Count completed jobs: directories with HLS files
 			$masterFiles = glob($folderPath . '/*/master.m3u8');
@@ -927,7 +918,7 @@ class CacheController extends Controller {
 				$completedDirs[dirname($file)] = true;
 			}
 			
-			$stats['completedJobs'] = count($completedDirs);
+			$stats['completedJobs'] += count($completedDirs); // Accumulate instead of overwrite
 			
 			// Get directory info efficiently with batch shell operations
 			$completedFilenames = [];
@@ -971,15 +962,17 @@ class CacheController extends Controller {
 						'timestamp' => $timestamp ?: 0,
 						'sizeBytes' => $sizeBytes
 					];
+					
+					// Accumulate total cache size
+					$stats['totalCacheSize'] += $sizeBytes;
 				}
 			}
 			
-			$stats['completedJobFilenames'] = $completedFilenames;
-			
-			// Calculate pending jobs: totalJobs - completedJobs
-			$stats['pendingJobs'] = $stats['totalJobs'] - $stats['completedJobs'];
-			
-			// Skip total cache size calculation - we'll show it per job card instead
+			// Merge completed filenames (avoid duplicates)
+			if (!isset($stats['completedJobFilenames'])) {
+				$stats['completedJobFilenames'] = [];
+			}
+			$stats['completedJobFilenames'] = array_merge($stats['completedJobFilenames'], $completedFilenames);
 			
 		} catch (\Exception $e) {
 			// Fallback to slow method if glob fails
@@ -1076,17 +1069,15 @@ class CacheController extends Controller {
 			
 			foreach ($items as $node) {
 				if ($node instanceof \OCP\Files\Folder) {
-					$stats['totalJobs']++;
+					$stats['totalJobs']++; // Accumulate instead of overwrite
 					
 					// Check if job is completed (has HLS files)
 					if ($node->nodeExists('master.m3u8') || $node->nodeExists('playlist.m3u8') || 
 						$this->hasPlaylistFiles($node)) {
-						$stats['completedJobs']++;
+						$stats['completedJobs']++; // Accumulate instead of overwrite
 					}
 				}
 			}
-			
-			$stats['pendingJobs'] = $stats['totalJobs'] - $stats['completedJobs'];
 			
 		} catch (\Exception $e) {
 			// Skip folders we can't access

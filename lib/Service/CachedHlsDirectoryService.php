@@ -56,45 +56,62 @@ class CachedHlsDirectoryService {
 
 	/**
 	 * Scan filesystem and update cache
-	 * Uses find command for fast scanning
+	 * Uses find command for fast scanning across all storage mounts
 	 */
 	public function refreshCache(string $userId): void {
 		try {
 			$userFolder = $this->rootFolder->getUserFolder($userId);
-			$userPath = $userFolder->getStorage()->getLocalFile($userFolder->getInternalPath());
-
-			if (!$userPath || !is_dir($userPath)) {
-				$this->logger->warning('Could not get local path for user folder', ['userId' => $userId]);
-				return;
-			}
-
-			// Use find command to locate all .cached_hls directories
-			// -type d: directories only
-			// -name .cached_hls: exact name match
-			$findCmd = sprintf(
-				'find %s -type d -name %s 2>/dev/null',
-				escapeshellarg($userPath),
-				escapeshellarg('.cached_hls')
-			);
-
-			$output = shell_exec($findCmd);
 			
-			if ($output === null) {
-				$this->logger->error('Find command failed', ['userId' => $userId, 'cmd' => $findCmd]);
+			// Get all storage mount points to scan
+			$pathsToScan = $this->getAllStoragePaths($userFolder);
+			
+			if (empty($pathsToScan)) {
+				$this->logger->warning('No storage paths found for user', ['userId' => $userId]);
 				return;
 			}
 
-			// Parse output and convert to relative paths
-			$absolutePaths = array_filter(explode("\n", trim($output)));
 			$relativePaths = [];
+			
+			// Run find on each storage mount point
+			foreach ($pathsToScan as $mountInfo) {
+				$localPath = $mountInfo['localPath'];
+				$relativeMountPath = $mountInfo['relativePath'];
+				
+				if (!$localPath || !is_dir($localPath)) {
+					continue;
+				}
 
-			foreach ($absolutePaths as $absPath) {
-				// Convert absolute path to relative path within user folder
-				if (strpos($absPath, $userPath) === 0) {
-					$relPath = substr($absPath, strlen($userPath));
-					$relPath = ltrim($relPath, '/');
-					if (!empty($relPath)) {
-						$relativePaths[] = $relPath;
+				// Use find command to locate all .cached_hls directories
+				$findCmd = sprintf(
+					'find %s -type d -name %s 2>/dev/null',
+					escapeshellarg($localPath),
+					escapeshellarg('.cached_hls')
+				);
+
+				$output = shell_exec($findCmd);
+				
+				// Empty output is fine - just means no .cached_hls directories found
+				if ($output === null || trim($output) === '') {
+					continue;
+				}
+
+				// Parse output and convert to relative paths
+				$absolutePaths = array_filter(explode("\n", trim($output)));
+
+				foreach ($absolutePaths as $absPath) {
+					// Convert absolute path to relative path within user folder
+					if (strpos($absPath, $localPath) === 0) {
+						$relPath = substr($absPath, strlen($localPath));
+						$relPath = ltrim($relPath, '/');
+						
+						// Prepend the mount point's relative path if it's not root
+						if ($relativeMountPath && $relativeMountPath !== '') {
+							$relPath = $relativeMountPath . '/' . $relPath;
+						}
+						
+						if (!empty($relPath)) {
+							$relativePaths[] = $relPath;
+						}
 					}
 				}
 			}
@@ -108,7 +125,8 @@ class CachedHlsDirectoryService {
 
 			$this->logger->info('Refreshed .cached_hls directory cache', [
 				'userId' => $userId,
-				'dirCount' => count($relativePaths)
+				'dirCount' => count($relativePaths),
+				'mountPoints' => count($pathsToScan)
 			]);
 
 		} catch (\Exception $e) {
@@ -116,6 +134,90 @@ class CachedHlsDirectoryService {
 				'userId' => $userId,
 				'error' => $e->getMessage()
 			]);
+		}
+	}
+
+	/**
+	 * Get all storage paths to scan (including external mounts)
+	 * Returns array of ['localPath' => string, 'relativePath' => string]
+	 */
+	private function getAllStoragePaths($userFolder): array {
+		$paths = [];
+		
+		try {
+			// Start with root user folder
+			$rootLocalPath = $userFolder->getStorage()->getLocalFile($userFolder->getInternalPath());
+			if ($rootLocalPath && is_dir($rootLocalPath)) {
+				$paths[] = [
+					'localPath' => $rootLocalPath,
+					'relativePath' => ''
+				];
+			}
+			
+			// Recursively check subdirectories for different storage mounts
+			$this->scanForMountPoints($userFolder, '', $paths);
+			
+		} catch (\Exception $e) {
+			$this->logger->debug('Error getting storage paths', ['error' => $e->getMessage()]);
+		}
+		
+		return $paths;
+	}
+
+	/**
+	 * Recursively scan for mount points (different storage backends)
+	 */
+	private function scanForMountPoints($folder, string $basePath, array &$paths): void {
+		try {
+			$items = $folder->getDirectoryListing();
+			
+			foreach ($items as $node) {
+				if ($node instanceof \OCP\Files\Folder) {
+					$nodeName = $node->getName();
+					
+					// Skip hidden folders
+					if ($nodeName[0] === '.') {
+						continue;
+					}
+					
+					$relativePath = $basePath ? $basePath . '/' . $nodeName : $nodeName;
+					
+					// Check if this folder is on a different storage mount
+					try {
+						$nodeLocalPath = $node->getStorage()->getLocalFile($node->getInternalPath());
+						
+						// If we got a different local path, it's likely a different mount
+						if ($nodeLocalPath && is_dir($nodeLocalPath)) {
+							// Check if this is a new mount point (different storage)
+							$isNewMount = true;
+							foreach ($paths as $existing) {
+								if (strpos($nodeLocalPath, $existing['localPath']) === 0) {
+									$isNewMount = false;
+									break;
+								}
+							}
+							
+							if ($isNewMount) {
+								$paths[] = [
+									'localPath' => $nodeLocalPath,
+									'relativePath' => $relativePath
+								];
+							}
+						}
+					} catch (\Exception $e) {
+						// Skip folders we can't access
+						continue;
+					}
+					
+					// Only recurse one level deep to find mount points
+					// Don't need to go deeper as find will handle subdirectories
+					if (substr_count($relativePath, '/') < 2) {
+						$this->scanForMountPoints($node, $relativePath, $paths);
+					}
+				}
+			}
+		} catch (\Exception $e) {
+			// Skip folders we can't access
 		}
 	}
 
