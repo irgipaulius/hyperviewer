@@ -274,7 +274,27 @@ class JobManager {
 			return
 		}
 
-		container.innerHTML = jobs.map(job => this.renderJobCard(job)).join('')
+		// Sort jobs by most relevant timestamp (newest first)
+		const sortedJobs = jobs.sort((a, b) => {
+			const timeA = a.completedAt || a.failedAt || a.startedAt || a.addedAt || 0
+			const timeB = b.completedAt || b.failedAt || b.startedAt || b.addedAt || 0
+			return timeB - timeA // Descending (newest first)
+		})
+
+		container.innerHTML = sortedJobs.map(job => this.renderJobCard(job)).join('')
+
+		// Add event listeners for action buttons
+		container.querySelectorAll('.job-action-btn').forEach(btn => {
+			btn.addEventListener('click', (e) => {
+				const action = e.target.dataset.action
+				const jobId = e.target.dataset.jobId
+				if (action === 'refresh') {
+					this.refreshJob(jobId)
+				} else if (action === 'delete') {
+					this.deleteJob(jobId)
+				}
+			})
+		})
 	}
 
 	/**
@@ -291,21 +311,21 @@ class JobManager {
 
 		return `
 			<div class="job-card ${job.status === 'failed' ? 'retry-pending-card' : ''}" data-job-id="${job.id}">
-				<div class="job-header">
-					<div class="job-filename" title="${this.escapeHtml(job.directory || '')}/${this.escapeHtml(job.filename || '')}">
-						${this.escapeHtml(job.filename || 'Unknown')}
-					</div>
-					<div class="job-actions">
-						<button class="job-action-btn" onclick="jobManager.refreshJob('${job.id}')" title="Refresh">🔄</button>
-						<button class="job-action-btn" onclick="jobManager.deleteJob('${job.id}')" title="Delete">🗑️</button>
-					</div>
+				<div class="job-filename" title="${this.escapeHtml(job.directory || '')}/${this.escapeHtml(job.filename || '')}">
+					${this.escapeHtml(job.filename || 'Unknown')}
 				</div>
 				${directoryHtml ? `<div class="job-directory">${directoryHtml}</div>` : ''}
 				${progressHtml}
 				${timestampsHtml ? `<div class="job-timestamps">${timestampsHtml}</div>` : ''}
 				${errorHtml ? `<div class="job-error">${errorHtml}</div>` : ''}
-				${resolutionsHtml ? `<div class="job-resolutions">${resolutionsHtml}</div>` : ''}
 				<div class="job-footer">
+					<div class="job-footer-left">
+						${resolutionsHtml ? `<div class="job-resolutions">${resolutionsHtml}</div>` : ''}
+						<div class="job-actions">
+							<button class="job-action-btn" data-action="refresh" data-job-id="${job.id}" title="Refresh">🔄</button>
+							<button class="job-action-btn" data-action="delete" data-job-id="${job.id}" title="Delete">🗑️</button>
+						</div>
+					</div>
 					<span class="job-status ${statusClass}">${statusText}</span>
 				</div>
 			</div>

@@ -76,26 +76,32 @@
 	background: color-mix(in srgb, var(--color-warning) 5%, var(--color-main-background));
 }
 
-.job-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: flex-start;
-	margin-bottom: 10px;
-}
-
 .job-filename {
 	font-size: 13px;
 	font-weight: 600;
-	flex: 1;
 	word-wrap: break-word;
-	margin-right: 10px;
 	line-height: 1.4;
+	margin-bottom: 10px;
+}
+
+.job-footer {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-top: 8px;
+	gap: 10px;
+}
+
+.job-footer-left {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
 }
 
 .job-actions {
 	display: flex;
 	gap: 4px;
-	flex-shrink: 0;
 }
 
 .job-action-btn {
@@ -112,12 +118,6 @@
 .job-action-btn:hover {
 	opacity: 1;
 	background: var(--color-background-hover);
-}
-
-.job-footer {
-	display: flex;
-	justify-content: flex-end;
-	margin-top: 8px;
 }
 
 .job-status {
