@@ -96,7 +96,8 @@ class AutoHlsGenerationJob extends TimedJob {
 			$dirNode = $userFolder->get($directory);
 			if (!($dirNode instanceof \OCP\Files\Folder)) return;
 
-			$this->scanAndQueue($dirNode, $directory, $userFolder, $userId, $settings);
+			// Use find command for fast video discovery
+			$this->findAndQueueVideos($dirNode, $directory, $userFolder, $userId, $settings);
 
 		} catch (\Exception $e) {
 			$this->logger->error('Failed to process auto-generation directory', [
@@ -106,53 +107,90 @@ class AutoHlsGenerationJob extends TimedJob {
 		}
 	}
 
-	private function scanAndQueue($folder, string $basePath, $userFolder, string $userId, array $settings): void {
-		$supportedExtensions = ['.mp4', '.MP4', '.mov', '.MOV'];
-		
-		// Use iterative queue-based traversal
-		$queue = [['folder' => $folder, 'path' => $basePath]];
-		
-		while (!empty($queue)) {
-			$current = array_shift($queue);
-			$currentFolder = $current['folder'];
-			$currentPath = $current['path'];
-
-			foreach ($currentFolder->getDirectoryListing() as $node) {
-				if ($node instanceof \OCP\Files\File) {
-					$filename = $node->getName();
-					
-					// Fast extension check
-					$hasVideoExtension = false;
-					foreach ($supportedExtensions as $ext) {
-						if (substr($filename, -strlen($ext)) === $ext) {
-							$hasVideoExtension = true;
-							break;
-						}
-					}
-					
-					if ($hasVideoExtension) {
-						if (!$this->hasHlsCache($userFolder, $filename, $currentPath, $settings)) {
-							// Normalize directory path - convert '/' to empty string for root
-							$normalizedDir = ($currentPath === '/' || $currentPath === '') ? '' : $currentPath;
-							
-							// Add to queue via ProcessManager
-							$this->processManager->addJob(
-								$userId,
-								$filename,
-								$normalizedDir,
-								$settings
-							);
-						}
-					}
-				} elseif ($node instanceof \OCP\Files\Folder) {
-					$folderName = $node->getName();
-					if (strpos($folderName, '.') !== 0) {
-						$subPath = $currentPath === '/' ? '/' . $folderName : $currentPath . '/' . $folderName;
-						$queue[] = ['folder' => $node, 'path' => $subPath];
-					}
-				}
+	/**
+	 * Find all video files using OS find command and queue them
+	 * Much faster than recursive PHP loops
+	 */
+	private function findAndQueueVideos($folder, string $basePath, $userFolder, string $userId, array $settings): void {
+		try {
+			// Get local filesystem path
+			$localPath = $folder->getStorage()->getLocalFile($folder->getInternalPath());
+			
+			if (!$localPath || !is_dir($localPath)) {
+				$this->logger->warning('Could not get local path for auto-gen directory', ['path' => $basePath]);
+				return;
 			}
+
+			// Use find to get all video files (much faster than PHP loops)
+			$findCmd = sprintf(
+				'find %s -type f \( -iname "*.mp4" -o -iname "*.mov" \) 2>/dev/null',
+				escapeshellarg($localPath)
+			);
+
+			$output = shell_exec($findCmd);
+			
+			if ($output === null || trim($output) === '') {
+				return;
+			}
+
+			// Parse output into video list
+			$absolutePaths = array_filter(explode("\n", trim($output)));
+			$videos = [];
+			
+			foreach ($absolutePaths as $absPath) {
+				if (strpos($absPath, $localPath) !== 0) {
+					continue;
+				}
+				
+				$relPath = substr($absPath, strlen($localPath));
+				$relPath = ltrim($relPath, '/');
+				
+				$filename = basename($absPath);
+				$fileDir = dirname($relPath);
+				
+				// Normalize directory path
+				if ($fileDir === '.') {
+					$fileDir = $basePath;
+				} else {
+					$fileDir = $basePath === '/' ? '/' . $fileDir : $basePath . '/' . $fileDir;
+				}
+				$normalizedDir = ($fileDir === '/' || $fileDir === '') ? '' : $fileDir;
+				
+				$videos[] = [
+					'filename' => $filename,
+					'directory' => $normalizedDir
+				];
+			}
+
+			// Filter pipeline: files.filter(notQueued).filter(noCache)
+			
+			// Step 1: Filter out videos already in queue (except aborted)
+			$notQueued = $this->processManager->filterNotQueued($videos, $userId);
+			
+			// Step 2: Filter out videos that already have HLS cache
+			$needsProcessing = $this->filterNoCache($notQueued, $userFolder, $settings);
+			
+			// Step 3: Add remaining videos to queue
+			foreach ($needsProcessing as $video) {
+				$this->processManager->addJob($userId, $video['filename'], $video['directory'], $settings);
+			}
+
+		} catch (\Exception $e) {
+			$this->logger->error('Failed to find and queue videos', [
+				'path' => $basePath,
+				'error' => $e->getMessage()
+			]);
 		}
+	}
+
+	/**
+	 * Filter out videos that already have HLS cache
+	 */
+	private function filterNoCache(array $videos, $userFolder, array $settings): array {
+		return array_filter($videos, function($video) use ($userFolder, $settings) {
+			// Return true if NO cache (needs processing)
+			return !$this->hasHlsCache($userFolder, $video['filename'], $video['directory'], $settings);
+		});
 	}
 
 	private function hasHlsCache($userFolder, string $filename, string $directory, array $settings): bool {

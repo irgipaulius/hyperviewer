@@ -77,6 +77,51 @@ class FFmpegProcessManager {
 	}
 
 	/**
+	 * Check if a job is already queued (pending, processing, or failed with retries remaining)
+	 */
+	public function isJobQueued(string $userId, string $filename, string $directory): bool {
+		$queue = $this->readQueue();
+		
+		foreach ($queue as $job) {
+			if ($job['userId'] === $userId && 
+				$job['filename'] === $filename && 
+				$job['directory'] === $directory &&
+				$job['status'] !== 'aborted') {
+				return true;
+			}
+		}
+		
+		return false;
+	}
+
+	/**
+	 * Get the current queue (for batch checking)
+	 */
+	public function getQueue(): array {
+		return $this->readQueue();
+	}
+
+	/**
+	 * Filter out videos that are already in queue (except aborted jobs)
+	 * Returns only videos that need to be queued
+	 */
+	public function filterNotQueued(array $videos, string $userId): array {
+		$queue = $this->readQueue();
+		
+		return array_filter($videos, function($video) use ($queue, $userId) {
+			foreach ($queue as $job) {
+				if ($job['userId'] === $userId && 
+					$job['filename'] === $video['filename'] && 
+					$job['directory'] === $video['directory'] &&
+					$job['status'] !== 'aborted') {
+					return false; // Already queued, skip
+				}
+			}
+			return true; // Not queued, keep
+		});
+	}
+
+	/**
 	 * Process the queue
 	 */
 	public function processQueue(): void {
