@@ -718,7 +718,7 @@ class CacheController extends Controller {
 								'enabled' => $settings['enabled'] ?? false,
 								'resolutions' => $settings['resolutions'] ?? [],
 								'cachePath' => $settings['cachePath'] ?? '',
-								'registeredAt' => $settings['registeredAt'] ?? 0,
+								'registeredAt' => $settings['registeredAt'] ?? $settings['createdAt'] ?? time(),
 								'lastScan' => $settings['lastScan'] ?? 0
 							];
 						}

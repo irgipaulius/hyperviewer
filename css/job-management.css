@@ -50,16 +50,60 @@
 	background: var(--color-main-background);
 }
 
+/* Modern Checkbox Styling */
+input[type="checkbox"] {
+	appearance: none;
+	-webkit-appearance: none;
+	width: 18px;
+	height: 18px;
+	border: 1px solid var(--color-border-dark);
+	border-radius: 4px;
+	background-color: var(--color-main-background);
+	cursor: pointer;
+	position: relative;
+	transition: all 0.2s ease;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+input[type="checkbox"]:checked {
+	background-color: var(--color-primary);
+	border-color: var(--color-primary);
+}
+
+input[type="checkbox"]:checked::after {
+	content: '';
+	width: 10px;
+	height: 5px;
+	border-left: 2px solid white;
+	border-bottom: 2px solid white;
+	transform: rotate(-45deg);
+	margin-bottom: 2px;
+}
+
+input[type="checkbox"]:indeterminate {
+	background-color: var(--color-primary);
+	border-color: var(--color-primary);
+}
+
+input[type="checkbox"]:indeterminate::after {
+	content: '';
+	width: 10px;
+	height: 2px;
+	background-color: white;
+}
+
 .jobs-column.current .jobs-column-header {
-	background: var(--color-primary-element);
+	background: color-mix(in srgb, var(--color-primary-element) 80%, black);
 }
 
 .jobs-column.done .jobs-column-header {
-	background: var(--color-success);
+	background: color-mix(in srgb, var(--color-success) 80%, black);
 }
 
 .jobs-column.failed .jobs-column-header {
-	background: var(--color-error);
+	background: color-mix(in srgb, var(--color-error) 80%, black);
 }
 
 /* Toolbar */

@@ -164,8 +164,9 @@ class JobManager {
 		if (jobsToPoll.length === 0) return
 
 		// Fetch filtered active jobs
-		const promises = jobsToPoll.map(job => this.fetchJobProgress(job.id))
-		await Promise.all(promises)
+		// Fetch filtered active jobs
+		const jobIds = jobsToPoll.map(job => job.id)
+		await this.fetchJobsProgressBatch(jobIds)
 
 		this.render()
 	}
@@ -176,7 +177,12 @@ class JobManager {
 	/**
 	 * Fetch progress for a single job (using batch endpoint)
 	 */
-	async fetchJobProgress(jobId) {
+	/**
+	 * Fetch progress for multiple jobs (using batch endpoint)
+	 */
+	async fetchJobsProgressBatch(jobIds) {
+		if (!jobIds || jobIds.length === 0) return
+
 		const url = OC.generateUrl('/apps/hyperviewer/api/jobs/batch-status')
 
 		try {
@@ -186,15 +192,18 @@ class JobManager {
 					requesttoken: OC.requestToken,
 					'Content-Type': 'application/json'
 				},
-				body: JSON.stringify({ ids: [jobId] })
+				body: JSON.stringify({ ids: jobIds })
 			})
 			const data = await response.json()
 
-			if (data.jobs && data.jobs.length > 0) {
-				this.jobs.set(jobId, data.jobs[0])
+			// Update all returned jobs
+			if (data.jobs) {
+				data.jobs.forEach(job => {
+					this.jobs.set(job.id, job)
+				})
 			}
 		} catch (error) {
-			console.error(`Failed to fetch job ${jobId}:`, error)
+			console.error(`Failed to fetch jobs batch:`, error)
 		}
 	}
 
@@ -240,7 +249,7 @@ class JobManager {
 	 * Refresh a single job
 	 */
 	async refreshJob(jobId) {
-		await this.fetchJobProgress(jobId)
+		await this.fetchJobsProgressBatch([jobId])
 		this.render()
 	}
 
@@ -545,7 +554,7 @@ class JobManager {
 						
 						<div class="job-actions">
 							<button class="job-action-btn" data-action="refresh" data-job-id="${job.id}" title="Refresh status">
-								<span class="icon-refresh"></span>
+								<span class="icon-reset"></span>
 							</button>
 							<button class="job-action-btn" data-action="delete" data-job-id="${job.id}" title="Delete job">
 								<span class="icon-delete"></span>

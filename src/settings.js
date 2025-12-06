@@ -130,6 +130,7 @@ function refreshAutoGeneration() {
 							</span>
 						</div>
 						<div class="auto-gen-details">
+							<span>Directory: ${escapeHtml(dir.directory)}</span>
 							<span>Cache: ${escapeHtml(dir.cachePath || dir.cacheLocation || 'Not set')}</span>
 							<span>Registered: ${formatDate(dir.createdAt || dir.registeredAt)}</span>
 						</div>
