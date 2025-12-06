@@ -30,6 +30,12 @@ script('hyperviewer', 'job-management');
 		</tbody>
 	</table>
 
+	<!-- Auto-Generation Directories -->
+	<h3><?php p($l->t('Auto-Generation Directories')); ?></h3>
+	<div id="autogen-container" class="autogen-list">
+		<div class="jobs-loading"><?php p($l->t('Loading...')); ?></div>
+	</div>
+
 	<!-- Active Jobs Section -->
 	<h3><?php p($l->t('Job Queue')); ?></h3>
 	<p class="settings-hint"><?php p($l->t('Monitor transcoding jobs in real-time')); ?></p>

@@ -478,7 +478,7 @@ function openUnifiedCacheDialog(options) {
 							</div>
 						</label>
 						<label class="resolution-item">
-							<input type="checkbox" name="resolution" value="360p">
+							<input type="checkbox" name="resolution" value="360p" checked>
 							<div class="resolution-content">
 								<span class="resolution-name">360p</span>
 								<span class="resolution-desc">Low Quality</span>
@@ -813,14 +813,14 @@ function openUnifiedCacheDialog(options) {
 			<input type="radio" name="cache_location" value="relative" checked>
 			<div class="option-content">
 				<span class="option-title">Relative (Parent Directory)</span>
-				<span class="option-desc">Cache stored in: <strong>${displayPath}</strong></span>
+				<span class="option-desc">Cache stored in: <strong>${displayPath}/.cached_hls</strong></span>
 			</div>
 		</label>
 		<label class="option-item">
 			<input type="radio" name="cache_location" value="home">
 			<div class="option-content">
 				<span class="option-title">Home (User Root)</span>
-				<span class="option-desc">Cache stored in your home directory (/HyperViewer/cache).</span>
+				<span class="option-desc">Cache stored in your home directory (~/.cached_hls).</span>
 			</div>
 		</label>
 	`;
