@@ -159,6 +159,8 @@ class FFmpegProcessManager {
 				$this->startJob($job['id']);
 			}
 		}
+
+		$this->logger->error('Active jobs: ' . $activeJobs . ' Pending jobs: ' . count($pendingJobs) . ' ');
 	}
 
 	/**
