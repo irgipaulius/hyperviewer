@@ -39,12 +39,12 @@ class Application extends App implements IBootstrap {
 		$jobList = $context->getServerContainer()->get(IJobList::class);
 
 		// Register auto-generation cron job (once)
-		if (!$jobList->has(AutoHlsGenerationJob::class)) {
+		if (!$jobList->has(AutoHlsGenerationJob::class, null)) {
 			$jobList->add(AutoHlsGenerationJob::class);
 		}
 
 		// Register process queue job (once)
-		if (!$jobList->has(ProcessQueueJob::class)) {
+		if (!$jobList->has(ProcessQueueJob::class, null)) {
 			$jobList->add(ProcessQueueJob::class);
 		}
 	}
