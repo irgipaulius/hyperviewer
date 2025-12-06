@@ -922,6 +922,28 @@ class CacheController extends Controller {
 	}
 
 	/**
+	 * Format bytes into human readable format
+	 */
+	private function formatBytes(int $size): string {
+		if ($size >= 1024 * 1024 * 1024) {
+			return round($size / (1024 * 1024 * 1024), 1) . ' GB';
+		} elseif ($size >= 1024 * 1024) {
+			return round($size / (1024 * 1024), 1) . ' MB';
+		} elseif ($size >= 1024) {
+			return round($size / 1024, 1) . ' KB';
+		} else {
+			return $size . ' B';
+		}
+	}
+
+	/**
+	 * Find HLS cache for a video file
+	 */
+	private function findHlsCache($userFolder, string $filename, string $directory, string $userId): ?string {
+		return $this->cachedHlsService->findHlsCache($userFolder, $filename, $userId);
+	}
+
+	/**
 	 * Batch check HLS cache for multiple videos in a directory
 	 * Much faster than checking each file individually
 	 * 
