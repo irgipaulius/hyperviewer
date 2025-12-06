@@ -16,6 +16,7 @@ script('hyperviewer', 'job-management');
 			<tr>
 				<th><?php p($l->t('Active Jobs')); ?></th>
 				<th><?php p($l->t('Total Cache Size')); ?></th>
+				<th><?php p($l->t('Videos Count')); ?></th>
 				<th><?php p($l->t('Completed')); ?></th>
 				<th><?php p($l->t('Pending')); ?></th>
 			</tr>
@@ -24,6 +25,7 @@ script('hyperviewer', 'job-management');
 			<tr>
 				<td id="stat-active" class="stat-value">0</td>
 				<td id="stat-cache-size" class="stat-value">0 B</td>
+				<td id="stat-videos-count" class="stat-value">0</td>
 				<td id="stat-completed" class="stat-value">0</td>
 				<td id="stat-pending" class="stat-value">0</td>
 			</tr>

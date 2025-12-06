@@ -25,6 +25,7 @@ class Application extends App implements IBootstrap {
 		$context->registerService('ProcessQueueJob', function() {
 			return \OC::$server->get(\OCA\HyperViewer\BackgroundJob\ProcessQueueJob::class);
 		});
+		$context->registerCommand(\OCA\HyperViewer\Command\ProcessQueue::class);
 	}
 
 	public function boot(IBootContext $context): void {

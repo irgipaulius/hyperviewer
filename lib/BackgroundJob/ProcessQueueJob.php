@@ -22,20 +22,40 @@ class ProcessQueueJob extends TimedJob {
 		parent::__construct($time);
 		$this->processManager = $processManager;
 		$this->logger = $logger;
-		$this->setInterval(5); // Run every 5 seconds
+		$this->setInterval(60); // Check every minute if worker is running
 	}
 
 	protected function run($argument): void {
-		$startTime = time();
-		$maxExecutionTime = 55; // Run for 55 seconds to allow frequent polling
+		if (!$this->isWorkerRunning()) {
+			$this->logger->info('HyperViewer worker not running, starting it...');
+			$this->startWorker();
+		}
+	}
 
-		// Loop to keep processing jobs while within the time limit
-		do {
-			$this->processManager->processQueue();
-			
-			// Sleep briefly to prevent CPU spinning if queue is empty
-			// But check frequently enough to pick up new jobs
-			sleep(2);
-		} while (time() - $startTime < $maxExecutionTime);
+	private function isWorkerRunning(): bool {
+		$pidFile = \OC::$server->getTempManager()->getTemporaryFolder() . '/hyperviewer_worker.pid';
+		if (file_exists($pidFile)) {
+			// Check if file is stale (older than 24h just in case)
+			if (time() - filemtime($pidFile) > 86400) {
+				return false;
+			}
+
+			$pid = (int)file_get_contents($pidFile);
+			if ($pid > 0 && posix_kill($pid, 0)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private function startWorker(): void {
+		$occPath = \OC::$SERVERROOT . '/occ';
+		$cmd = PHP_BINARY . ' ' . escapeshellarg($occPath) . ' hyperviewer:process-queue';
+		
+		// Run in background
+		$cmd .= ' > /dev/null 2>&1 &';
+		
+		exec($cmd);
+		$this->logger->info('HyperViewer worker started via background job');
 	}
 }

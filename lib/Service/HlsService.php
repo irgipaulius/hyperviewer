@@ -171,6 +171,10 @@ class HlsService {
 				
 				if ($err) {
 					$stderrOutput .= $err;
+					// Keep only the last 10KB to prevent memory exhaustion on long jobs
+					if (strlen($stderrOutput) > 10240) {
+						$stderrOutput = substr($stderrOutput, -5120);
+					}
 				}
 
 				// Update progress

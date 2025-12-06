@@ -20,7 +20,6 @@ return [
 		['name' => 'cache#batchDeleteJobs', 'url' => '/api/jobs/batch-delete', 'verb' => 'POST'],
 		['name' => 'cache#batchGetJobStatus', 'url' => '/api/jobs/batch-status', 'verb' => 'POST'],
 		['name' => 'cache#getAutoGenerationSettings', 'url' => '/api/auto-generation', 'verb' => 'GET'],
-		['name' => 'cache#updateAutoGeneration', 'url' => '/api/auto-generation/{configKey}', 'verb' => 'PUT'],
 		['name' => 'cache#removeAutoGeneration', 'url' => '/api/auto-generation/{configKey}', 'verb' => 'DELETE'],
 		['name' => 'cache#getJobStatistics', 'url' => '/api/jobs/statistics', 'verb' => 'GET'],
 	]

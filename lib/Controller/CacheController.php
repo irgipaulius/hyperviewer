@@ -726,6 +726,7 @@ class CacheController extends Controller {
 
 							$stats = $this->getDirectoryStats($userFolder, $checkPath);
 							$cacheSize = $stats['size'];
+							$cacheCount = $stats['count'];
 
 							$autoGenDirs[] = [
 								'configKey' => $key,
@@ -735,7 +736,8 @@ class CacheController extends Controller {
 								'cachePath' => $settings['cachePath'] ?? '',
 								'registeredAt' => $settings['registeredAt'] ?? $settings['createdAt'] ?? time(),
 								'lastScan' => $settings['lastScan'] ?? 0,
-								'totalCacheSize' => $this->formatBytes($cacheSize)
+								'totalCacheSize' => $this->formatBytes($cacheSize),
+								'videosCount' => $cacheCount,
 							];
 						}
 					}

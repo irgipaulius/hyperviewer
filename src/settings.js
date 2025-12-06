@@ -90,6 +90,7 @@ function refreshStatistics() {
 
 			document.getElementById('stat-active').textContent = actualStats.activeJobs || 0
 			document.getElementById('stat-cache-size').textContent = actualStats.totalCacheSize || '0 B'
+			document.getElementById('stat-videos-count').textContent = actualStats.videosCount || 0
 			document.getElementById('stat-completed').textContent = actualStats.completedJobs || 0
 			document.getElementById('stat-pending').textContent = actualStats.pendingJobs || 0
 		})
@@ -132,6 +133,7 @@ function refreshAutoGeneration() {
 						<div class="auto-gen-details">
 							<span>Directory: ${escapeHtml(dir.directory)}</span>
 							<span>Cache: ${dir.totalCacheSize || '0 B'}</span>
+							<span>Videos: ${dir.videosCount || '0'}</span>
 							<span>Reg: ${formatDate(dir.createdAt || dir.registeredAt)}</span>
 							<span>Last Scan: ${dir.lastScan ? formatDate(dir.lastScan) : 'Never'}</span>
 						</div>
