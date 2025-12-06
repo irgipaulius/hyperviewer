@@ -937,13 +937,6 @@ class CacheController extends Controller {
 	}
 
 	/**
-	 * Find HLS cache for a video file
-	 */
-	private function findHlsCache($userFolder, string $filename, string $directory, string $userId): ?string {
-		return $this->cachedHlsService->findHlsCache($userFolder, $filename, $userId);
-	}
-
-	/**
 	 * Batch check HLS cache for multiple videos in a directory
 	 * Much faster than checking each file individually
 	 * 
