@@ -99,6 +99,18 @@ class AutoHlsGenerationJob extends TimedJob {
 			// Use find command for fast video discovery
 			$this->findAndQueueVideos($dirNode, $directory, $userFolder, $userId, $settings);
 
+			// Update lastScan timestamp efficiently
+			$configKey = 'auto_gen_' . md5($userId . '_' . $directory);
+			$json = $this->config->getAppValue('hyperviewer', $configKey, '');
+			
+			if (!empty($json)) {
+				$data = json_decode($json, true);
+				if ($data) {
+					$data['lastScan'] = time();
+					$this->config->setAppValue('hyperviewer', $configKey, json_encode($data));
+				}
+			}
+
 		} catch (\Exception $e) {
 			$this->logger->error('Failed to process auto-generation directory', [
 				'directory' => $directory,

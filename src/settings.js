@@ -131,8 +131,9 @@ function refreshAutoGeneration() {
 						</div>
 						<div class="auto-gen-details">
 							<span>Directory: ${escapeHtml(dir.directory)}</span>
-							<span>Cache: ${escapeHtml(dir.cachePath || dir.cacheLocation || 'Not set')}</span>
-							<span>Registered: ${formatDate(dir.createdAt || dir.registeredAt)}</span>
+							<span>Cache: ${dir.totalCacheSize || '0 B'}</span>
+							<span>Reg: ${formatDate(dir.createdAt || dir.registeredAt)}</span>
+							<span>Last Scan: ${dir.lastScan ? formatDate(dir.lastScan) : 'Never'}</span>
 						</div>
 						${dir.resolutions && dir.resolutions.length > 0
 							? `

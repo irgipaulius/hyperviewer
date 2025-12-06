@@ -643,7 +643,8 @@ class CacheController extends Controller {
 									// Enrich with cache directory size if processing
 									$cacheSize = 0;
 									if (($data['status'] ?? '') === 'processing') {
-										$cacheSize = $this->getJobCacheSize($jobFolder);
+										$stats = $this->getDirectoryStats($userFolder, $jobFolder->getPath());
+										$cacheSize = $stats['size'];
 									}
 									
 									return new JSONResponse([
@@ -678,7 +679,7 @@ class CacheController extends Controller {
 				'debug' => [
 					'originalFilename' => $filename,
 					'decodedFilename' => $decodedFilename,
-					'searchedLocations' => $cacheLocations,
+					'searchedLocations' => $locationsToCheck,
 					'userId' => $user->getUID()
 				]
 			];
@@ -702,6 +703,8 @@ class CacheController extends Controller {
 			return new JSONResponse(['error' => 'Unauthorized'], 401);
 		}
 
+		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+
 		try {
 			$autoGenDirs = [];
 			$allAppValues = $this->config->getAppKeys('hyperviewer');
@@ -712,14 +715,27 @@ class CacheController extends Controller {
 					if (!empty($settingsJson)) {
 						$settings = json_decode($settingsJson, true);
 						if ($settings && isset($settings['userId']) && $settings['userId'] === $user->getUID()) {
+							$dirPath = $settings['directory'] ?? '';
+							$cacheSize = 0;
+							
+							// Resolving cache directory path
+							$checkPath = $settings['cachePath'] ?? '';
+							if (empty($checkPath) && !empty($dirPath)) {
+								$checkPath = $dirPath . '/.cached_hls';
+							}
+
+							$stats = $this->getDirectoryStats($userFolder, $checkPath);
+							$cacheSize = $stats['size'];
+
 							$autoGenDirs[] = [
 								'configKey' => $key,
-								'directory' => $settings['directory'] ?? '',
+								'directory' => $dirPath,
 								'enabled' => $settings['enabled'] ?? false,
 								'resolutions' => $settings['resolutions'] ?? [],
 								'cachePath' => $settings['cachePath'] ?? '',
 								'registeredAt' => $settings['registeredAt'] ?? $settings['createdAt'] ?? time(),
-								'lastScan' => $settings['lastScan'] ?? 0
+								'lastScan' => $settings['lastScan'] ?? 0,
+								'totalCacheSize' => $this->formatBytes($cacheSize)
 							];
 						}
 					}
@@ -731,56 +747,6 @@ class CacheController extends Controller {
 		} catch (\Exception $e) {
 			$this->logger->error('Error getting auto-generation settings', ['error' => $e->getMessage()]);
 			return new JSONResponse(['error' => 'Failed to get settings'], 500);
-		}
-	}
-
-	/**
-	 * Update auto-generation directory settings
-	 * 
-	 * @NoAdminRequired
-	 */
-	public function updateAutoGeneration(string $configKey): JSONResponse {
-		$user = $this->userSession->getUser();
-		if (!$user) {
-			return new JSONResponse(['error' => 'Unauthorized'], 401);
-		}
-
-		try {
-			$settingsJson = $this->config->getAppValue('hyperviewer', $configKey, '');
-			if (empty($settingsJson)) {
-				return new JSONResponse(['error' => 'Auto-generation setting not found'], 404);
-			}
-
-			$settings = json_decode($settingsJson, true);
-			if (!$settings || $settings['userId'] !== $user->getUID()) {
-				return new JSONResponse(['error' => 'Unauthorized or invalid setting'], 403);
-			}
-
-			// Get updated settings from request
-			$input = json_decode(file_get_contents('php://input'), true);
-			
-			// Update allowed fields
-			if (isset($input['enabled'])) {
-				$settings['enabled'] = (bool)$input['enabled'];
-			}
-			if (isset($input['resolutions']) && is_array($input['resolutions'])) {
-				$settings['resolutions'] = $input['resolutions'];
-			}
-			if (isset($input['cachePath'])) {
-				$settings['cachePath'] = $input['cachePath'];
-			}
-
-			// Save updated settings
-			$this->config->setAppValue('hyperviewer', $configKey, json_encode($settings));
-
-			return new JSONResponse([
-				'success' => true,
-				'message' => 'Auto-generation setting updated'
-			]);
-
-		} catch (\Exception $e) {
-			$this->logger->error('Error updating auto-generation setting', ['error' => $e->getMessage()]);
-			return new JSONResponse(['error' => 'Failed to update auto-generation setting'], 500);
 		}
 	}
 
@@ -851,21 +817,9 @@ class CacheController extends Controller {
 			$completedCount = 0;
 
 			foreach ($cachedDirs as $cacheDirPath) {
-				if ($userFolder->nodeExists($cacheDirPath)) {
-					$cacheFolder = $userFolder->get($cacheDirPath);
-					if ($cacheFolder instanceof \OCP\Files\Folder) {
-						$localPath = $cacheFolder->getStorage()->getLocalFile($cacheFolder->getInternalPath());
-						
-						if ($localPath && is_dir($localPath)) {
-							// Sum up size
-							$totalSize += $this->calculateDirectorySize($localPath);
-							
-							// Count completed jobs (directories containing processed video)
-							// We look for directories inside .cached_hls
-							$completedCount += $this->countSubdirectories($localPath);
-						}
-					}
-				}
+				$dirStats = $this->getDirectoryStats($userFolder, $cacheDirPath);
+				$totalSize += $dirStats['size'];
+				$completedCount += $dirStats['count'];
 			}
 
 			$stats['totalCacheSize'] = $this->formatBytes($totalSize);
@@ -884,42 +838,50 @@ class CacheController extends Controller {
 		}
 	}
 
-	/**
-	 * Calculate directory size using 'du'
-	 */
-	private function calculateDirectorySize(string $path): int {
-		$output = shell_exec('du -s ' . escapeshellarg($path));
-		if ($output) {
-			// Output format: "size path"
-			$parts = preg_split('/\s+/', trim($output));
-			if (isset($parts[0]) && is_numeric($parts[0])) {
-				// du return blocks (usually 512B or 1024B depending on system)
-				// Assuming standard 1024B (1K) blocks for safe approximation unless specified
-				// On Mac (BSD du), default is 512-byte blocks. GNU du is 1024.
-				// Let's force it to bytes with -k (kilobytes) if possible, but simplest is usually blocks.
-				// A clearer way: du -sk returns kilobytes.
-				$kiloBytes = (int)$parts[0];
-				// Note: if du uses 512-byte blocks by default, this might be off.
-				// Let's trust the number is roughly KB as per common default or assume 512b blocks if needed.
-				// Standard `du` is 512-byte blocks on BSD/Mac, 1KB on GNU.
-				// For consistent sizing, we could use `du -k`.
-				// Let's assume Kbytes for now as it's a display stat.
-				return $kiloBytes * 1024;
+	private function getDirectoryStats($userFolder, string $path): array {
+		try {
+			if (empty($path) || !$userFolder->nodeExists($path)) {
+				return ['size' => 0, 'count' => 0];
 			}
+
+			$node = $userFolder->get($path);
+			if (!($node instanceof \OCP\Files\Folder)) {
+				return ['size' => 0, 'count' => 0];
+			}
+
+			$localPath = $node->getStorage()->getLocalFile($node->getInternalPath());
+			if (!$localPath || !is_dir($localPath)) {
+				return ['size' => 0, 'count' => 0];
+			}
+
+			$escapedPath = escapeshellarg($localPath);
+			$size = 0;
+			$count = 0;
+
+			// Size
+			$duOutput = shell_exec('du -s ' . $escapedPath);
+			if ($duOutput) {
+				$parts = preg_split('/\s+/', trim($duOutput));
+				if (isset($parts[0]) && is_numeric($parts[0])) {
+					$size = (int)$parts[0] * 1024;
+				}
+			}
+
+			// Count
+			$findCmd = 'find ' . $escapedPath . ' -mindepth 1 -maxdepth 1 -type d | wc -l';
+			$findOutput = shell_exec($findCmd);
+			if ($findOutput) {
+				$count = (int)trim($findOutput);
+			}
+
+			return ['size' => $size, 'count' => $count];
+
+		} catch (\Exception $e) {
+			return ['size' => 0, 'count' => 0];
 		}
-		return 0;
 	}
 
-	/**
-	 * Count immediate subdirectories using 'find'
-	 * Each subdirectory in .cached_hls corresponds to 1 cached file (job)
-	 */
-	private function countSubdirectories(string $path): int {
-		// find path -mindepth 1 -maxdepth 1 -type d | wc -l
-		$cmd = 'find ' . escapeshellarg($path) . ' -mindepth 1 -maxdepth 1 -type d | wc -l';
-		$count = shell_exec($cmd);
-		return $count ? (int)trim($count) : 0;
-	}
+
 
 	/**
 	 * Format bytes into human readable format
