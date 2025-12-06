@@ -144,8 +144,6 @@ class HlsService {
 	}
 
 	private function executeFFmpegWithProgress(string $cmd, string $progressFile): void {
-		$this->logger->error('FFmpeg command: ' . $cmd);
-		
 		$descriptors = [
 			0 => ['pipe', 'r'], // stdin
 			1 => ['pipe', 'w'], // stdout

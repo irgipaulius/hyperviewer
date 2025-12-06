@@ -185,6 +185,7 @@ class FFmpegProcessManager {
 		$this->saveQueue($queue);
 
 		try {
+			$this->logger->error('running transcoding job: ' . $queue[$jobIndex]['filename']);
 			// Delegate execution to HlsService
 			$this->hlsService->transcode(
 				$queue[$jobIndex]['userId'],
