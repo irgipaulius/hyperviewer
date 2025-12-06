@@ -572,99 +572,7 @@ class CacheController extends Controller {
 		}
 	}
 
-	/**
-	 * Get individual job by ID with progress data
-	 * 
-	 * @NoAdminRequired
-	 */
-	public function getJobById(string $id): JSONResponse {
-		$user = $this->userSession->getUser();
-		if (!$user) {
-			return new JSONResponse(['error' => 'Unauthorized'], 401);
-		}
 
-		try {
-			$queue = $this->processManager->getQueue();
-			
-			// Find the job
-			$job = null;
-			foreach ($queue as $queueJob) {
-				if ($queueJob['id'] === $id && $queueJob['userId'] === $user->getUID()) {
-					$job = $queueJob;
-					break;
-				}
-			}
-			
-			if (!$job) {
-				return new JSONResponse(['error' => 'Job not found'], 404);
-			}
-			
-			// Enrich with progress data if processing
-			if ($job['status'] === 'processing') {
-				$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-				$locationType = $job['settings']['locationType'] ?? 'relative';
-				$directory = $job['directory'] ?? '';
-				$cacheBasePath = \OCA\HyperViewer\Service\PathResolver::calculateCachePath($locationType, $directory);
-				$baseFilename = pathinfo($job['filename'], PATHINFO_FILENAME);
-				$progressFile = $cacheBasePath . '/' . $baseFilename . '/progress.json';
-				
-				if ($userFolder->nodeExists($progressFile)) {
-					try {
-						$file = $userFolder->get($progressFile);
-						$progressData = json_decode($file->getContent(), true);
-						if ($progressData) {
-							$job = array_merge($job, $progressData);
-						}
-					} catch (\Exception $e) {
-						// Ignore read errors
-					}
-				}
-			}
-
-			return new JSONResponse(['job' => $job]);
-
-		} catch (\Exception $e) {
-			return new JSONResponse(['error' => 'Failed to get job'], 500);
-		}
-	}
-
-	/**
-	 * Delete a job from the queue
-	 * 
-	 * @NoAdminRequired
-	 */
-	public function deleteJob(string $id): JSONResponse {
-		$user = $this->userSession->getUser();
-		if (!$user) {
-			return new JSONResponse(['error' => 'Unauthorized'], 401);
-		}
-
-		try {
-			$queue = $this->processManager->getQueue();
-			$newQueue = [];
-			$found = false;
-
-			foreach ($queue as $job) {
-				if ($job['id'] === $id && $job['userId'] === $user->getUID()) {
-					$found = true;
-					continue; // Skip this job (delete it)
-				}
-				$newQueue[] = $job;
-			}
-
-			if (!$found) {
-				return new JSONResponse(['error' => 'Job not found'], 404);
-			}
-
-			// Save updated queue
-			$this->processManager->setQueue($newQueue);
-
-			return new JSONResponse(['success' => true]);
-
-		} catch (\Exception $e) {
-			return new JSONResponse(['error' => 'Failed to delete job'], 500);
-		}
-	}
 
 	/**
 	 * Get detailed progress for a specific active job
@@ -1445,5 +1353,71 @@ class CacheController extends Controller {
 		} catch (\Exception $e) {
 			return new JSONResponse(['error' => $e->getMessage()], 500);
 		}
+	}
+
+
+	/**
+	 * Delete multiple jobs
+	 * 
+	 * @NoAdminRequired
+	 */
+	public function batchDeleteJobs(): JSONResponse {
+		$user = $this->userSession->getUser();
+		if (!$user) {
+			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		}
+
+		$ids = $this->request->getParam('ids', []);
+		if (!is_array($ids) || empty($ids)) {
+			return new JSONResponse(['error' => 'No IDs provided'], 400);
+		}
+
+		$deletedCount = 0;
+		$errors = [];
+
+		foreach ($ids as $id) {
+			try {
+				if ($this->processManager->deleteJob($id, $user->getUID())) {
+					$deletedCount++;
+				} else {
+					$errors[$id] = 'Job not found or access denied';
+				}
+			} catch (\Exception $e) {
+				$errors[$id] = $e->getMessage();
+			}
+		}
+
+		return new JSONResponse([
+			'success' => true,
+			'deleted' => $deletedCount,
+			'errors' => $errors
+		]);
+	}
+
+	/**
+	 * Get status for multiple jobs
+	 * 
+	 * @NoAdminRequired
+	 */
+	public function batchGetJobStatus(): JSONResponse {
+		$user = $this->userSession->getUser();
+		if (!$user) {
+			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		}
+
+		$ids = $this->request->getParam('ids', []);
+		if (!is_array($ids) || empty($ids)) {
+			return new JSONResponse(['error' => 'No IDs provided'], 400);
+		}
+
+		$jobs = [];
+		foreach ($ids as $id) {
+			$job = $this->processManager->getJob($id);
+			if ($job && $job['userId'] === $user->getUID()) {
+				$jobs[] = $job;
+			}
+		}
+
+		return new JSONResponse(['jobs' => $jobs]);
 	}
 }

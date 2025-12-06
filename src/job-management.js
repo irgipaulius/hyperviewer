@@ -7,19 +7,67 @@ class JobManager {
 
 	constructor() {
 		this.jobs = new Map() // jobId -> job data
+		this.selectedJobs = new Set() // Selected job IDs
+		this.visibleJobs = new Set() // Visible job IDs
+		this.searchQuery = ''
 		this.lastId = ''
 		this.isLoading = false
 		this.hasMore = true
 		this.pollInterval = null
 		this.activePollInterval = null
+		
+		// Intersection Observer for visibility tracking
+		this.observer = new IntersectionObserver((entries) => {
+			entries.forEach(entry => {
+				const jobId = entry.target.dataset.jobId
+				if (entry.isIntersecting) {
+					this.visibleJobs.add(jobId)
+				} else {
+					this.visibleJobs.delete(jobId)
+				}
+			})
+		}, { threshold: 0.1 })
 	}
 
 	/**
 	 * Initialize and load all jobs
 	 */
 	async init() {
+		this.setupToolbar()
 		await this.loadAllJobs()
 		this.startPolling()
+	}
+
+	/**
+	 * Setup toolbar event listeners
+	 */
+	setupToolbar() {
+		// Search
+		const searchInput = document.getElementById('jobs-search-input')
+		if (searchInput) {
+			searchInput.addEventListener('input', (e) => {
+				this.searchQuery = e.target.value.toLowerCase().trim()
+				this.render()
+			})
+		}
+
+		// Batch Refresh
+		const refreshBtn = document.getElementById('batch-refresh-btn')
+		if (refreshBtn) {
+			refreshBtn.addEventListener('click', () => this.batchRefresh())
+		}
+
+		// Batch Delete
+		const deleteBtn = document.getElementById('batch-delete-btn')
+		if (deleteBtn) {
+			deleteBtn.addEventListener('click', () => this.batchDelete())
+		}
+		
+		// Refresh All
+		const refreshAllBtn = document.getElementById('refresh-jobs-btn')
+		if (refreshAllBtn) {
+			refreshAllBtn.addEventListener('click', () => this.refresh())
+		}
 	}
 
 	/**
@@ -107,14 +155,16 @@ class JobManager {
 	 * Poll and update all pending and processing jobs
 	 */
 	async pollActiveJobs() {
-		const activeJobs = Array.from(this.jobs.values()).filter(
-			job => job.status === 'pending' || job.status === 'processing'
+		// Only poll jobs that are visible AND (pending or processing)
+		const jobsToPoll = Array.from(this.jobs.values()).filter(job => 
+			(job.status === 'pending' || job.status === 'processing') && 
+			this.visibleJobs.has(job.id)
 		)
 
-		if (activeJobs.length === 0) return
+		if (jobsToPoll.length === 0) return
 
-		// Fetch each active job individually to get latest status
-		const promises = activeJobs.map(job => this.fetchJobProgress(job.id))
+		// Fetch filtered active jobs
+		const promises = jobsToPoll.map(job => this.fetchJobProgress(job.id))
 		await Promise.all(promises)
 
 		this.render()
@@ -123,17 +173,25 @@ class JobManager {
 	/**
 	 * Fetch progress for a single job
 	 */
+	/**
+	 * Fetch progress for a single job (using batch endpoint)
+	 */
 	async fetchJobProgress(jobId) {
-		const url = OC.generateUrl(`/apps/hyperviewer/api/jobs/active/${jobId}`)
+		const url = OC.generateUrl('/apps/hyperviewer/api/jobs/batch-status')
 
 		try {
 			const response = await fetch(url, {
-				headers: { requesttoken: OC.requestToken }
+				method: 'POST',
+				headers: { 
+					requesttoken: OC.requestToken,
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ ids: [jobId] })
 			})
 			const data = await response.json()
 
-			if (data.job) {
-				this.jobs.set(jobId, data.job)
+			if (data.jobs && data.jobs.length > 0) {
+				this.jobs.set(jobId, data.jobs[0])
 			}
 		} catch (error) {
 			console.error(`Failed to fetch job ${jobId}:`, error)
@@ -187,21 +245,142 @@ class JobManager {
 	}
 
 	/**
+	 * Toggle selection of a single job
+	 */
+	toggleJobSelection(jobId) {
+		if (this.selectedJobs.has(jobId)) {
+			this.selectedJobs.delete(jobId)
+		} else {
+			this.selectedJobs.add(jobId)
+		}
+		this.render()
+	}
+
+	/**
+	 * Select/Deselect all jobs in a column (respecting filter)
+	 */
+	toggleSelectAll(columnType) {
+		const jobs = this.filterJobs(columnType)
+		const allSelected = jobs.every(job => this.selectedJobs.has(job.id))
+		
+		if (allSelected) {
+			jobs.forEach(job => this.selectedJobs.delete(job.id))
+		} else {
+			jobs.forEach(job => this.selectedJobs.add(job.id))
+		}
+		this.render()
+	}
+
+	/**
+	 * Update toolbar button states
+	 */
+	updateToolbar() {
+		const count = this.selectedJobs.size
+		
+		const refreshBtn = document.getElementById('batch-refresh-btn')
+		const refreshCount = document.getElementById('batch-refresh-count')
+		if (refreshBtn && refreshCount) {
+			refreshBtn.disabled = count === 0
+			refreshCount.textContent = count > 0 ? `(${count})` : ''
+		}
+
+		const deleteBtn = document.getElementById('batch-delete-btn')
+		const deleteCount = document.getElementById('batch-delete-count')
+		if (deleteBtn && deleteCount) {
+			deleteBtn.disabled = count === 0
+			deleteCount.textContent = count > 0 ? `(${count})` : ''
+		}
+	}
+
+	/**
+	 * Batch Delete
+	 */
+	async batchDelete() {
+		if (this.selectedJobs.size === 0) return
+		
+		// Immediate UI update (optimistic)
+		const idsToDelete = Array.from(this.selectedJobs)
+		
+		const url = OC.generateUrl('/apps/hyperviewer/api/jobs/batch-delete')
+		
+		try {
+			await fetch(url, {
+				method: 'POST',
+				headers: { 
+					requesttoken: OC.requestToken,
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ ids: idsToDelete })
+			})
+			
+			// Remove from local state
+			idsToDelete.forEach(id => this.jobs.delete(id))
+			this.selectedJobs.clear()
+			this.render()
+			
+		} catch (error) {
+			console.error('Batch delete failed:', error)
+			alert('Failed to delete selected jobs')
+			this.refresh() // Revert UI
+		}
+	}
+
+	/**
+	 * Batch Refresh
+	 */
+	async batchRefresh() {
+		if (this.selectedJobs.size === 0) return
+
+		const idsToRefresh = Array.from(this.selectedJobs)
+		const url = OC.generateUrl('/apps/hyperviewer/api/jobs/batch-status')
+		
+		try {
+			const response = await fetch(url, {
+				method: 'POST',
+				headers: { 
+					requesttoken: OC.requestToken,
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ ids: idsToRefresh })
+			})
+			
+			const data = await response.json()
+			
+			if (data.jobs) {
+				data.jobs.forEach(job => this.jobs.set(job.id, job))
+				this.render()
+			}
+			
+		} catch (error) {
+			console.error('Batch refresh failed:', error)
+		}
+	}
+
+	/**
 	 * Delete a job from the queue
 	 */
+	/**
+	 * Delete a job from the queue (using batch endpoint)
+	 */
 	async deleteJob(jobId) {
-		if (!confirm('Delete this job?')) return
-
-		const url = OC.generateUrl(`/apps/hyperviewer/api/jobs/active/${jobId}`)
+		const url = OC.generateUrl('/apps/hyperviewer/api/jobs/batch-delete')
 
 		try {
 			const response = await fetch(url, {
-				method: 'DELETE',
-				headers: { requesttoken: OC.requestToken }
+				method: 'POST',
+				headers: { 
+					requesttoken: OC.requestToken,
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ ids: [jobId] })
 			})
 
-			if (response.ok) {
+			const data = await response.json()
+
+			if (data.success) {
 				this.jobs.delete(jobId)
+				// Also remove from selection if present
+				this.selectedJobs.delete(jobId) 
 				this.render()
 			} else {
 				alert('Failed to delete job')
@@ -217,14 +396,25 @@ class JobManager {
 	 */
 	filterJobs(status) {
 		return Array.from(this.jobs.values()).filter(job => {
+			// Status Filter
+			let statusMatch = false
 			if (status === 'current') {
-				return job.status === 'pending' || job.status === 'processing'
+				statusMatch = job.status === 'pending' || job.status === 'processing'
 			} else if (status === 'done') {
-				return job.status === 'completed'
+				statusMatch = job.status === 'completed'
 			} else if (status === 'failed') {
-				return job.status === 'failed' || job.status === 'aborted'
+				statusMatch = job.status === 'failed' || job.status === 'aborted'
 			}
-			return false
+			if (!statusMatch) return false
+
+			// Search Filter
+			if (this.searchQuery) {
+				const filename = (job.filename || '').toLowerCase()
+				const directory = (job.directory || '').toLowerCase()
+				return filename.includes(this.searchQuery) || directory.includes(this.searchQuery)
+			}
+			
+			return true
 		})
 	}
 
@@ -235,6 +425,7 @@ class JobManager {
 		this.renderColumn('current', this.filterJobs('current'))
 		this.renderColumn('done', this.filterJobs('done'))
 		this.renderColumn('failed', this.filterJobs('failed'))
+		this.updateToolbar()
 	}
 
 	/**
@@ -242,10 +433,7 @@ class JobManager {
 	 */
 	renderColumn(columnType, jobs) {
 		const container = document.getElementById(`jobs-${columnType}`)
-		if (!container) {
-			console.warn(`Container not found: jobs-${columnType}`)
-			return
-		}
+		if (!container) return
 
 		// Update count
 		const countEl = document.getElementById(`jobs-${columnType}-count`)
@@ -253,8 +441,32 @@ class JobManager {
 			countEl.textContent = jobs.length
 		}
 
+		// Update Header (Select All)
+		const headerEl = container.parentElement.querySelector('.jobs-column-header')
+		if (headerEl) {
+			let checkbox = headerEl.querySelector('.column-select-all')
+			if (!checkbox) {
+				// Inject checkbox
+				const span = document.createElement('span')
+				span.innerHTML = `<input type="checkbox" class="column-select-all" data-column="${columnType}">`
+				headerEl.insertBefore(span.firstChild, headerEl.firstChild)
+				
+				// Re-query
+				checkbox = headerEl.querySelector('.column-select-all')
+				checkbox.addEventListener('change', (e) => this.toggleSelectAll(columnType))
+			}
+			
+			// Update state
+			const allSelected = jobs.length > 0 && jobs.every(job => this.selectedJobs.has(job.id))
+			const someSelected = jobs.some(job => this.selectedJobs.has(job.id))
+			
+			checkbox.checked = allSelected
+			checkbox.indeterminate = someSelected && !allSelected
+		}
+
 		if (jobs.length === 0) {
-			container.innerHTML = `<div class="jobs-empty">No ${columnType} jobs</div>`
+			const emptyMsg = this.searchQuery ? 'No matching jobs' : `No ${columnType} jobs`
+			container.innerHTML = `<div class="jobs-empty">${emptyMsg}</div>`
 			return
 		}
 
@@ -262,24 +474,35 @@ class JobManager {
 		const sortedJobs = jobs.sort((a, b) => {
 			const timeA = a.completedAt || a.failedAt || a.startedAt || a.addedAt || 0
 			const timeB = b.completedAt || b.failedAt || b.startedAt || b.addedAt || 0
-			return timeB - timeA // Descending (newest first)
+			return timeB - timeA
 		})
 
 		container.innerHTML = sortedJobs.map(job => this.renderJobCard(job)).join('')
 
-		// Add event listeners for action buttons
-		container.querySelectorAll('.job-action-btn').forEach(btn => {
-			btn.addEventListener('click', (e) => {
-				e.preventDefault()
-				e.stopPropagation()
-				const action = e.currentTarget.dataset.action
-				const jobId = e.currentTarget.dataset.jobId
-				console.log('Button clicked:', action, jobId)
-				if (action === 'refresh') {
-					this.refreshJob(jobId)
-				} else if (action === 'delete') {
-					this.deleteJob(jobId)
-				}
+		// Attach Observers and Listeners
+		container.querySelectorAll('.job-card').forEach(card => {
+			// Visibility Observer
+			this.observer.observe(card)
+			
+			// Checkbox Listener
+			const checkbox = card.querySelector('.job-checkbox')
+			checkbox.addEventListener('change', (e) => {
+				this.toggleJobSelection(card.dataset.jobId)
+			})
+			
+			// Action Buttons
+			card.querySelectorAll('.job-action-btn').forEach(btn => {
+				btn.addEventListener('click', (e) => {
+					e.preventDefault()
+					e.stopPropagation()
+					const action = e.currentTarget.dataset.action
+					const jobId = e.currentTarget.dataset.jobId
+					if (action === 'refresh') {
+						this.refreshJob(jobId)
+					} else if (action === 'delete') {
+						this.deleteJob(jobId)
+					}
+				})
 			})
 		})
 	}
@@ -295,25 +518,40 @@ class JobManager {
 		const timestampsHtml = this.renderTimestamps(job)
 		const errorHtml = job.error ? `<strong>❌ Error:</strong> ${this.escapeHtml(job.error)}` : ''
 		const resolutionsHtml = this.renderResolutions(job)
+		const isSelected = this.selectedJobs.has(job.id)
 
 		return `
-			<div class="job-card ${job.status === 'failed' ? 'retry-pending-card' : ''}" data-job-id="${job.id}">
-				<div class="job-filename" title="${this.escapeHtml(job.directory || '')}/${this.escapeHtml(job.filename || '')}">
-					${this.escapeHtml(job.filename || 'Unknown')}
+			<div class="job-card ${job.status === 'failed' ? 'retry-pending-card' : ''} ${isSelected ? 'selected' : ''}" data-job-id="${job.id}">
+				<div class="job-selection-checkbox">
+					<input type="checkbox" class="job-checkbox" data-job-id="${job.id}" ${isSelected ? 'checked' : ''}>
 				</div>
-				${directoryHtml ? `<div class="job-directory">${directoryHtml}</div>` : ''}
-				${progressHtml}
-				${timestampsHtml ? `<div class="job-timestamps">${timestampsHtml}</div>` : ''}
-				${errorHtml ? `<div class="job-error">${errorHtml}</div>` : ''}
-				<div class="job-footer">
-					<div class="job-footer-left">
-						${resolutionsHtml ? `<div class="job-resolutions">${resolutionsHtml}</div>` : ''}
+				<div class="job-content">
+					<div class="job-filename" title="${this.escapeHtml(job.filename)}">${this.escapeHtml(job.filename)}</div>
+					
+					${resolutionsHtml}
+
+					<div class="job-details">
+						${directoryHtml}
+					</div>
+
+					${progressHtml}
+					${timestampsHtml}
+					${errorHtml}
+
+					<div class="job-footer">
+						<div class="job-footer-left">
+							<span class="job-status ${statusClass}">${statusText}</span>
+						</div>
+						
 						<div class="job-actions">
-							<button class="job-action-btn" data-action="refresh" data-job-id="${job.id}" title="Refresh">🔄</button>
-							<button class="job-action-btn" data-action="delete" data-job-id="${job.id}" title="Delete">🗑️</button>
+							<button class="job-action-btn" data-action="refresh" data-job-id="${job.id}" title="Refresh status">
+								<span class="icon-refresh"></span>
+							</button>
+							<button class="job-action-btn" data-action="delete" data-job-id="${job.id}" title="Delete job">
+								<span class="icon-delete"></span>
+							</button>
 						</div>
 					</div>
-					<span class="job-status ${statusClass}">${statusText}</span>
 				</div>
 			</div>
 		`

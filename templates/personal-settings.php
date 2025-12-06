@@ -34,9 +34,28 @@ script('hyperviewer', 'job-management');
 	<h3><?php p($l->t('Job Queue')); ?></h3>
 	<p class="settings-hint"><?php p($l->t('Monitor transcoding jobs in real-time')); ?></p>
 	
-	<button id="refresh-jobs-btn" class="button">
-		<?php p($l->t('Refresh Data')); ?>
-	</button>
+	<div class="jobs-toolbar">
+		<div class="jobs-search">
+			<input type="text" id="jobs-search-input" placeholder="<?php p($l->t('Search jobs...')); ?>" class="jobs-search-input">
+		</div>
+		<div class="jobs-actions-group">
+			<button id="batch-refresh-btn" class="button" disabled>
+				<span class="icon-refresh"></span>
+				<?php p($l->t('Refresh Selected')); ?>
+				<span id="batch-refresh-count" class="hidden-counter"></span>
+			</button>
+			<button id="batch-delete-btn" class="button button-danger" disabled>
+				<span class="icon-delete"></span>
+				<?php p($l->t('Delete Selected')); ?>
+				<span id="batch-delete-count" class="hidden-counter"></span>
+			</button>
+			<div class="separator-vertical"></div>
+			<button id="refresh-jobs-btn" class="button primary">
+				<span class="icon-refresh"></span>
+				<?php p($l->t('Refresh All')); ?>
+			</button>
+		</div>
+	</div>
 
 	<div class="jobs-grid">
 		<!-- Current Jobs Column -->
