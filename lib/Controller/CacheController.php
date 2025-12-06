@@ -549,7 +549,7 @@ class CacheController extends Controller {
 
 		try {
 			$lastId = $this->request->getParam('lastId', '');
-			$limit = min((int)$this->request->getParam('limit', 10), 50); // Max 50 items
+			$limit = min((int)$this->request->getParam('limit', 10), 1000); // Max 1000 items
 			
 			$allJobs = $this->processManager->getQueue();
 			$userJobs = [];
