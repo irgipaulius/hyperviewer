@@ -801,21 +801,26 @@ function openUnifiedCacheDialog(options) {
 		modal.classList.add("show");
 	});
 
-	// Populate cache location options with hardcoded choices
+	// Determine directory path for display
+	const displayPath = isDirectory 
+		? directoryPath 
+		: (files[0]?.context?.dir || files[0]?.context?.fileList?.getCurrentDirectory() || "/");
+
+	// Populate cache location options
 	const container = modal.querySelector("#cache-locations-container");
 	container.innerHTML = `
 		<label class="option-item">
 			<input type="radio" name="cache_location" value="relative" checked>
 			<div class="option-content">
 				<span class="option-title">Relative (Parent Directory)</span>
-				<span class="option-desc">Cache stored alongside your videos. Best for large storage that may be slower (HDD, network drives).</span>
+				<span class="option-desc">Cache stored in: <strong>${displayPath}</strong></span>
 			</div>
 		</label>
 		<label class="option-item">
 			<input type="radio" name="cache_location" value="home">
 			<div class="option-content">
 				<span class="option-title">Home (User Root)</span>
-				<span class="option-desc">Cache stored in your home directory. Usually faster due to SSD/RAM storage, ideal for frequently accessed videos.</span>
+				<span class="option-desc">Cache stored in your home directory (/HyperViewer/cache).</span>
 			</div>
 		</label>
 	`;
@@ -1102,8 +1107,9 @@ async function startCacheGeneration(files, directoryPath = null) {
 	// Prepare files data for backend
 	const filesData = files.map(file => ({
 		filename: file.filename,
-		// Use provided directoryPath, or fallback to file context, or default to "/"
+		// Prioritize file's own directory (from discovery), then provided directoryPath, then context
 		directory:
+			file.directory ||
 			directoryPath ||
 			file.context?.dir ||
 			file.context?.fileList?.getCurrentDirectory() ||
