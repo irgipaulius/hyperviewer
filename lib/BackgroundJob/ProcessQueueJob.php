@@ -33,7 +33,7 @@ class ProcessQueueJob extends TimedJob {
 	}
 
 	private function isWorkerRunning(): bool {
-		$pidFile = \OC::$server->getTempManager()->getTemporaryFolder() . '/hyperviewer_worker.pid';
+		$pidFile = sys_get_temp_dir() . '/hyperviewer_worker.pid';
 		if (file_exists($pidFile)) {
 			// Check if file is stale (older than 24h just in case)
 			if (time() - filemtime($pidFile) > 86400) {

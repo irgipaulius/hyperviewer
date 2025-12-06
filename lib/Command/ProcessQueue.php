@@ -37,14 +37,17 @@ class ProcessQueue extends Command {
 			pcntl_signal(SIGINT, [$this, 'handleSignal']);
 		}
 
+
 		// Create PID file
-		$pidFile = \OC::$server->getTempManager()->getTemporaryFolder() . '/hyperviewer_worker.pid';
+		$pidFile = sys_get_temp_dir() . '/hyperviewer_worker.pid';
 		if (file_exists($pidFile)) {
 			$pid = (int)file_get_contents($pidFile);
-			if (posix_kill($pid, 0)) {
+			// Check if process is running
+			if ($pid > 0 && posix_kill($pid, 0)) {
 				$output->writeln('<error>Worker is already running (PID: ' . $pid . ')</error>');
 				return 1;
 			}
+			// Stale PID file
 			unlink($pidFile);
 		}
 
