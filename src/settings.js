@@ -89,7 +89,7 @@ function refreshStatistics() {
 			const actualStats = stats.stats || stats
 
 			document.getElementById('stat-active').textContent = actualStats.activeJobs || 0
-			document.getElementById('stat-autogen').textContent = actualStats.autoGenDirectories || 0
+			document.getElementById('stat-cache-size').textContent = actualStats.totalCacheSize || '0 B'
 			document.getElementById('stat-completed').textContent = actualStats.completedJobs || 0
 			document.getElementById('stat-pending').textContent = actualStats.pendingJobs || 0
 		})

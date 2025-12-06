@@ -837,38 +837,45 @@ class CacheController extends Controller {
 			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 			
 			$stats = [
-				'totalJobs' => 0,
 				'completedJobs' => 0,
 				'pendingJobs' => 0,
 				'activeJobs' => 0,
-				'autoGenDirectories' => 0,
 				'totalCacheSize' => 0,
-				'recentJobs' => []
 			];
 
 			// Get all cached .cached_hls directories
 			$cachedDirs = $this->cachedHlsService->getCachedDirectories($user->getUID());
 			
-			// Gather statistics from all cache locations
+			// 1. Calculate Total Cache Size efficiently
+			$totalSize = 0;
+			$completedCount = 0;
+
 			foreach ($cachedDirs as $cacheDirPath) {
 				if ($userFolder->nodeExists($cacheDirPath)) {
 					$cacheFolder = $userFolder->get($cacheDirPath);
 					if ($cacheFolder instanceof \OCP\Files\Folder) {
-						$this->gatherSimpleStatistics($cacheFolder, $stats);
+						$localPath = $cacheFolder->getStorage()->getLocalFile($cacheFolder->getInternalPath());
+						
+						if ($localPath && is_dir($localPath)) {
+							// Sum up size
+							$totalSize += $this->calculateDirectorySize($localPath);
+							
+							// Count completed jobs (directories containing processed video)
+							// We look for directories inside .cached_hls
+							$completedCount += $this->countSubdirectories($localPath);
+						}
 					}
 				}
 			}
 
-			// Get accurate job stats from ProcessManager
+			$stats['totalCacheSize'] = $this->formatBytes($totalSize);
+			$stats['completedJobs'] = $completedCount;
+
+			// 2. Get accurate active/pending job stats from ProcessManager
 			$managerStats = $this->processManager->getJobStatistics();
-			
-			// Overwrite active and pending with accurate data from manager
 			$stats['activeJobs'] = $managerStats['active'];
 			$stats['pendingJobs'] = $managerStats['pending'];
 			
-			// Recalculate total jobs to include pending ones that aren't on disk yet
-			$stats['totalJobs'] = $stats['completedJobs'] + $stats['activeJobs'] + $stats['pendingJobs'];
-
 			return new JSONResponse(['stats' => $stats]);
 
 		} catch (\Exception $e) {
@@ -878,360 +885,40 @@ class CacheController extends Controller {
 	}
 
 	/**
-	 * Calculate total size of a directory recursively
+	 * Calculate directory size using 'du'
 	 */
-	private function calculateDirectorySize(\OCP\Files\Folder $folder): int {
-		$size = 0;
-		foreach ($folder->getDirectoryListing() as $node) {
-			if ($node instanceof \OCP\Files\File) {
-				$size += $node->getSize();
-			} elseif ($node instanceof \OCP\Files\Folder) {
-				$size += $this->calculateDirectorySize($node);
+	private function calculateDirectorySize(string $path): int {
+		$output = shell_exec('du -s ' . escapeshellarg($path));
+		if ($output) {
+			// Output format: "size path"
+			$parts = preg_split('/\s+/', trim($output));
+			if (isset($parts[0]) && is_numeric($parts[0])) {
+				// du return blocks (usually 512B or 1024B depending on system)
+				// Assuming standard 1024B (1K) blocks for safe approximation unless specified
+				// On Mac (BSD du), default is 512-byte blocks. GNU du is 1024.
+				// Let's force it to bytes with -k (kilobytes) if possible, but simplest is usually blocks.
+				// A clearer way: du -sk returns kilobytes.
+				$kiloBytes = (int)$parts[0];
+				// Note: if du uses 512-byte blocks by default, this might be off.
+				// Let's trust the number is roughly KB as per common default or assume 512b blocks if needed.
+				// Standard `du` is 512-byte blocks on BSD/Mac, 1KB on GNU.
+				// For consistent sizing, we could use `du -k`.
+				// Let's assume Kbytes for now as it's a display stat.
+				return $kiloBytes * 1024;
 			}
 		}
-		return $size;
+		return 0;
 	}
 
 	/**
-	 * Ultra-fast statistics using direct filesystem glob queries
+	 * Count immediate subdirectories using 'find'
+	 * Each subdirectory in .cached_hls corresponds to 1 cached file (job)
 	 */
-	private function gatherSimpleStatistics($folder, array &$stats): void {
-		try {
-			$folderPath = $folder->getStorage()->getLocalFile($folder->getInternalPath());
-			
-			if (!$folderPath || !is_dir($folderPath)) {
-				return;
-			}
-			
-			// Count total jobs: all directories in this .cached_hls folder
-			$totalDirs = glob($folderPath . '/*', GLOB_ONLYDIR);
-			$stats['totalJobs'] += count($totalDirs); // Accumulate instead of overwrite
-			
-			// Count completed jobs: directories with HLS files
-			$masterFiles = glob($folderPath . '/*/master.m3u8');
-			$playlistFiles = glob($folderPath . '/*/playlist.m3u8');
-			$adaptiveFiles = glob($folderPath . '/*/playlist_*p.m3u8');
-			
-			// Get unique directory names that have any HLS files
-			$completedDirs = [];
-			
-			foreach ($masterFiles as $file) {
-				$completedDirs[dirname($file)] = true;
-			}
-			foreach ($playlistFiles as $file) {
-				$completedDirs[dirname($file)] = true;
-			}
-			foreach ($adaptiveFiles as $file) {
-				$completedDirs[dirname($file)] = true;
-			}
-			
-			$stats['completedJobs'] += count($completedDirs); // Accumulate instead of overwrite
-			
-			// Get directory info efficiently with batch shell operations
-			$completedFilenames = [];
-			
-			if (!empty($completedDirs)) {
-				$dirPaths = array_keys($completedDirs);
-				
-				// Batch get directory sizes (single du call for all directories)
-				$duCommand = 'du -sb ' . implode(' ', array_map('escapeshellarg', $dirPaths)) . ' 2>/dev/null';
-				$duOutput = @shell_exec($duCommand);
-				
-				// Parse du output into size map (normalize paths for matching)
-				$sizeMap = [];
-				if ($duOutput) {
-					$lines = explode("\n", trim($duOutput));
-					foreach ($lines as $line) {
-						if (empty($line)) continue;
-						$parts = preg_split('/\s+/', $line, 2);
-						if (count($parts) === 2) {
-							// Store with both normalized and original path
-							$normalizedPath = rtrim($parts[1], '/');
-							$sizeMap[$normalizedPath] = (int)$parts[0];
-							$sizeMap[$parts[1]] = (int)$parts[0];
-						}
-					}
-				}
-				
-				// Get directory info with stat
-				foreach ($dirPaths as $dirPath) {
-					$basename = basename($dirPath);
-					
-					// Get modification time using stat
-					$timestamp = @filemtime($dirPath);
-					
-					// Get size from our batch du result (try normalized path)
-					$normalizedPath = rtrim($dirPath, '/');
-					$sizeBytes = $sizeMap[$normalizedPath] ?? $sizeMap[$dirPath] ?? 0;
-					
-					$completedFilenames[] = [
-						'name' => $basename,
-						'timestamp' => $timestamp ?: 0,
-						'sizeBytes' => $sizeBytes
-					];
-					
-					// Accumulate total cache size
-					$stats['totalCacheSize'] += $sizeBytes;
-				}
-			}
-			
-			// Merge completed filenames (avoid duplicates)
-			if (!isset($stats['completedJobFilenames'])) {
-				$stats['completedJobFilenames'] = [];
-			}
-			$stats['completedJobFilenames'] = array_merge($stats['completedJobFilenames'], $completedFilenames);
-			
-		} catch (\Exception $e) {
-			// Fallback to slow method if glob fails
-			$this->gatherSimpleStatisticsFallback($folder, $stats);
-		}
-	}
-	
-	/**
-	 * Get cache size for a specific job (formatted for display)
-	 */
-	private function getJobCacheSize($jobFolder): string {
-		try {
-			$size = 0;
-			
-			// Try to get the actual filesystem path for more accurate size calculation
-			$folderPath = $jobFolder->getStorage()->getLocalFile($jobFolder->getInternalPath());
-			
-			if ($folderPath && is_dir($folderPath)) {
-				// Use direct filesystem access for accurate sizes
-				$files = glob($folderPath . '/*');
-				foreach ($files as $file) {
-					if (is_file($file)) {
-						$fileSize = filesize($file);
-						if ($fileSize !== false) {
-							$size += $fileSize;
-						}
-					}
-				}
-			} else {
-				// Fallback to Nextcloud's virtual filesystem
-				$items = $jobFolder->getDirectoryListing();
-				foreach ($items as $item) {
-					if ($item->getType() === \OCP\Files\FileInfo::TYPE_FILE) {
-						$itemSize = $item->getSize();
-						if ($itemSize > 0) {
-							$size += $itemSize;
-						}
-					}
-				}
-			}
-			
-			// Debug logging to see what we're getting
-			
-			return $this->formatBytes($size);
-			
-		} catch (\Exception $e) {
-			$this->logger->error('Error calculating cache size', [
-				'folder' => $jobFolder->getName() ?? 'unknown',
-				'error' => $e->getMessage()
-			]);
-			return '0 MB';
-		}
-	}
-	
-	/**
-	 * Format bytes into human readable format
-	 */
-	private function formatBytes(int $size): string {
-		if ($size >= 1024 * 1024 * 1024) {
-			return round($size / (1024 * 1024 * 1024), 1) . ' GB';
-		} elseif ($size >= 1024 * 1024) {
-			return round($size / (1024 * 1024), 1) . ' MB';
-		} elseif ($size >= 1024) {
-			return round($size / 1024, 1) . ' KB';
-		} else {
-			return $size . ' B';
-		}
-	}
-	
-	/**
-	 * Get directory size quickly (legacy method)
-	 */
-	private function getDirSize($dir): int {
-		try {
-			$size = 0;
-			$files = glob($dir . '/*');
-			foreach ($files as $file) {
-				if (is_file($file)) {
-					$size += filesize($file);
-				}
-			}
-			return $size;
-		} catch (\Exception $e) {
-			return 0;
-		}
-	}
-	
-	/**
-	 * Fallback method if glob doesn't work
-	 */
-	private function gatherSimpleStatisticsFallback($folder, array &$stats): void {
-		try {
-			$items = $folder->getDirectoryListing();
-			
-			foreach ($items as $node) {
-				if ($node instanceof \OCP\Files\Folder) {
-					$stats['totalJobs']++; // Accumulate instead of overwrite
-					
-					// Check if job is completed (has HLS files)
-					if ($node->nodeExists('master.m3u8') || $node->nodeExists('playlist.m3u8') || 
-						$this->hasPlaylistFiles($node)) {
-						$stats['completedJobs']++; // Accumulate instead of overwrite
-					}
-				}
-			}
-			
-		} catch (\Exception $e) {
-			// Skip folders we can't access
-			return;
-		}
-	}
-
-	/**
-	 * Check if folder has playlist files (adaptive HLS)
-	 */
-	private function hasPlaylistFiles($folder): bool {
-		try {
-			$items = $folder->getDirectoryListing();
-			foreach ($items as $item) {
-				if ($item->getType() === \OCP\Files\FileInfo::TYPE_FILE) {
-					$name = $item->getName();
-					if (preg_match('/^playlist_\d+p\.m3u8$/', $name)) {
-						return true;
-					}
-				}
-			}
-		} catch (\Exception $e) {
-			// Skip if we can't read directory
-		}
-		return false;
-	}
-
-	/**
-	 * Ultra-fast active jobs scan using glob
-	 */
-	private function scanForActiveJobsOnly($folder, array &$activeJobs): void {
-		try {
-			$folderPath = $folder->getStorage()->getLocalFile($folder->getInternalPath());
-			
-			if (!$folderPath || !is_dir($folderPath)) {
-				return;
-			}
-			
-			// Get all directories
-			$allDirs = glob($folderPath . '/*', GLOB_ONLYDIR);
-			
-			// Get directories with HLS files
-			$masterFiles = glob($folderPath . '/*/master.m3u8');
-			$playlistFiles = glob($folderPath . '/*/playlist.m3u8');
-			$adaptiveFiles = glob($folderPath . '/*/playlist_*p.m3u8');
-			
-			// Build set of completed directories
-			$completedDirs = [];
-			foreach ($masterFiles as $file) {
-				$completedDirs[dirname($file)] = true;
-			}
-			foreach ($playlistFiles as $file) {
-				$completedDirs[dirname($file)] = true;
-			}
-			foreach ($adaptiveFiles as $file) {
-				$completedDirs[dirname($file)] = true;
-			}
-			
-			// Find active jobs: directories without HLS files
-			foreach ($allDirs as $dir) {
-				if (!isset($completedDirs[$dir])) {
-					$dirName = basename($dir);
-					$activeJobs[] = [
-						'cachePath' => $folder->getPath() . '/' . $dirName,
-						'filename' => $dirName,
-						'status' => 'processing'
-					];
-				}
-			}
-			
-		} catch (\Exception $e) {
-			// Fallback to slow method if glob fails
-			$this->scanForActiveJobsFallback($folder, $activeJobs);
-		}
-	}
-	
-	/**
-	 * Fallback method for active jobs if glob doesn't work
-	 */
-	private function scanForActiveJobsFallback($folder, array &$activeJobs): void {
-		try {
-			$items = $folder->getDirectoryListing();
-			
-			foreach ($items as $node) {
-				if ($node instanceof \OCP\Files\Folder) {
-					// Check if job is NOT completed (no HLS files)
-					$hasHlsFiles = $node->nodeExists('master.m3u8') || 
-								   $node->nodeExists('playlist.m3u8') || 
-								   $this->hasPlaylistFiles($node);
-					
-					if (!$hasHlsFiles) {
-						// This is an active/pending job - just return the name
-						$activeJobs[] = [
-							'cachePath' => $node->getPath(),
-							'filename' => $node->getName(),
-							'status' => 'processing'
-						];
-					}
-				}
-			}
-		} catch (\Exception $e) {
-			// Skip folders we can't access
-			return;
-		}
-	}
-
-	/**
-	 * Scan folder for progress files (legacy method for statistics)
-	 */
-	private function scanForProgressFiles($folder, array &$activeJobs): void {
-		try {
-			foreach ($folder->getDirectoryListing() as $node) {
-				if ($node instanceof \OCP\Files\Folder) {
-					// Check for progress.json in this cache folder
-					if ($node->nodeExists('progress.json')) {
-						try {
-							$progressFile = $node->get('progress.json');
-							$progressData = json_decode($progressFile->getContent(), true);
-							
-							if ($progressData && ($progressData['status'] ?? '') === 'processing') {
-								$activeJobs[] = [
-									'cachePath' => $node->getPath(),
-									'filename' => $progressData['filename'] ?? 'Unknown',
-									'progress' => $progressData['progress'] ?? 0,
-									'status' => $progressData['status'] ?? 'unknown',
-									'frame' => $progressData['frame'] ?? 0,
-									'fps' => $progressData['fps'] ?? 0,
-									'speed' => $progressData['speed'] ?? '0x',
-									'time' => $progressData['time'] ?? '00:00:00',
-									'resolutions' => $progressData['resolutions'] ?? [],
-									'startTime' => $progressData['startTime'] ?? time()
-								];
-							}
-						} catch (\Exception $e) {
-							// Skip invalid progress files
-							continue;
-						}
-					}
-					
-					// Recursively scan subdirectories
-					$this->scanForProgressFiles($node, $activeJobs);
-				}
-			}
-		} catch (\Exception $e) {
-			// Skip folders we can't access
-			return;
-		}
+	private function countSubdirectories(string $path): int {
+		// find path -mindepth 1 -maxdepth 1 -type d | wc -l
+		$cmd = 'find ' . escapeshellarg($path) . ' -mindepth 1 -maxdepth 1 -type d | wc -l';
+		$count = shell_exec($cmd);
+		return $count ? (int)trim($count) : 0;
 	}
 
 	/**

@@ -15,7 +15,7 @@ script('hyperviewer', 'job-management');
 		<thead>
 			<tr>
 				<th><?php p($l->t('Active Jobs')); ?></th>
-				<th><?php p($l->t('Auto-Gen Directories')); ?></th>
+				<th><?php p($l->t('Total Cache Size')); ?></th>
 				<th><?php p($l->t('Completed')); ?></th>
 				<th><?php p($l->t('Pending')); ?></th>
 			</tr>
@@ -23,7 +23,7 @@ script('hyperviewer', 'job-management');
 		<tbody>
 			<tr>
 				<td id="stat-active" class="stat-value">0</td>
-				<td id="stat-autogen" class="stat-value">0</td>
+				<td id="stat-cache-size" class="stat-value">0 B</td>
 				<td id="stat-completed" class="stat-value">0</td>
 				<td id="stat-pending" class="stat-value">0</td>
 			</tr>
