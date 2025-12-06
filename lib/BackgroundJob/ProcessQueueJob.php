@@ -22,11 +22,6 @@ class ProcessQueueJob extends TimedJob {
 	}
 
 	protected function run($argument): void {
-		$startTime = time();
-		// run for 5 minutes.
-		while(time() - $startTime < 5 * 60) {
-			$this->processManager->processQueue();
-			sleep(1);
-		}
+		$this->processManager->processQueue();
 	}
 }
