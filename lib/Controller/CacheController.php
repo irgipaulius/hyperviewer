@@ -66,6 +66,21 @@ class CacheController extends Controller {
 		
 		// Add background job for each file
 		foreach ($files as $fileData) {
+			// Check if cache already exists anywhere
+			if (!$overwriteExisting) {
+				$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+				$existingCachePath = $this->cachedHlsService->findHlsCache(
+					$userFolder, 
+					$fileData['filename'], 
+					$user->getUID()
+				);
+				
+				if ($existingCachePath !== null) {
+					// Cache exists somewhere, skip queuing
+					continue;
+				}
+			}
+			
 			$directory = $fileData['directory'] ?? '';
 			
 			// Calculate cache path based on location type
@@ -261,7 +276,7 @@ class CacheController extends Controller {
 		}
 
 		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-		$cacheExists = $this->findHlsCache($userFolder, $filename, $directory, $user->getUID());
+		$cacheExists = $this->findHlsCache($userFolder, $filename, $user->getUID());
 
 		return new JSONResponse([
 			'exists' => $cacheExists !== null,
@@ -275,7 +290,7 @@ class CacheController extends Controller {
 	 * Find HLS cache for a video file
 	 * Uses cached directory locations for fast lookup
 	 */
-	private function findHlsCache($userFolder, string $filename, string $directory, string $userId): ?string {
+	private function findHlsCache($userFolder, string $filename, string $userId): ?string {
 		return $this->cachedHlsService->findHlsCache($userFolder, $filename, $userId);
 	}
 
@@ -924,7 +939,7 @@ class CacheController extends Controller {
 
 		// Check each video file
 		foreach ($filenames as $filename) {
-			$cachePath = $this->findHlsCache($userFolder, $filename, $directory, $user->getUID());
+			$cachePath = $this->findHlsCache($userFolder, $filename, $user->getUID());
 			if ($cachePath !== null) {
 				$cachedVideos[] = $filename;
 			}
