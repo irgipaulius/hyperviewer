@@ -8,8 +8,10 @@ use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
+use OCP\BackgroundJob\IJobList;
 use OCP\Util;
 use OCA\HyperViewer\BackgroundJob\AutoHlsGenerationJob;
+use OCA\HyperViewer\BackgroundJob\ProcessQueueJob;
 
 class Application extends App implements IBootstrap {
 	public const APP_ID = 'hyperviewer';
@@ -19,27 +21,30 @@ class Application extends App implements IBootstrap {
 	}
 
 	public function register(IRegistrationContext $context): void {
-		$context->registerService('AutoHlsGenerationJob', function() {
+		$context->registerService('AutoHlsGenerationJob', function () {
 			return \OC::$server->get(AutoHlsGenerationJob::class);
 		});
-		$context->registerService('ProcessQueueJob', function() {
-			return \OC::$server->get(\OCA\HyperViewer\BackgroundJob\ProcessQueueJob::class);
+
+		$context->registerService('ProcessQueueJob', function () {
+			return \OC::$server->get(ProcessQueueJob::class);
 		});
 	}
 
 	public function boot(IBootContext $context): void {
-		// Always inject our Files integration JS
+		// JS integration
 		Util::addScript(self::APP_ID, 'files-integration');
-		
-		// Register auto-generation cron job
-		$jobList = $context->getServerContainer()->get(\OCP\BackgroundJob\IJobList::class);
+
+		/** @var IJobList $jobList */
+		$jobList = $context->getServerContainer()->get(IJobList::class);
+
+		// Register auto-generation cron job once
 		if (!$jobList->has(AutoHlsGenerationJob::class, null)) {
-			$jobList->add(AutoHlsGenerationJob::class);
+			$jobList->add(AutoHlsGenerationJob::class, null);
 		}
-		
-		// Register process queue job
-		if (!$jobList->has(\OCA\HyperViewer\BackgroundJob\ProcessQueueJob::class, null)) {
-			$jobList->add(\OCA\HyperViewer\BackgroundJob\ProcessQueueJob::class);
+
+		// Register FFmpeg queue processor once
+		if (!$jobList->has(ProcessQueueJob::class, null)) {
+			$jobList->add(ProcessQueueJob::class, null);
 		}
 	}
 }
