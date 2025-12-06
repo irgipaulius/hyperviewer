@@ -90,7 +90,7 @@ class JobManager {
 		const url = OC.generateUrl('/apps/hyperviewer/api/jobs/active')
 		const params = new URLSearchParams({
 			lastId: this.lastId,
-			limit: '100'
+			limit: 100
 		})
 
 		try {
@@ -120,7 +120,7 @@ class JobManager {
 		const url = OC.generateUrl('/apps/hyperviewer/api/jobs/active')
 		const params = new URLSearchParams({
 			lastId: this.lastId,
-			limit: '100'
+			limit: 100
 		})
 
 		try {
