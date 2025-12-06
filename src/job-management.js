@@ -593,18 +593,18 @@ class JobManager {
 	renderTimestamps(job) {
 		const parts = []
 		if (job.addedAt) {
-			parts.push(`📅 Queued: ${this.formatDate(job.addedAt)}`)
+			parts.push(`<div class="job-timestamp">📅 Queued: ${this.formatDate(job.addedAt)}</div>`)
 		}
 		if (job.startedAt) {
-			parts.push(`▶️ Started: ${this.formatDate(job.startedAt)}`)
+			parts.push(`<div class="job-timestamp">▶️ Started: ${this.formatDate(job.startedAt)}</div>`)
 		}
 		if (job.completedAt) {
-			parts.push(`✅ Completed: ${this.formatDate(job.completedAt)}`)
+			parts.push(`<div class="job-timestamp">✅ Completed: ${this.formatDate(job.completedAt)}</div>`)
 		}
 		if (job.failedAt) {
-			parts.push(`⚠️ Failed: ${this.formatDate(job.failedAt)}`)
+			parts.push(`<div class="job-timestamp">⚠️ Failed: ${this.formatDate(job.failedAt)}</div>`)
 		}
-		return parts.map(p => `<span>${p}</span>`).join('')
+		return `<div class="job-timestamps-container">${parts.join('')}</div>`
 	}
 
 	renderResolutions(job) {

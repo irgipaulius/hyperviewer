@@ -341,4 +341,37 @@ class FFmpegProcessManager {
 
 		return $stats;
 	}
+
+	/**
+	 * Get a specific job by ID
+	 */
+	public function getJob(string $jobId): ?array {
+		$queue = $this->readQueue();
+		foreach ($queue as $job) {
+			if ($job['id'] === $jobId) {
+				return $job;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Delete a specific job
+	 */
+	public function deleteJob(string $jobId, string $userId): bool {
+		$queue = $this->readQueue();
+		$originalCount = count($queue);
+		
+		$queue = array_filter($queue, function($job) use ($jobId, $userId) {
+			// Keep job if ID doesn't match OR userId doesn't match (security check)
+			return !($job['id'] === $jobId && $job['userId'] === $userId);
+		});
+
+		if (count($queue) !== $originalCount) {
+			$this->saveQueue(array_values($queue));
+			return true;
+		}
+		
+		return false;
+	}
 }

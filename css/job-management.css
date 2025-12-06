@@ -245,6 +245,25 @@
 	height: 6px;
 }
 
+.job-card .job-error {
+	color: var(--color-error);
+	margin-top: 5px;
+	font-size: 13px;
+}
+
+.job-timestamp {
+	display: block;
+	font-size: 12px;
+	color: var(--color-text-maxcontrast);
+	margin-bottom: 2px;
+}
+
+.job-timestamps-container {
+	margin-top: 8px;
+	margin-bottom: 8px;
+	color: var(--color-text-maxcontrast);
+}
+
 .job-details {
 	display: flex;
 	flex-wrap: wrap;
