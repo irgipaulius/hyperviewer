@@ -26,7 +26,7 @@ class ProcessQueueJob extends TimedJob {
 		// run for 5 minutes.
 		while(time() - $startTime < 5 * 60) {
 			$this->processManager->processQueue();
-			sleep(1)
+			sleep(1);
 		}
 	}
 }
