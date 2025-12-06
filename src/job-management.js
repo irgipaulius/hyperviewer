@@ -63,11 +63,6 @@ class JobManager {
 			deleteBtn.addEventListener('click', () => this.batchDelete())
 		}
 		
-		// Refresh All
-		const refreshAllBtn = document.getElementById('refresh-jobs-btn')
-		if (refreshAllBtn) {
-			refreshAllBtn.addEventListener('click', () => this.refresh())
-		}
 	}
 
 	/**
@@ -205,21 +200,6 @@ class JobManager {
 		} catch (error) {
 			console.error(`Failed to fetch jobs batch:`, error)
 		}
-	}
-
-	/**
-	 * Start polling for new jobs and active job updates
-	 */
-	startPolling() {
-		if (this.pollInterval) {
-			clearInterval(this.pollInterval)
-		}
-
-		// Poll for new jobs every 10 seconds
-		this.pollInterval = setInterval(() => this.pollNewJobs(), 10000)
-
-		// Poll active (pending/processing) jobs every 5 seconds
-		this.activePollInterval = setInterval(() => this.pollActiveJobs(), 5000)
 	}
 
 	/**
@@ -583,6 +563,7 @@ class JobManager {
 	}
 
 	renderProgress(job) {
+		console.log('rendering processing job', job)
 		if (job.status !== 'processing') return ''
 		const progress = job.progress || 0
 		return `
@@ -620,6 +601,21 @@ class JobManager {
 		const resolutions = job.settings?.resolutions || []
 		if (resolutions.length === 0) return ''
 		return resolutions.map(res => `<span class="resolution-tag">${this.escapeHtml(res)}</span>`).join('')
+	}
+
+	startPolling() {
+		if (this.pollInterval) {
+			clearInterval(this.pollInterval)
+		}
+		if (this.activePollInterval) {
+			clearInterval(this.activePollInterval)
+		}
+
+		// Poll for new jobs every 10 seconds
+		this.pollInterval = setInterval(() => this.pollNewJobs(), 10000)
+
+		// Poll active (pending/processing) jobs every 5 seconds
+		this.activePollInterval = setInterval(() => this.pollActiveJobs(), 5000)
 	}
 
 	formatDate(timestamp) {

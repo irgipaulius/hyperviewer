@@ -11,6 +11,7 @@ module.exports = {
 		'semi': 'off',
 		'operator-linebreak': 'off',
 		'no-trailing-spaces': 'off',
+		'no-multiple-empty-lines': 'off',
 		// Keep only the important rules
 		'no-unused-vars': 'warn',
 		'no-undef': 'error'

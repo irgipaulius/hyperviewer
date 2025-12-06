@@ -1152,7 +1152,7 @@ async function startCacheGeneration(files, directoryPath = null) {
 				`Cache generation started for ${
 					files.length
 				} file(s).\n\nCache location: ${
-					options.cachePath
+					filesData.directory
 				}\n\nResolutions: ${options.resolutions.join(
 					", "
 				)}\n\nProcessing will run in the background.`,
