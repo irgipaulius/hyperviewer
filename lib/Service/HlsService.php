@@ -254,14 +254,21 @@ class HlsService {
 	}
 
 	private function initializeProgressFile(string $progressFile, string $filename, array $resolutions): void {
-		$data = [
+		$progressDir = dirname($progressFile);
+		if (!is_dir($progressDir)) {
+			if (!@mkdir($progressDir, 0775, true) && !is_dir($progressDir)) {
+				throw new \Exception('Failed to create progress directory: ' . $progressDir);
+			}
+		}
+
+		$initialData = [
 			'status' => 'processing',
 			'filename' => $filename,
 			'resolutions' => $resolutions,
 			'progress' => 0,
 			'startTime' => time()
 		];
-		file_put_contents($progressFile, json_encode($data));
+		file_put_contents($progressFile, json_encode($initialData));
 	}
 
 	private function updateProgressFileCompletion(string $progressFile, bool $success): void {
