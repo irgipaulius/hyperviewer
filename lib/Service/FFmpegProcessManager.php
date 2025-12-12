@@ -191,7 +191,26 @@ class FFmpegProcessManager {
 
 		// Spawn async worker via occ command
 		$serverRoot = \OC::$SERVERROOT;
-		$phpBinary = PHP_BINARY;
+		// Prefer the CLI php binary; PHP_BINARY may be php-fpm inside web context
+		$phpCandidates = [
+			PHP_BINDIR . '/php',
+			'/usr/local/bin/php',
+			'/usr/bin/php',
+			PHP_BINARY,
+		];
+		$phpBinary = null;
+		foreach ($phpCandidates as $candidate) {
+			if ($candidate && @is_executable($candidate)) {
+				$phpBinary = $candidate;
+				break;
+			}
+		}
+		if ($phpBinary === null) {
+			$this->logger->error('No executable php binary found to spawn async job for ' . $jobId);
+			$this->updateJobStatus($jobId, 'failed', 'No executable php binary found');
+			return;
+		}
+
 		$occPath = $serverRoot . '/occ';
 		$cmd = escapeshellcmd($phpBinary) . ' ' . escapeshellarg($occPath) . ' hyperviewer:run-job ' . escapeshellarg($jobId) . ' > /dev/null 2>&1 &';
 
@@ -393,11 +412,29 @@ class FFmpegProcessManager {
 	}
 
 	private function isJobRunning(array $job): bool {
-		// Simple check: if started more than 8 hours ago, assume dead
-		if (isset($job['startedAt']) && (time() - $job['startedAt']) > 4*7200) {
+		$pid = $job['pid'] ?? null;
+		if ($pid !== null && $pid !== '') {
+			if (!$this->isProcessAlive((int)$pid)) {
+				return false;
+			}
+		}
+
+		// Fallback: if started more than 8 hours ago, assume dead
+		if (isset($job['startedAt']) && (time() - $job['startedAt']) > 4 * 7200) {
 			return false;
 		}
 		return true;
+	}
+
+	private function isProcessAlive(int $pid): bool {
+		if ($pid <= 0) return false;
+
+		if (function_exists('posix_kill')) {
+			return @posix_kill($pid, 0);
+		}
+
+		// Fallback for systems without posix_kill
+		return file_exists('/proc/' . $pid);
 	}
 
 	private function handleStaleJob(string $jobId): void {
