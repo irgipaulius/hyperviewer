@@ -142,6 +142,8 @@ class HlsService {
 		
 		// Mark completion in progress file
 		$this->updateProgressFileCompletion($progressFile, true);
+
+		$this->logger->error('Transcode completed: ' . $filename);
 	}
 
 	private function executeFFmpegWithProgress(string $cmd, string $progressFile): void {
@@ -151,6 +153,7 @@ class HlsService {
 			2 => ['pipe', 'w']  // stderr
 		];
 
+		$this->logger->error('FFmpeg starting: ' . $cmd);
 		$process = proc_open($cmd, $descriptors, $pipes);
 
 		if (is_resource($process)) {
