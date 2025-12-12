@@ -75,7 +75,7 @@ class CacheController extends Controller {
 					$user->getUID()
 				);
 				
-				if ($existingCachePath !== null) {
+				if ($existingCachePath !== null && $overwriteExisting === false) {
 					// Cache exists somewhere, skip queuing
 					continue;
 				}
