@@ -412,33 +412,11 @@ class FFmpegProcessManager {
 	}
 
 	private function isJobRunning(array $job): bool {
-		$pid = $job['pid'] ?? null;
-		if ($pid !== null && $pid !== '') {
-			if (!$this->isProcessAlive((int)$pid)) {
-				return false;
-			}
-		}
-
 		// Fallback: if started more than 8 hours ago, assume dead
 		if (isset($job['startedAt']) && (time() - $job['startedAt']) > 4 * 7200) {
 			return false;
 		}
 		return true;
-	}
-
-	private function isProcessAlive(int $pid): bool {
-		if ($pid <= 0) return false;
-
-		if (function_exists('posix_kill') && @posix_kill($pid, 0)) {
-			return true;
-		}
-
-		// Fallback: check via ps (works on FreeBSD; /proc may be absent)
-		$escapedPid = escapeshellarg((string)$pid);
-		$output = [];
-		$returnVar = 0;
-		@exec('ps -p ' . $escapedPid . ' -o pid=', $output, $returnVar);
-		return $returnVar === 0 && !empty($output);
 	}
 
 	private function handleStaleJob(string $jobId): void {
