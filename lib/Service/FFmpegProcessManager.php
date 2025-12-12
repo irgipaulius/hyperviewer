@@ -62,13 +62,16 @@ class FFmpegProcessManager {
 
 		// Check for duplicates
 		foreach ($queue as $existingJob) {
-			if ($existingJob['userId'] === $userId && 
+			if ($settings['overwriteExisting'] === false &&
+				$existingJob['userId'] === $userId && 
 				$existingJob['filename'] === $filename && 
 				$existingJob['directory'] === $directory &&
 				$existingJob['status'] !== 'failed') {
 				return $existingJob['id'];
 			}
 		}
+
+		$this->logger->error('Adding job: ' . json_encode($job));
 
 		$queue[] = $job;
 		$this->saveQueue($queue);
