@@ -101,6 +101,9 @@ class CacheController extends Controller {
 			$jobIds[] = $jobId;
 		}
 
+		// Trigger processing immediately after enqueue
+		$this->processManager->processQueue();
+
 		return new JSONResponse([
 			'success' => true,
 			'jobIds' => $jobIds,

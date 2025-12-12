@@ -189,6 +189,9 @@ class AutoHlsGenerationJob extends TimedJob {
 				$this->processManager->addJob($userId, $video['filename'], $video['directory'], $settings);
 			}
 
+			// Trigger processing immediately after enqueue
+			$this->processManager->processQueue();
+
 		} catch (\Exception $e) {
 			$this->logger->error('Failed to find and queue videos', [
 				'path' => $basePath,
