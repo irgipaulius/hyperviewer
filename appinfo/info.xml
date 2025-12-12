@@ -39,6 +39,9 @@ Turn your Nextcloud into a lightweight remote video editing station — where yo
         <type>video/quicktime</type>
         <type>video/mp4</type>
     </types>
+    <commands>
+        <command>OCA\HyperViewer\Command\RunJobCommand</command>
+    </commands>
     <settings>
         <personal>OCA\HyperViewer\Settings\PersonalSettings</personal>
         <personal-section>OCA\HyperViewer\Settings\PersonalSection</personal-section>

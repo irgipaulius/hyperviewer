@@ -34,7 +34,10 @@ class Application extends App implements IBootstrap {
 			return \OC::$server->get(RunJobCommand::class);
 		});
 
-		$context->registerCommand(RunJobCommand::class);
+		// registerCommand is available on newer NC; guard for older API versions
+		if (method_exists($context, 'registerCommand')) {
+			$context->registerCommand(RunJobCommand::class);
+		}
 	}
 
 	public function boot(IBootContext $context): void {
