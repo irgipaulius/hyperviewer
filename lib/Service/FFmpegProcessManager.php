@@ -203,6 +203,7 @@ class FFmpegProcessManager {
 
 		$process = proc_open($cmd, $descriptors, $pipes);
 		if (is_resource($process)) {
+			$this->logger->error('Spawned async job for ' . $jobId . ' cmd=' . $cmd);
 			$status = proc_get_status($process);
 			$pid = $status['pid'] ?? null;
 			// Close pipes immediately; child keeps running
