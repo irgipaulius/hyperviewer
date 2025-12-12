@@ -102,7 +102,7 @@ class HlsService {
 			$variants['720p'] = $allVariants['720p'];
 		}
 
-		$ffmpegCmd = '/usr/local/bin/ffmpeg -y -i ' . escapeshellarg($inputPath);
+		$ffmpegCmd = '/usr/local/bin/ffmpeg -y -autorotate 1 -i ' . escapeshellarg($inputPath);
 		
 		// Check if input has audio
 		$hasAudio = $this->hasAudioStream($inputPath);

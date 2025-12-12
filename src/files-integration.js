@@ -189,6 +189,7 @@ function addHlsBadgesToFileList() {
 	 */
 	async function updateHlsBadges() {
 		console.log("🔍 Checking for videos to badge...");
+		let now = new Date();
 
 		const directory =
 			window.OCA?.Files?.App?.fileList?.getCurrentDirectory() || "/";
@@ -215,6 +216,8 @@ function addHlsBadgesToFileList() {
 		// Get all filenames
 		const filenames = videoFiles.map(f => f.name);
 
+		console.log(`Badge prep time: ${new Date() - now}ms`);
+		now = new Date();
 		try {
 			// Batch check all videos at once (much faster!)
 			const response = await fetch(
@@ -231,6 +234,8 @@ function addHlsBadgesToFileList() {
 					})
 				}
 			);
+			console.log(`Badge request time: ${new Date() - now}ms`);
+			now = new Date();
 
 			if (!response.ok) {
 				console.error("Batch check failed:", response.status);
@@ -241,13 +246,14 @@ function addHlsBadgesToFileList() {
 			const cachedVideos = new Set(result.cachedVideos || []);
 
 			console.log(
-				`✅ Batch check complete: ${cachedVideos.size}/${filenames.length} videos have HLS cache`
+				`✅ Batch check complete [${new Date() - now}ms]: ${cachedVideos.size}/${filenames.length} videos have HLS cache`
 			);
+			now = new Date();
 
 			// Apply badges to videos with cache
 			for (const videoFile of videoFiles) {
 				const filename = videoFile.name;
-
+				
 				// Skip if video doesn't have cache
 				if (!cachedVideos.has(filename)) {
 					continue;
@@ -298,10 +304,9 @@ function addHlsBadgesToFileList() {
 					badge.textContent = "HLS";
 					badge.title = "HLS cache available";
 					thumbnailContainer.appendChild(badge);
-
-					console.log(`✅ Added HLS badge to: ${filename}`);
 				}
 			}
+			console.log(`✅ Added HLS badges to ${videoFiles.length} videos in ${new Date() - now}ms`);
 		} catch (error) {
 			console.error("Failed to batch check HLS cache:", error);
 		}
@@ -315,7 +320,7 @@ function addHlsBadgesToFileList() {
 
 	// Update badges periodically but less frequently (30 seconds instead of 5)
 	// MutationObserver will catch most changes, this is just a safety net
-	setInterval(updateHlsBadges, 30000);
+	// setInterval(updateHlsBadges, 30000);
 
 	// Throttle mechanism for MutationObserver
 	let badgeUpdateTimeout = null;
