@@ -20,7 +20,7 @@ class FFmpegProcessManager {
 	private HlsService $hlsService;
 
 	private \OCP\Files\IAppData $appData;
-	private int $maxConcurrentJobs = 2;
+	private int $maxConcurrentJobs = 4;
 	private int $maxAttempts = 3;
 
 	public function __construct(
