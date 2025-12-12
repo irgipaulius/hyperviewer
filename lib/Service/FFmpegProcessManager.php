@@ -185,27 +185,82 @@ class FFmpegProcessManager {
 		// Update status to processing and increment attempts
 		$queue[$jobIndex]['status'] = 'processing';
 		$queue[$jobIndex]['startedAt'] = time();
-		$queue[$jobIndex]['pid'] = getmypid();
+		$queue[$jobIndex]['pid'] = null; // will set after spawn if available
 		$queue[$jobIndex]['attempts'] = ($queue[$jobIndex]['attempts'] ?? 0) + 1;
 		$this->saveQueue($queue);
 
+		// Spawn async worker via occ command
+		$serverRoot = \OC::$SERVERROOT;
+		$phpBinary = PHP_BINARY;
+		$occPath = $serverRoot . '/occ';
+		$cmd = escapeshellcmd($phpBinary) . ' ' . escapeshellarg($occPath) . ' hyperviewer:run-job ' . escapeshellarg($jobId) . ' > /dev/null 2>&1 &';
+
+		$descriptors = [
+			0 => ['pipe', 'r'],
+			1 => ['pipe', 'w'],
+			2 => ['pipe', 'w'],
+		];
+
+		$process = proc_open($cmd, $descriptors, $pipes);
+		if (is_resource($process)) {
+			$status = proc_get_status($process);
+			$pid = $status['pid'] ?? null;
+			// Close pipes immediately; child keeps running
+			foreach ($pipes as $pipe) {
+				fclose($pipe);
+			}
+			proc_close($process);
+
+			// Save child pid if available
+			if ($pid) {
+				$queue = $this->readQueue();
+				foreach ($queue as $idx => $job) {
+					if ($job['id'] === $jobId) {
+						$queue[$idx]['pid'] = $pid;
+						break;
+					}
+				}
+				$this->saveQueue($queue);
+			}
+		} else {
+			$this->logger->error('Failed to spawn async job for ' . $jobId . ' cmd=' . $cmd);
+			$this->updateJobStatus($jobId, 'failed', 'Failed to spawn async process');
+		}
+	}
+
+	/**
+	 * Run a job inline (used by the async child process).
+	 */
+	public function runJobInline(string $jobId): void {
+		$queue = $this->readQueue();
+		$jobIndex = -1;
+		
+		foreach ($queue as $index => $job) {
+			if ($job['id'] === $jobId) {
+				$jobIndex = $index;
+				break;
+			}
+		}
+
+		if ($jobIndex === -1) {
+			return;
+		}
+
 		try {
 			$this->logger->error('running transcoding job: ' . $queue[$jobIndex]['filename']);
-			// Delegate execution to HlsService
 			$this->hlsService->transcode(
 				$queue[$jobIndex]['userId'],
 				$queue[$jobIndex]['filename'],
 				$queue[$jobIndex]['directory'],
 				$queue[$jobIndex]['settings']
 			);
-			
-			// If we get here, transcoding finished successfully
+
 			$this->updateJobStatus($jobId, 'completed');
 		} catch (\Exception $e) {
 			$this->logger->error('Transcoding failed: ' . $e->getMessage() . ' Job: ' . json_encode($queue[$jobIndex]));
 			$this->updateJobStatus($jobId, 'failed', $e->getMessage());
 		} finally {
-			// immediately process another job if available
+			// After finishing, immediately try to fill the queue again
 			$this->processQueue();
 		}
 	}

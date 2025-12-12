@@ -12,6 +12,7 @@ use OCP\BackgroundJob\IJobList;
 use OCP\Util;
 use OCA\HyperViewer\BackgroundJob\AutoHlsGenerationJob;
 use OCA\HyperViewer\BackgroundJob\ProcessQueueJob;
+use OCA\HyperViewer\Command\RunJobCommand;
 
 class Application extends App implements IBootstrap {
 	public const APP_ID = 'hyperviewer';
@@ -28,6 +29,12 @@ class Application extends App implements IBootstrap {
 		$context->registerService('ProcessQueueJob', function () {
 			return \OC::$server->get(ProcessQueueJob::class);
 		});
+
+		$context->registerService('RunJobCommand', function () {
+			return \OC::$server->get(RunJobCommand::class);
+		});
+
+		$context->registerCommand(RunJobCommand::class);
 	}
 
 	public function boot(IBootContext $context): void {

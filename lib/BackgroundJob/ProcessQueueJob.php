@@ -18,7 +18,7 @@ class ProcessQueueJob extends TimedJob {
 	) {
 		parent::__construct($time);
 		$this->processManager = $processManager;
-		$this->setInterval(60); // Check every minute if worker is running
+		$this->setInterval(1); // every 5 mins
 	}
 
 	protected function run($argument): void {

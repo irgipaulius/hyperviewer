@@ -102,7 +102,8 @@ class HlsService {
 			$variants['720p'] = $allVariants['720p'];
 		}
 
-		$ffmpegCmd = '/usr/local/bin/ffmpeg -y -autorotate 1 -i ' . escapeshellarg($inputPath);
+		// Lower priority so other system processes remain responsive (FreeBSD default increment is 10)
+		$ffmpegCmd = '/usr/bin/nice -n 11 /usr/local/bin/ffmpeg -y -autorotate 1 -i ' . escapeshellarg($inputPath);
 		
 		// Check if input has audio
 		$hasAudio = $this->hasAudioStream($inputPath);
