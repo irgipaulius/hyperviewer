@@ -111,9 +111,23 @@ class HlsService {
 		$streamMaps = [];
 		
 		foreach ($variants as $name => $variant) {
+			[$baseW, $baseH] = array_map('intval', explode('x', $variant['resolution']));
+			$scaleExpr = sprintf(
+				"scale='if(gt(iw,ih),%d,%d)':'if(gt(iw,ih),%d,%d)',setsar=1",
+				$baseW,
+				$baseH,
+				$baseH,
+				$baseW
+			);
+
 			$ffmpegCmd .= sprintf(
-				' -map 0:v:0 -c:v:%d libx264 -preset superfast -crf 23 -maxrate %s -bufsize %s -s:v:%d %s',
-				$streamIndex, $variant['bitrate'], intval($variant['bitrate']) * 2 . 'k', $streamIndex, $variant['resolution']
+				' -map 0:v:0 -c:v:%d libx264 -preset superfast -crf 23 -maxrate %s -bufsize %s -vf:v:%d %s -metadata:s:v:%d rotate=0',
+				$streamIndex,
+				$variant['bitrate'],
+				intval($variant['bitrate']) * 2 . 'k',
+				$streamIndex,
+				escapeshellarg($scaleExpr),
+				$streamIndex
 			);
 			
 			if ($hasAudio) {
