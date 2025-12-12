@@ -429,12 +429,16 @@ class FFmpegProcessManager {
 	private function isProcessAlive(int $pid): bool {
 		if ($pid <= 0) return false;
 
-		if (function_exists('posix_kill')) {
-			return @posix_kill($pid, 0);
+		if (function_exists('posix_kill') && @posix_kill($pid, 0)) {
+			return true;
 		}
 
-		// Fallback for systems without posix_kill
-		return file_exists('/proc/' . $pid);
+		// Fallback: check via ps (works on FreeBSD; /proc may be absent)
+		$escapedPid = escapeshellarg((string)$pid);
+		$output = [];
+		$returnVar = 0;
+		@exec('ps -p ' . $escapedPid . ' -o pid=', $output, $returnVar);
+		return $returnVar === 0 && !empty($output);
 	}
 
 	private function handleStaleJob(string $jobId): void {
