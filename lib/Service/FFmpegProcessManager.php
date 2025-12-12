@@ -201,31 +201,48 @@ class FFmpegProcessManager {
 			2 => ['pipe', 'w'],
 		];
 
-		$process = proc_open($cmd, $descriptors, $pipes);
-		if (is_resource($process)) {
-			$this->logger->error('Spawned async job for ' . $jobId . ' cmd=' . $cmd);
-			$status = proc_get_status($process);
-			$pid = $status['pid'] ?? null;
-			// Close pipes immediately; child keeps running
+		$process = @proc_open($cmd, $descriptors, $pipes);
+		if (!is_resource($process)) {
+			$this->logger->error('Failed to spawn async job for ' . $jobId . ' cmd=' . $cmd);
+			$this->updateJobStatus($jobId, 'failed', 'Failed to spawn async process');
+			return;
+		}
+
+		$this->logger->error('Spawned async job for ' . $jobId . ' cmd=' . $cmd);
+		$status = proc_get_status($process);
+
+		// If the process is not running right after spawn, treat as failure
+		if (empty($status['running'])) {
+			$exitCode = $status['exitcode'] ?? null;
+			$this->logger->error('Async job exited immediately for ' . $jobId . ' cmd=' . $cmd . ' exit=' . var_export($exitCode, true));
+			// Close pipes and mark failed
 			foreach ($pipes as $pipe) {
 				fclose($pipe);
 			}
 			proc_close($process);
+			$this->updateJobStatus($jobId, 'failed', 'Async process exited immediately (code ' . ($exitCode ?? 'n/a') . ')');
+			return;
+		}
 
-			// Save child pid if available
-			if ($pid) {
-				$queue = $this->readQueue();
-				foreach ($queue as $idx => $job) {
-					if ($job['id'] === $jobId) {
-						$queue[$idx]['pid'] = $pid;
-						break;
-					}
+		$pid = $status['pid'] ?? null;
+		// Close pipes immediately; child keeps running
+		foreach ($pipes as $pipe) {
+			fclose($pipe);
+		}
+		proc_close($process);
+
+		// Save child pid if available
+		if ($pid) {
+			$queue = $this->readQueue();
+			foreach ($queue as $idx => $job) {
+				if ($job['id'] === $jobId) {
+					$queue[$idx]['pid'] = $pid;
+					break;
 				}
-				$this->saveQueue($queue);
 			}
+			$this->saveQueue($queue);
 		} else {
-			$this->logger->error('Failed to spawn async job for ' . $jobId . ' cmd=' . $cmd);
-			$this->updateJobStatus($jobId, 'failed', 'Failed to spawn async process');
+			$this->logger->error('Spawned async job but could not determine PID for ' . $jobId);
 		}
 	}
 
@@ -248,6 +265,11 @@ class FFmpegProcessManager {
 		}
 
 		try {
+			// Defensive logging in case we enter runJobInline for a job not marked processing
+			if (($queue[$jobIndex]['status'] ?? '') !== 'processing') {
+				$this->logger->error('runJobInline invoked for job not marked processing: ' . $jobId);
+			}
+
 			$this->logger->error('running transcoding job: ' . $queue[$jobIndex]['filename']);
 			$this->hlsService->transcode(
 				$queue[$jobIndex]['userId'],
@@ -257,7 +279,7 @@ class FFmpegProcessManager {
 			);
 
 			$this->updateJobStatus($jobId, 'completed');
-		} catch (\Exception $e) {
+		} catch (\Throwable $e) {
 			$this->logger->error('Transcoding failed: ' . $e->getMessage() . ' Job: ' . json_encode($queue[$jobIndex]));
 			$this->updateJobStatus($jobId, 'failed', $e->getMessage());
 		} finally {
