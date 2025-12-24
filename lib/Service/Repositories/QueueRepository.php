@@ -15,12 +15,10 @@ class QueueRepository {
 	
 	private string $table = "*PREFIX*hyperviewer_queue";
 	private IDBConnection $conn;
-	private ?string $userId;
 	private ?string $worker;
 
-	public function __construct(IDBConnection $conn, ?string $userId, ?string $worker) {
+	public function __construct(IDBConnection $conn, ?string $worker) {
 		$this->conn = $conn;
-		$this->userId = $userId;
 		$this->worker = $worker;
 	}
 
@@ -32,6 +30,7 @@ CREATE TABLE IF NOT EXISTS {$this->table} (
 	user_id VARCHAR(64) NOT NULL,
 	file_path TEXT NOT NULL,
 	cache_path TEXT NOT NULL,
+	job_data TEXT NOT NULL DEFAULT '{}',
 	status VARCHAR(16) NOT NULL DEFAULT 'queued',
 	error TEXT,
 	priority INTEGER NOT NULL DEFAULT 5,
@@ -49,27 +48,40 @@ SQL;
 
 		// SQLite uses AUTOINCREMENT, pgsql/mysql ignore keyword gracefully
 		$this->conn->executeStatement($sql);
+
+		try {
+			$this->conn->executeStatement("ALTER TABLE {$this->table} ADD COLUMN job_data TEXT NOT NULL DEFAULT '{}' ");
+		} catch (\Throwable $e) {
+		}
 	}
 
 	/**
 	 * @param int $priority lower is higher priority
 	 */
+	/**
+	 * $jobData format:
+	 *  - overwriteExisting: bool
+	 *  - resolutions: string[] (e.g. ['720p','480p','360p','240p'])
+	 */
 	public function enqueue(
 		int $fileId,
 		string $filePath,
 		string $cachePath,
+		string $userId,
+		array $jobData = [],
 		int $priority = 5
 	): void {
 		$sql = <<<SQL
 INSERT INTO {$this->table}
-	(file_id, user_id, file_path, cache_path, status, priority, created_at, updated_at, lock_token, worker)
-VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), NULL, ?)
+	(file_id, user_id, file_path, cache_path, job_data, status, priority, created_at, updated_at, lock_token, worker)
+VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NULL, ?)
 SQL;
 		$this->conn->executeStatement($sql, [
 			$fileId,
-			$this->userId,
+			$userId,
 			$filePath,
 			$cachePath,
+			json_encode($jobData),
 			$this->STATUS_QUEUED,
 			$priority,
 			$this->worker
@@ -102,6 +114,19 @@ SQL;
 		return $row ?: null;
 	}
 
+	public function getOne(int $jobId): ?array {
+		$row = $this->conn->fetchAssociative("SELECT * FROM {$this->table} WHERE id = ?", [$jobId]);
+		return $row ?: null;
+	}
+
+	public function countProcessing(): int {
+		$row = $this->conn->fetchAssociative(
+			"SELECT COUNT(*) AS cnt FROM {$this->table} WHERE status = ?",
+			[self::STATUS_PROCESSING]
+		);
+		return (int)($row['cnt'] ?? 0);
+	}
+
 	/**
 	 * Mark job done (no row returned).
 	 */
@@ -131,15 +156,12 @@ SQL;
 	 * @param int $pageSize number of records per page
 	 * @return array[]
 	 */
-	public function listForUser(int $page = 1, int $pageSize = 100): array {
-		if ($this->userId === null) {
-			return [];
-		}
+	public function listForUser(string $userId, int $page = 1, int $pageSize = 100): array {
 		$page = max(1, $page);
 		$pageSize = max(1, $pageSize);
 		$offset = ($page - 1) * $pageSize;
 
 		$sql = "SELECT * FROM {$this->table} WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?";
-		return $this->conn->fetchAllAssociative($sql, [$this->userId, $pageSize, $offset]);
+		return $this->conn->fetchAllAssociative($sql, [$userId, $pageSize, $offset]);
 	}
 }

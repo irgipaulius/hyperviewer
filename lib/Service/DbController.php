@@ -16,11 +16,11 @@ class DbController {
 	public QueueRepository $queue;
 	public FileCacheRepository $cache;
 
-	public function __construct(IDBConnection $conn, ?string $userId, ?string $worker = null) {
-		$this->conn = $conn;
+	public function __construct(?string $userId, ?string $worker = null) {
+		$this->conn = \OC::$server->getDatabaseConnection();
 
-		$this->dirgen = new AutoDirRepository($this->conn, $userId);
-		$this->queue = new QueueRepository($this->conn, $userId, $worker);
+		$this->dirgen = new AutoDirRepository($this->conn, $userId ?? '');
+		$this->queue = new QueueRepository($this->conn, $worker);
 		$this->cache = new FileCacheRepository($this->conn);
 
 		// Ensure tables/columns exist (idempotent, no drops)

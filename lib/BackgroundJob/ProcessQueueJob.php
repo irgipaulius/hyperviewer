@@ -6,22 +6,22 @@ namespace OCA\HyperViewer\BackgroundJob;
 
 use OCP\BackgroundJob\TimedJob;
 use OCP\AppFramework\Utility\ITimeFactory;
-use OCA\HyperViewer\Service\FFmpegProcessManager;
+use OCA\HyperViewer\Service\QueueManager;
 
 class ProcessQueueJob extends TimedJob {
 
-	private FFmpegProcessManager $processManager;
+	private QueueManager $queueManager;
 
 	public function __construct(
 		ITimeFactory $time,
-		FFmpegProcessManager $processManager
+		QueueManager $queueManager
 	) {
 		parent::__construct($time);
-		$this->processManager = $processManager;
+		$this->queueManager = $queueManager;
 		$this->setInterval(1); // every 5 mins
 	}
 
 	protected function run($argument): void {
-		$this->processManager->processQueue();
+		$this->queueManager->processQueue();
 	}
 }
