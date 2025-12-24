@@ -1114,8 +1114,8 @@ async function startCacheGeneration(files, directoryPath = null) {
 		filename: file.filename,
 		// Prioritize file's own directory (from discovery), then provided directoryPath, then context
 		directory:
-			file.directory ||
 			directoryPath ||
+			file.directory ||
 			file.context?.dir ||
 			file.context?.fileList?.getCurrentDirectory() ||
 			"/"
