@@ -27,9 +27,9 @@ use OCP\AppFramework\Db\Entity;
  * @method void setCreatedAt(int $createdAt)
  */
 class LogEntry extends Entity {
-	protected $level = 'info';
-	protected $channel = 'app';
-	protected $message = '';
+	protected $level = null;
+	protected $channel = null;
+	protected $message = null;
 	protected $context = null;
 	protected $userId = null;
 	protected $fileid = null;
