@@ -47,7 +47,7 @@ class MediaController extends Controller {
 			$jobsByFile[(int)$job->getFileid()] = $job;
 		}
 		foreach ($fileids as $fileid) {
-			$media = $this->mediaIndex->getMediaForFileid($fileid);
+			$media = $this->mediaIndex->getMediaForFileid($fileid, $user->getUID());
 			$job = $jobsByFile[$fileid] ?? null;
 			$out[$fileid] = [
 				'cache_state' => $media?->getCacheState() ?? 'none',
@@ -141,7 +141,15 @@ class MediaController extends Controller {
 				}
 			}
 		}
-		$media = $fileid > 0 ? $this->mediaIndex->getMediaForFileid($fileid) : null;
+		$media = null;
+		if ($fileid > 0) {
+			try {
+				$file = $this->mediaIndex->resolveFileForUser($user->getUID(), $fileid);
+				$media = $this->mediaIndex->getMediaForFile($file, $user->getUID());
+			} catch (\Throwable) {
+				$media = $this->mediaIndex->getMediaForFileid($fileid, $user->getUID());
+			}
+		}
 		$ready = $media !== null && in_array($media->getCacheState(), ['partial', 'ready'], true);
 		return new JSONResponse([
 			'exists' => $ready,

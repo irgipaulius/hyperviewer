@@ -5,6 +5,7 @@
 
 import "./styles/cache-modal.css";
 import { playVideoSmart } from "./modules/video-player.js";
+import { registerHyperViewerFileActions } from "./files/register-file-actions.js";
 
 console.log("🎬 Hyper Viewer Files integration loading...");
 
@@ -38,106 +39,12 @@ document.addEventListener("DOMContentLoaded", function() {
  * Initialize files integration
  */
 function initializeFilesIntegration() {
-	// Check if we're in the Files app
-	if (!window.OCA || !window.OCA.Files || !window.OCA.Files.fileActions) {
-		setTimeout(initializeFilesIntegration, 2000);
-		return;
-	}
-
-	console.log("✅ Files app detected, registering actions...");
-
-	// Register "Generate HLS Cache" action for MOV files
-	OCA.Files.fileActions.registerAction({
-		name: "generateHlsCacheMov",
-		displayName: t("hyperviewer", "Generate HLS Cache"),
-		mime: "video/quicktime",
-		permissions: OC.PERMISSION_UPDATE,
-		iconClass: "icon-category-multimedia",
-		actionHandler(filename, context) {
-			console.log(
-				"🚀 Generate HLS Cache action triggered for MOV:",
-				filename
-			);
-			console.log("📁 Context:", context);
-			openCacheGenerationDialog([{ filename, context }]);
-		}
+	console.log("✅ Registering Hyper Viewer file actions (NC35 @nextcloud/files)…");
+	registerHyperViewerFileActions({
+		playVideoSmart,
+		openCacheGenerationDialog,
+		openDirectoryCacheGenerationDialog,
 	});
-
-	// Override default video player for MOV files - auto-detect HLS cache
-	OCA.Files.fileActions.registerAction({
-		name: "playVideoSmart",
-		displayName: t("hyperviewer", "Play"),
-		mime: "video/quicktime",
-		permissions: OC.PERMISSION_READ,
-		iconClass: "icon-play",
-		order: -1, // Higher priority than default
-		async actionHandler(filename, context) {
-			console.log("🎬 Smart play triggered for MOV:", filename);
-			const directory =
-				context?.dir || context?.fileList?.getCurrentDirectory() || "/";
-			await playVideoSmart(filename, directory, context);
-		}
-	});
-
-	// Set as default action for MOV files
-	OCA.Files.fileActions.setDefault("video/quicktime", "playVideoSmart");
-
-	// Register "Generate HLS Cache" action for MP4 files
-	OCA.Files.fileActions.registerAction({
-		name: "generateHlsCacheMp4",
-		displayName: t("hyperviewer", "Generate HLS Cache"),
-		mime: "video/mp4",
-		permissions: OC.PERMISSION_UPDATE,
-		iconClass: "icon-category-multimedia",
-		actionHandler(filename, context) {
-			console.log(
-				"🚀 Generate HLS Cache action triggered for MP4:",
-				filename
-			);
-			console.log("📁 Context:", context);
-			openCacheGenerationDialog([{ filename, context }]);
-		}
-	});
-
-	// Override default video player for MP4 files - auto-detect HLS cache
-	OCA.Files.fileActions.registerAction({
-		name: "playVideoSmartMp4",
-		displayName: t("hyperviewer", "Play"),
-		mime: "video/mp4",
-		permissions: OC.PERMISSION_READ,
-		iconClass: "icon-play",
-		order: -1, // Higher priority than default
-		async actionHandler(filename, context) {
-			console.log("🎬 Smart play triggered for MP4:", filename);
-			const directory =
-				context?.dir || context?.fileList?.getCurrentDirectory() || "/";
-			await playVideoSmart(filename, directory, context);
-		}
-	});
-
-	// Set as default action for MP4 files
-	OCA.Files.fileActions.setDefault("video/mp4", "playVideoSmartMp4");
-
-	// Register "Generate HLS Cache" action for directories
-	OCA.Files.fileActions.registerAction({
-		name: "generateHlsCacheDirectory",
-		displayName: t("hyperviewer", "Generate HLS Cache (Directory)"),
-		mime: "httpd/unix-directory",
-		permissions: OC.PERMISSION_UPDATE,
-		iconClass: "icon-category-multimedia",
-		actionHandler(filename, context) {
-			console.log(
-				"🚀 Generate HLS Cache action triggered for directory:",
-				filename
-			);
-			console.log("📁 Context:", context);
-			openDirectoryCacheGenerationDialog(filename, context);
-		}
-	});
-
-	console.log("✅ Hyper Viewer Files integration registered!");
-
-	// Add HLS badges to file list
 	addHlsBadgesToFileList();
 }
 
@@ -191,30 +98,37 @@ function addHlsBadgesToFileList() {
 		console.log("🔍 Checking for videos to badge...");
 		let now = new Date();
 
-		const directory =
-			window.OCA?.Files?.App?.fileList?.getCurrentDirectory() || "/";
+		const directory = document.querySelector("[data-cy-files-content-breadcrumbs]")?.dataset?.dir
+			|| window.OCA?.Files?.App?.currentDir
+			|| window.OCA?.Files?.App?.fileList?.getCurrentDirectory?.()
+			|| "/";
+
+		let batchFiles = [];
+		document.querySelectorAll("[data-cy-files-list-row]").forEach(row => {
+			const mime = row.getAttribute("data-cy-files-list-row-mime") || "";
+			const name = row.getAttribute("data-cy-files-list-row-basename") || row.dataset.file;
+			const fileid = parseInt(row.dataset.fileId || row.getAttribute("data-fileid") || "0", 10);
+			if (!name) {
+				return;
+			}
+			if (mime === "video/mp4" || mime === "video/quicktime" || /\.(mp4|mov)$/i.test(name)) {
+				batchFiles.push({ filename: name, fileid, directory });
+			}
+		});
+
 		const fileList = window.OCA?.Files?.App?.fileList;
+		if (batchFiles.length === 0 && fileList?.files) {
+			batchFiles = fileList.files
+				.filter(f => f.mimetype === "video/quicktime" || f.mimetype === "video/mp4")
+				.map(f => ({ filename: f.name, fileid: f.id, directory }));
+		}
 
-		if (!fileList || !fileList.files) {
-			console.warn("⚠️ No fileList available");
+		if (batchFiles.length === 0) {
 			return;
 		}
 
-		// Get video files from fileList (the source of truth)
-		const videoFiles = fileList.files.filter(
-			file =>
-				file.mimetype === "video/quicktime" ||
-				file.mimetype === "video/mp4"
-		);
-
-		console.log(`📹 Found ${videoFiles.length} video files in fileList`);
-
-		if (videoFiles.length === 0) {
-			return;
-		}
-
-		// Get all filenames
-		const filenames = videoFiles.map(f => f.name);
+		const videoFiles = batchFiles;
+		const filenames = videoFiles.map(f => f.filename);
 
 		console.log(`Badge prep time: ${new Date() - now}ms`);
 		now = new Date();
@@ -230,7 +144,7 @@ function addHlsBadgesToFileList() {
 					},
 					body: JSON.stringify({
 						directory,
-						filenames
+						files: videoFiles
 					})
 				}
 			);
@@ -457,13 +371,6 @@ function openUnifiedCacheDialog(options) {
 			</div>
 			<div class="hyper-viewer-cache-content">
 				${infoContent}
-				
-				<div class="form-section">
-					<label class="section-title">Cache Location</label>
-					<div class="option-group" id="cache-locations-container">
-						<p style="color: #999; font-size: 13px;">Loading cache locations...</p>
-					</div>
-				</div>
 				
 				<div class="form-section">
 					<label class="section-title">Resolution Renditions</label>
@@ -806,30 +713,6 @@ function openUnifiedCacheDialog(options) {
 		modal.classList.add("show");
 	});
 
-	// Determine directory path for display
-	const displayPath = isDirectory 
-		? directoryPath 
-		: (files[0]?.context?.dir || files[0]?.context?.fileList?.getCurrentDirectory() || "/");
-
-	// Populate cache location options
-	const container = modal.querySelector("#cache-locations-container");
-	container.innerHTML = `
-		<label class="option-item">
-			<input type="radio" name="cache_location" value="relative" checked>
-			<div class="option-content">
-				<span class="option-title">Relative (Parent Directory)</span>
-				<span class="option-desc">Cache stored in: <strong>${displayPath}/.cached_hls</strong></span>
-			</div>
-		</label>
-		<label class="option-item">
-			<input type="radio" name="cache_location" value="home">
-			<div class="option-content">
-				<span class="option-title">Home (User Root)</span>
-				<span class="option-desc">Cache stored in your home directory (~/.cached_hls).</span>
-			</div>
-		</label>
-	`;
-
 	// Handle escape key
 	const handleKeydown = e => {
 		if (e.key === "Escape") {
@@ -949,21 +832,6 @@ async function discoverVideoFilesInDirectory(directoryPath) {
 async function startDirectoryCacheGeneration(videoFiles, directoryPath) {
 	console.log("Starting directory HLS cache generation for:", directoryPath);
 
-	// Get selected cache location type
-	const selectedLocationRadio = document.querySelector(
-		'input[name="cache_location"]:checked'
-	);
-	if (!selectedLocationRadio) {
-		OC.dialogs.alert("Please select a cache location", "Error");
-		return;
-	}
-
-	const locationType = selectedLocationRadio.value;
-	if (!locationType) {
-		OC.dialogs.alert("Invalid cache location selected", "Error");
-		return;
-	}
-
 	const overwriteExisting =
 		document.getElementById("overwrite_existing")?.checked || false;
 	const enableAutoGeneration =
@@ -981,7 +849,6 @@ async function startDirectoryCacheGeneration(videoFiles, directoryPath) {
 			: ["720p", "480p", "360p", "240p"];
 
 	const options = {
-		locationType,
 		overwriteExisting,
 		resolutions,
 		enableAutoGeneration,
@@ -1073,22 +940,6 @@ async function startCacheGeneration(files, directoryPath = null) {
 		files.map(f => f.filename)
 	);
 
-	// Get selected cache location type
-	const selectedLocationRadio = document.querySelector(
-		'input[name="cache_location"]:checked'
-	);
-	if (!selectedLocationRadio) {
-		OC.dialogs.alert("Please select a cache location", "Error");
-		return;
-	}
-
-	const locationType = selectedLocationRadio.value;
-	if (!locationType) {
-		OC.dialogs.alert("Invalid cache location selected", "Error");
-		return;
-	}
-
-	// Get selected options
 	const overwriteExisting =
 		document.getElementById("overwrite_existing")?.checked || false;
 
@@ -1104,20 +955,17 @@ async function startCacheGeneration(files, directoryPath = null) {
 			: ["720p", "480p", "240p"];
 
 	const options = {
-		locationType,
 		overwriteExisting,
 		resolutions
 	};
 
-	// Prepare files data for backend
 	const filesData = files.map(file => ({
 		filename: file.filename,
-		// Prioritize file's own directory (from discovery), then provided directoryPath, then context
+		fileid: file.fileid || file.context?.fileInfoModel?.id || 0,
 		directory:
 			directoryPath ||
 			file.directory ||
 			file.context?.dir ||
-			file.context?.fileList?.getCurrentDirectory() ||
 			"/"
 	}));
 
@@ -1136,7 +984,6 @@ async function startCacheGeneration(files, directoryPath = null) {
 				},
 				body: JSON.stringify({
 					files: filesData,
-					locationType: options.locationType,
 					overwriteExisting: options.overwriteExisting,
 					resolutions: options.resolutions
 				})
@@ -1154,13 +1001,7 @@ async function startCacheGeneration(files, directoryPath = null) {
 			}
 
 			OC.dialogs.info(
-				`Cache generation started for ${
-					files.length
-				} file(s).\n\nCache location: ${
-					filesData.directory
-				}\n\nResolutions: ${options.resolutions.join(
-					", "
-				)}\n\nProcessing will run in the background.`,
+				`Cache generation started for ${files.length} file(s).\n\nResolutions: ${options.resolutions.join(", ")}\n\nJobs run in the background worker.`,
 				"HLS Cache Generation Started"
 			);
 		} else {

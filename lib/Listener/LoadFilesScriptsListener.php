@@ -7,7 +7,7 @@ namespace OCA\HyperViewer\Listener;
 use OCA\HyperViewer\AppInfo\Application;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
-use OCP\Files\Events\LoadAdditionalScriptsEvent;
+use OCA\Files\Event\LoadAdditionalScriptsEvent;
 use OCP\Util;
 
 /** @implements IEventListener<Event> */

@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 class CacheStoreServiceTest extends TestCase {
 	public function testHlsFilenameWhitelist(): void {
 		$store = new CacheStoreService(
-			$this->createMock(\OCP\IAppDataFactory::class),
+			$this->createMock(\OCP\Files\AppData\IAppDataFactory::class),
 			$this->createMock(\OCA\HyperViewer\Service\ConfigService::class),
 		);
 		$this->assertTrue($store->isAllowedHlsFilename('master.m3u8'));

@@ -11,15 +11,13 @@ use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
-use OCP\Files\Events\LoadAdditionalScriptsEvent;
+use OCA\Files\Event\LoadAdditionalScriptsEvent;
 use OCP\Files\Events\Node\NodeCopiedEvent;
 use OCP\Files\Events\Node\NodeCreatedEvent;
 use OCP\Files\Events\Node\NodeDeletedEvent;
 use OCP\Files\Events\Node\NodeRenamedEvent;
 use OCP\Files\Events\Node\NodeWrittenEvent;
 use OCP\Security\CSP\AddContentSecurityPolicyEvent;
-use OCP\Util;
-
 class Application extends App implements IBootstrap {
 	public const APP_ID = 'hyperviewer';
 
@@ -38,7 +36,5 @@ class Application extends App implements IBootstrap {
 	}
 
 	public function boot(IBootContext $context): void {
-		// Fallback for environments where LoadAdditionalScriptsEvent is not emitted.
-		Util::addScript(self::APP_ID, 'files-integration');
 	}
 }

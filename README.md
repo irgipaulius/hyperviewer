@@ -13,7 +13,7 @@ Professional video processing toolkit for Nextcloud. Automatically generates HLS
 ## Features
 
 - 🎬 **Queue-backed HLS encoding** - Fingerprint-addressed cache store, first-rendition-fast then background upgrades (720p–1080p)
-- ⚙️ **Dedicated worker** - Run `HV_WORKER=1 occ hyperviewer:worker` (see `scripts/freebsd/hyperviewer_worker` for rc.d)
+- ⚙️ **Dedicated worker** - `HV_WORKER=1 occ hyperviewer:worker` or FreeBSD `scripts/freebsd/hyperviewer_worker` (`daemon -P … -r -u www -o logfile php occ …`)
 - 🎞️ **Shaka Player Integration** - Professional HLS video playback interface
 - 📱 **Mobile Friendly** - Responsive UI works on all devices
 
@@ -74,7 +74,7 @@ composer test:unit              # Run tests
 | `hyperviewer:worker` | Process `hv_jobs` (set `HV_WORKER=1`) |
 | `hyperviewer:scan` | Metadata scan + enqueue fingerprint/encode jobs |
 | `hyperviewer:reindex` | Rebuild fileid ↔ fingerprint index |
-| `hyperviewer:cache:convert-legacy` | Import old `.cached_hls` trees into the fingerprint store |
+| `scripts/convert_cached_hls.php` | Import old `.cached_hls` trees (standalone; see script header) |
 | `hyperviewer:cache:stats` | Cache size / entry counts |
 
 ## How It Works

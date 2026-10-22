@@ -11,7 +11,6 @@ use OCA\HyperViewer\Db\MediaMapper;
 use OCP\Files\File;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
-use OCP\Files\Storage\IStorage;
 
 class MediaIndexService {
 	public function __construct(
@@ -38,7 +37,15 @@ class MediaIndexService {
 		return $node;
 	}
 
-	public function getMediaForFileid(int $fileid): ?Media {
+	public function getMediaForFileid(int $fileid, ?string $userId = null): ?Media {
+		if ($userId !== null && $userId !== '') {
+			try {
+				$file = $this->resolveFileForUser($userId, $fileid);
+				return $this->getMediaForFile($file, $userId);
+			} catch (\Throwable) {
+				// fall through to fileid hint
+			}
+		}
 		$loc = $this->locationMapper->findByFileid($fileid);
 		if ($loc === null) {
 			return null;
@@ -50,11 +57,40 @@ class MediaIndexService {
 		}
 	}
 
+	public function getMediaForFile(File $file, string $userId): ?Media {
+		$loc = $this->findLocationByFile($file, $userId);
+		if ($loc === null) {
+			return null;
+		}
+		try {
+			return $this->mediaMapper->findById($loc->getMediaId());
+		} catch (\OCP\AppFramework\Db\DoesNotExistException) {
+			return null;
+		}
+	}
+
+	public function findLocationByFile(File $file, string $userId): ?Location {
+		$internal = $this->toInternalPath($file, $userId);
+		$pathHash = hash('sha256', $internal);
+		$storageId = $file->getStorageId();
+		$loc = $this->locationMapper->findByStorageAndPathHash($storageId, $pathHash);
+		if ($loc !== null) {
+			return $loc;
+		}
+		if ($file->getId() > 0) {
+			return $this->locationMapper->findByFileid($file->getId());
+		}
+		return null;
+	}
+
 	public function indexOrRebind(File $file, string $userId, bool $forceFingerprint = false): Media {
-		$fileid = $file->getId();
-		$existing = $this->locationMapper->findByFileid($fileid);
+		$existing = $this->findLocationByFile($file, $userId);
 		if ($existing !== null && !$forceFingerprint) {
 			if ($existing->getSize() === $file->getSize() && $existing->getMtime() === $file->getMTime()) {
+				if ($file->getId() > 0 && $existing->getFileid() !== $file->getId()) {
+					$existing->setFileid($file->getId());
+					$this->locationMapper->update($existing);
+				}
 				return $this->mediaMapper->findById($existing->getMediaId());
 			}
 		}
@@ -73,21 +109,27 @@ class MediaIndexService {
 		return $media;
 	}
 
-	public function updateLocationPath(int $fileid, string $newPath, int $mtime, int $size): void {
-		$loc = $this->locationMapper->findByFileid($fileid);
+	public function updateLocationPath(File $file, string $userId): void {
+		$internal = $this->toInternalPath($file, $userId);
+		$loc = $this->findLocationByFile($file, $userId);
+		if ($loc === null && $file->getId() > 0) {
+			$loc = $this->locationMapper->findByFileid($file->getId());
+		}
 		if ($loc === null) {
 			return;
 		}
-		$loc->setPath($newPath);
-		$loc->setPathHash(hash('sha256', $newPath));
-		$loc->setMtime($mtime);
-		$loc->setSize($size);
+		$loc->setPath($internal);
+		$loc->setPathHash(hash('sha256', $internal));
+		$loc->setMtime($file->getMTime());
+		$loc->setSize($file->getSize());
+		$loc->setStorageId($file->getStorageId());
+		$loc->setFileid($file->getId() > 0 ? $file->getId() : null);
 		$loc->setSeenAt(time());
 		$this->locationMapper->update($loc);
 	}
 
 	public function bindNewFileidToMedia(int $mediaId, File $file, string $userId): Location {
-		$existing = $this->locationMapper->findByFileid($file->getId());
+		$existing = $this->findLocationByFile($file, $userId);
 		if ($existing !== null) {
 			return $existing;
 		}
@@ -95,34 +137,58 @@ class MediaIndexService {
 		return $this->upsertLocation($media, $file, $userId, null);
 	}
 
+	public function removeLocationForFile(File $file, string $userId): void {
+		$loc = $this->findLocationByFile($file, $userId);
+		if ($loc !== null) {
+			$this->locationMapper->delete($loc);
+			return;
+		}
+		if ($file->getId() > 0) {
+			$this->locationMapper->deleteByFileid($file->getId());
+		}
+	}
+
 	public function removeLocationByFileid(int $fileid): void {
 		$this->locationMapper->deleteByFileid($fileid);
 	}
 
 	private function upsertLocation(Media $media, File $file, string $userId, ?Location $existing): Location {
-		$path = $file->getPath();
-		$internal = ltrim(str_replace('/' . $userId . '/files', '', $path), '/');
+		$internal = $this->toInternalPath($file, $userId);
+		$pathHash = hash('sha256', $internal);
+		$storageId = $file->getStorageId();
+		if ($existing === null) {
+			$existing = $this->locationMapper->findByStorageAndPathHash($storageId, $pathHash);
+		}
 		if ($existing !== null) {
 			$existing->setMediaId($media->getId());
 			$existing->setPath($internal);
-			$existing->setPathHash(hash('sha256', $internal));
+			$existing->setPathHash($pathHash);
 			$existing->setSize($file->getSize());
 			$existing->setMtime($file->getMTime());
-			$existing->setStorageId((int)$file->getStorageId());
+			$existing->setStorageId($storageId);
+			$existing->setFileid($file->getId() > 0 ? $file->getId() : null);
 			$existing->setSeenAt(time());
 			return $this->locationMapper->update($existing);
 		}
 		$loc = new Location();
 		$loc->setMediaId($media->getId());
-		$loc->setFileid($file->getId());
-		$loc->setStorageId((int)$file->getStorageId());
+		$loc->setFileid($file->getId() > 0 ? $file->getId() : null);
+		$loc->setStorageId($storageId);
 		$loc->setPath($internal);
-		$loc->setPathHash(hash('sha256', $internal));
+		$loc->setPathHash($pathHash);
 		$loc->setUserId($userId);
 		$loc->setSize($file->getSize());
 		$loc->setMtime($file->getMTime());
 		$loc->setSeenAt(time());
 		return $this->locationMapper->insert($loc);
+	}
+
+	private function toInternalPath(File $file, string $userId): string {
+		$internal = $file->getInternalPath();
+		if ($internal !== '') {
+			return $internal;
+		}
+		return ltrim(str_replace('/' . $userId . '/files', '', $file->getPath()), '/');
 	}
 
 	public function assertUserCanReadMedia(string $userId, int $mediaId): void {

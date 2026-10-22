@@ -31,19 +31,20 @@ class FileEventListener implements IEventListener {
 		if ($event instanceof NodeDeletedEvent) {
 			$node = $event->getNode();
 			if ($node instanceof File) {
-				$this->mediaIndex->removeLocationByFileid($node->getId());
+				$userId = $node->getOwner()?->getUID() ?? '';
+				if ($userId !== '') {
+					$this->mediaIndex->removeLocationForFile($node, $userId);
+				}
 			}
 			return;
 		}
 		if ($event instanceof NodeRenamedEvent) {
 			$target = $event->getTarget();
 			if ($target instanceof File) {
-				$this->mediaIndex->updateLocationPath(
-					$target->getId(),
-					ltrim(str_replace('/' . $target->getOwner()?->getUID() . '/files', '', $target->getPath()), '/'),
-					$target->getMTime(),
-					$target->getSize(),
-				);
+				$userId = $target->getOwner()?->getUID() ?? '';
+				if ($userId !== '') {
+					$this->mediaIndex->updateLocationPath($target, $userId);
+				}
 			}
 			return;
 		}
@@ -51,9 +52,10 @@ class FileEventListener implements IEventListener {
 			$target = $event->getTarget();
 			$source = $event->getSource();
 			if ($target instanceof File && $source instanceof File) {
-				$media = $this->mediaIndex->getMediaForFileid($source->getId());
+				$userId = $target->getOwner()?->getUID() ?? '';
+				$sourceUser = $source->getOwner()?->getUID() ?? $userId;
+				$media = $sourceUser !== '' ? $this->mediaIndex->getMediaForFile($source, $sourceUser) : null;
 				if ($media !== null) {
-					$userId = $target->getOwner()?->getUID() ?? '';
 					if ($userId !== '') {
 						$this->mediaIndex->bindNewFileidToMedia($media->getId(), $target, $userId);
 					}

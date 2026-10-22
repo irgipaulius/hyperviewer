@@ -11,8 +11,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setId(int $id)
  * @method int getMediaId()
  * @method void setMediaId(int $mediaId)
- * @method int getFileid()
- * @method void setFileid(int $fileid)
+ * @method int|null getFileid()
+ * @method void setFileid(?int $fileid)
  * @method int getStorageId()
  * @method void setStorageId(int $storageId)
  * @method string getPathHash()
@@ -30,7 +30,7 @@ use OCP\AppFramework\Db\Entity;
  */
 class Location extends Entity {
 	protected $mediaId = 0;
-	protected $fileid = 0;
+	protected ?int $fileid = null;
 	protected $storageId = 0;
 	protected $pathHash = '';
 	protected $path = '';

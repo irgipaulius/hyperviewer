@@ -15,7 +15,7 @@ use OCP\AppFramework\Http\StreamResponse;
 use OCP\Files\IRootFolder;
 use OCP\IRequest;
 use OCP\IUserSession;
-use OCP\Temp\ITempManager;
+use OCP\ITempManager;
 
 class FrameController extends Controller {
 	public function __construct(
@@ -34,13 +34,6 @@ class FrameController extends Controller {
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function extractFrame(): DataResponse|StreamResponse {
-		return $this->extractFrameInternal();
-	}
-
-	/** Legacy route name used by frontend modules. */
-	#[NoAdminRequired]
-	#[NoCSRFRequired]
-	public function extractFrameLegacy(): DataResponse|StreamResponse {
 		return $this->extractFrameInternal();
 	}
 

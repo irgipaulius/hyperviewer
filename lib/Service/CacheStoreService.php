@@ -7,7 +7,7 @@ namespace OCA\HyperViewer\Service;
 use OCP\Files\IAppData;
 use OCP\Files\NotFoundException;
 use OCP\Files\SimpleFS\ISimpleFolder;
-use OCP\IAppDataFactory;
+use OCP\Files\AppData\IAppDataFactory;
 
 class CacheStoreService {
 	private IAppData $appData;

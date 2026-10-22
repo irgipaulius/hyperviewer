@@ -12,8 +12,7 @@ return [
 
 		['name' => 'hls#serve', 'url' => '/hls/{fingerprint}/{filename}', 'verb' => 'GET', 'requirements' => ['fingerprint' => '.+', 'filename' => '.+']],
 
-		['name' => 'frame#extractFrameLegacy', 'url' => '/api/extract-frame', 'verb' => 'POST'],
-		['name' => 'frame#extractFrame', 'url' => '/api/frame', 'verb' => 'GET'],
+		['name' => 'frame#extractFrame', 'url' => '/api/frame', 'verb' => 'POST'],
 
 		['name' => 'clip#exportClip', 'url' => '/api/export-clip', 'verb' => 'POST'],
 
@@ -37,7 +36,5 @@ return [
 		['name' => 'admin#resetSetting', 'url' => '/api/admin/settings/reset', 'verb' => 'POST'],
 		['name' => 'admin#logs', 'url' => '/api/admin/logs', 'verb' => 'GET'],
 
-		['name' => 'settings#setCacheLocations', 'url' => '/settings/cache-locations', 'verb' => 'POST'],
-		['name' => 'settings#getCacheLocations', 'url' => '/settings/cache-locations', 'verb' => 'GET'],
 	],
 ];

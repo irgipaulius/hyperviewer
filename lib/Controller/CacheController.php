@@ -56,8 +56,9 @@ class CacheController extends Controller {
 		foreach ($files as $fileData) {
 			$fileid = (int)($fileData['fileid'] ?? 0);
 			$filename = (string)($fileData['filename'] ?? '');
+			$fileDirectory = (string)($fileData['directory'] ?? $directory);
 			if ($fileid <= 0 && $filename !== '') {
-				$directory = (string)($fileData['directory'] ?? '/');
+				$directory = $fileDirectory;
 				$path = rtrim($directory, '/') . '/' . $filename;
 				$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 				$rel = ltrim($path, '/');
@@ -68,7 +69,20 @@ class CacheController extends Controller {
 					}
 				}
 			}
-			$media = $fileid > 0 ? $this->mediaIndex->getMediaForFileid($fileid) : null;
+			$media = null;
+			if ($fileid > 0) {
+				$media = $this->mediaIndex->getMediaForFileid($fileid, $user->getUID());
+			} elseif ($filename !== '') {
+				$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+				$rel = ltrim(rtrim($fileDirectory, '/') . '/' . $filename, '/');
+				if ($userFolder->nodeExists($rel)) {
+					$node = $userFolder->get($rel);
+					if ($node instanceof \OCP\Files\File) {
+						$media = $this->mediaIndex->getMediaForFile($node, $user->getUID());
+						$fileid = $node->getId();
+					}
+				}
+			}
 			$state = $media?->getCacheState() ?? 'none';
 			$has = in_array($state, ['partial', 'ready'], true);
 			if ($has && $filename !== '') {

@@ -11,11 +11,11 @@ load_rc_config $name
 
 : ${hyperviewer_worker_enable:="NO"}
 : ${hyperviewer_worker_user:="www"}
+: ${hyperviewer_worker_php:="/usr/local/bin/php"}
 : ${hyperviewer_worker_occ:="/usr/local/www/nextcloud/occ"}
 : ${hyperviewer_worker_concurrency:="1"}
+: ${hyperviewer_worker_log:="/var/log/hyperviewer_worker.log"}
 
-command="/usr/sbin/daemon"
-procname="hyperviewer_worker"
 pidfile="/var/run/${name}.pid"
 
 start_cmd="${name}_start"
@@ -23,14 +23,14 @@ stop_cmd="${name}_stop"
 
 hyperviewer_worker_start() {
 	export HV_WORKER=1
-	daemon -p ${pidfile} -u ${hyperviewer_worker_user} \
-		${hyperviewer_worker_occ} hyperviewer:worker --concurrency=${hyperviewer_worker_concurrency}
+	daemon -P "${pidfile}" -r -u "${hyperviewer_worker_user}" -o "${hyperviewer_worker_log}" \
+		"${hyperviewer_worker_php}" "${hyperviewer_worker_occ}" hyperviewer:worker --concurrency="${hyperviewer_worker_concurrency}"
 }
 
 hyperviewer_worker_stop() {
-	if [ -f ${pidfile} ]; then
-		kill $(cat ${pidfile}) 2>/dev/null || true
-		rm -f ${pidfile}
+	if [ -f "${pidfile}" ]; then
+		kill "$(cat "${pidfile}")" 2>/dev/null || true
+		rm -f "${pidfile}"
 	fi
 }
 

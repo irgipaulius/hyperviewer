@@ -14,6 +14,19 @@ class LocationMapper extends QBMapper {
 		parent::__construct($db, 'hv_locations', Location::class);
 	}
 
+	public function findByStorageAndPathHash(int $storageId, string $pathHash): ?Location {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('storage_id', $qb->createNamedParameter($storageId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('path_hash', $qb->createNamedParameter($pathHash)));
+		try {
+			return $this->findEntity($qb);
+		} catch (\OCP\AppFramework\Db\DoesNotExistException) {
+			return null;
+		}
+	}
+
 	public function findByFileid(int $fileid): ?Location {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')

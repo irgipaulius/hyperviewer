@@ -11,7 +11,7 @@
  */
 export async function extractFrameBlob(filename, directory, timestamp) {
 	const response = await fetch(
-		OC.generateUrl("/apps/hyperviewer/api/extract-frame"),
+		OC.generateUrl("/apps/hyperviewer/api/frame"),
 		{
 			method: "POST",
 			headers: {
