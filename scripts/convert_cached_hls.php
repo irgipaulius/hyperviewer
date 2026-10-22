@@ -26,7 +26,7 @@ if ($ncRoot === '' || !is_dir($ncRoot)) {
 require_once rtrim($ncRoot, '/') . '/lib/base.php';
 \OC::$CLI = true;
 
-if (!\OC_App::isEnabled('hyperviewer')) {
+if (!\OCP\Server::get(\OCP\App\IAppManager::class)->isEnabledForAnyone('hyperviewer')) {
 	fwrite(STDERR, "Enable the hyperviewer app before running conversion.\n");
 	exit(1);
 }
