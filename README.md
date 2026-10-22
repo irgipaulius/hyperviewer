@@ -13,7 +13,7 @@ Professional video processing toolkit for Nextcloud. Automatically generates HLS
 ## Features
 
 - 🎬 **Queue-backed HLS encoding** - Fingerprint-addressed cache store, first-rendition-fast then background upgrades (720p–1080p)
-- ⚙️ **Dedicated worker** - `HV_WORKER=1 occ hyperviewer:worker` or FreeBSD `scripts/freebsd/hyperviewer_worker` (`daemon -P … -r -u www -o logfile php occ …`)
+- ⚙️ **Dedicated worker** - `HV_WORKER=1 occ hyperviewer:worker` or FreeBSD `scripts/freebsd/hyperviewer_worker` (plain `daemon -f -u www` around an sh restart loop; daemon supervisor flags crash on TrueNAS 13.1 kernels with 13.5 jails)
 - 🎞️ **Shaka Player Integration** - Professional HLS video playback interface
 - 📱 **Mobile Friendly** - Responsive UI works on all devices
 
