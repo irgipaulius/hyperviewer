@@ -7,14 +7,10 @@ import "shaka-player/dist/controls.css";
 import playerModalTemplate from "../templates/player-modal.html";
 import { ClipEditor } from "./clip-editor";
 import { extractFrameBlob } from "./frame-extractor";
+import { FileType } from "@nextcloud/files";
+import { folderPath, isVideoMime, viewerPath } from "../files/nodePaths.js";
 
-/**
- * Check if HLS cache exists for a video file
- *
- * @param filename
- * @param directory
- */
-async function checkHlsCache(filename, directory) {
+async function checkHlsCacheByFileid(fileid, filename, directory) {
 	try {
 		const response = await fetch(
 			OC.generateUrl("/apps/hyperviewer/cache/check"),
@@ -24,15 +20,11 @@ async function checkHlsCache(filename, directory) {
 					"Content-Type": "application/json",
 					requesttoken: OC.requestToken
 				},
-				body: JSON.stringify({
-					filename,
-					directory
-				})
+				body: JSON.stringify({ fileid, filename, directory })
 			}
 		);
-
 		const result = await response.json();
-		return result.exists ? result.cachePath : null;
+		return result.exists ? result.fingerprint : null;
 	} catch (error) {
 		console.error("Failed to check HLS cache:", error);
 		return null;
@@ -40,123 +32,66 @@ async function checkHlsCache(filename, directory) {
 }
 
 /**
- * Smart video player - automatically uses HLS if available, otherwise default player
- *
- * @param filename
- * @param directory
- * @param context
+ * @param {import('@nextcloud/files').INode} node
+ * @param {import('@nextcloud/files').IFolder} folder
+ * @param {import('@nextcloud/files').INode[]} [contents]
  */
-export async function playVideoSmart(filename, directory, context) {
-	console.log(`🎬 Smart play: Checking HLS cache for: ${filename}`);
+export async function playVideoSmart(node, folder, contents = []) {
+	const directory = folderPath(folder, node);
+	const filename = node.basename;
+	const fileid = node.fileid ?? 0;
+	console.log(`🎬 Smart play: ${filename} (fileid ${fileid})`);
 
 	try {
-		// Check if HLS cache exists
-		const cachePath = await checkHlsCache(filename, directory);
-
-		if (cachePath) {
-			console.log(`✅ HLS cache found, using Shaka Player`);
-			// Load Shaka Player with HLS
-			loadShakaPlayer(filename, cachePath, context, directory);
+		const fingerprint = await checkHlsCacheByFileid(
+			fileid,
+			filename,
+			directory
+		);
+		if (fingerprint) {
+			loadShakaPlayer(node, fingerprint, folder, contents);
 		} else {
-			console.log(`ℹ️ No HLS cache, using default player`);
-			// Fall back to default Nextcloud video player
-			openWithDefaultPlayer(filename, directory, context);
+			openWithDefaultPlayer(viewerPath(node, folder));
 		}
 	} catch (error) {
 		console.error("Error checking HLS cache:", error);
-		// Fall back to default player on error
-		openWithDefaultPlayer(filename, directory, context);
+		openWithDefaultPlayer(viewerPath(node, folder));
 	}
 }
 
-/**
- * Open video with default Nextcloud player
- *
- * @param filename
- * @param directory
- * @param context
- */
-function openWithDefaultPlayer(filename, directory, context) {
-	console.log(`🎥 Opening with default player: ${filename}`);
-
-	try {
-		// Get the file list
-		const fileList =
-			context?.fileInfoModel?.fileList ||
-			context?.fileList ||
-			window.OCA?.Files?.App?.fileList;
-
-		if (!fileList) {
-			console.error("No fileList available");
-			return;
-		}
-
-		// Find the file model
-		const fileModel = fileList.files.find(f => f.name === filename);
-
-		if (!fileModel) {
-			console.error(`File not found in fileList: ${filename}`);
-			return;
-		}
-
-		// Use Nextcloud Viewer directly
-		console.log("🎬 Opening with Nextcloud Viewer");
-		const filePath =
-			directory === "/" ? `/${filename}` : `${directory}/${filename}`;
-
-		if (window.OCA?.Viewer) {
-			window.OCA.Viewer.open({
-				path: filePath
-			});
-		} else {
-			console.error("Viewer not available");
-		}
-	} catch (error) {
-		console.error("Error opening with default player:", error);
+function openWithDefaultPlayer(path) {
+	if (window.OCA?.Viewer) {
+		window.OCA.Viewer.open({ path });
+	} else {
+		console.error("Viewer not available for path:", path);
 	}
 }
 
+function videoPlaylistFromContents(contents) {
+	return (contents || [])
+		.filter(
+			n =>
+				n.type === FileType.File && isVideoMime(n.mime)
+		)
+		.map(n => n.basename)
+		.sort();
+}
+
 /**
- * Load Shaka Player in a modal
- *
- * @param {string} filename - Video filename
- * @param {string} cachePath - HLS cache path
- * @param {object} context - File context
- * @param {string} directory - Current directory path
+ * @param {import('@nextcloud/files').INode} node
+ * @param {string} fingerprint
+ * @param {import('@nextcloud/files').IFolder} folder
+ * @param {import('@nextcloud/files').INode[]} contents
  */
-function loadShakaPlayer(filename, cachePath, context, directory) {
+function loadShakaPlayer(node, fingerprint, folder, contents) {
+	const filename = node.basename;
+	const directory = folderPath(folder, node);
+	const fileid = node.fileid ?? 0;
 	const videoId = `hyperVideo_${Date.now()}`;
 
-	// Ensure directory is set
-	if (!directory) {
-		directory =
-			context?.dir || context?.fileList?.getCurrentDirectory() || "/";
-	}
+	const videoPlaylist = videoPlaylistFromContents(contents);
+	const currentVideoIndex = videoPlaylist.indexOf(filename);
 
-	// Get video playlist for navigation
-	let videoPlaylist = [];
-	let currentVideoIndex = 0;
-	if (context?.fileInfoModel || context?.fileList) {
-		const fileList = context.fileInfoModel?.fileList || context.fileList;
-		if (fileList) {
-			const files = fileList.files || [];
-			// Filter video files (MOV and MP4)
-			videoPlaylist = files
-				.filter(
-					file =>
-						file.mimetype === "video/quicktime" ||
-						file.mimetype === "video/mp4"
-				)
-				.map(file => file.name)
-				.sort();
-			currentVideoIndex = videoPlaylist.indexOf(filename);
-			console.log(
-				`📹 Video playlist: ${videoPlaylist.length} videos, current index: ${currentVideoIndex}`
-			);
-		}
-	}
-
-	// Create enhanced modal with clipping controls
 	const modal = document.createElement("div");
 	modal.style.cssText = `
         position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10000;
@@ -164,7 +99,6 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
         padding: 20px; box-sizing: border-box;
     `;
 
-	// Replace template variables using string replacement (CSP-safe)
 	modal.innerHTML = playerModalTemplate.replace(/\$\{videoId\}/g, videoId);
 
 	const closeModal = () => {
@@ -190,169 +124,101 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 	document.addEventListener("keydown", handleKeydown);
 
 	const video = document.getElementById(videoId);
+	const context = { dir: directory, fileInfoModel: { id: fileid } };
+	const clipEditor = new ClipEditor(modal, video, context, filename, fileid);
 
-	// Clipping state
-	const clipEditor = new ClipEditor(modal, video, context, filename);
-
-	// Add close button event listener
 	modal.querySelector(".close-btn").addEventListener("click", closeModal);
-
-	// Add default player button event listener
 	modal
 		.querySelector("#open-default-player")
 		.addEventListener("click", () => {
 			closeModal();
-			openWithDefaultPlayer(filename, directory, context);
+			openWithDefaultPlayer(viewerPath(node, folder));
 		});
 
-	// Video navigation functionality
 	const navigateToVideo = async direction => {
-		if (videoPlaylist.length <= 1) return; // No other videos to navigate to
-
-		// Calculate new index with loop-around
+		if (videoPlaylist.length <= 1) {
+			return;
+		}
 		let newIndex = currentVideoIndex + direction;
-		if (newIndex < 0) newIndex = videoPlaylist.length - 1; // Loop to end
-		if (newIndex >= videoPlaylist.length) newIndex = 0; // Loop to start
-
-		const nextFilename = videoPlaylist[newIndex];
-		console.log(
-			`🔄 Navigating to video ${newIndex + 1}/${
-				videoPlaylist.length
-			}: ${nextFilename}`
-		);
-
-		// Close current modal
+		if (newIndex < 0) {
+			newIndex = videoPlaylist.length - 1;
+		}
+		if (newIndex >= videoPlaylist.length) {
+			newIndex = 0;
+		}
+		const nextName = videoPlaylist[newIndex];
+		const nextNode = (contents || []).find(n => n.basename === nextName);
+		if (!nextNode) {
+			return;
+		}
 		closeModal();
-
-		// Play next video with smart player
-		await playVideoSmart(nextFilename, directory, context);
+		await playVideoSmart(nextNode, folder, contents);
 	};
 
-	// Navigation arrow buttons (desktop)
 	const prevBtn = modal.querySelector("#prev-video-btn");
 	const nextBtn = modal.querySelector("#next-video-btn");
 	const videoContainer = modal.querySelector("#video-player-container");
 	const pauseFrameImg = modal.querySelector("#pause-frame-display");
 
-	// Track frame extraction state to allow cancellation
 	let frameExtractionId = 0;
 	let currentFrameUrl = null;
 
-	// Extract frame from original file and display it as overlay
 	async function extractAndDisplayFrame(timestamp, targetVideo = video) {
-		// Create unique ID for this extraction request
 		const currentExtractionId = ++frameExtractionId;
 		try {
-			console.log("🖼️ Extracting frame at:", timestamp);
-			const blob = await extractFrameBlob(filename, directory, timestamp);
-			console.log(
-				"✅ Blob received, size:",
-				blob.size,
-				"type:",
-				blob.type
+			const blob = await extractFrameBlob(
+				filename,
+				directory,
+				timestamp,
+				fileid
 			);
-
-			// Check if this extraction was cancelled (video started playing)
 			if (currentExtractionId !== frameExtractionId) {
-				console.log(
-					"⚠️ Frame extraction cancelled - video is playing"
-				);
 				return;
 			}
-
-			// Clean up previous frame URL if exists
 			if (currentFrameUrl) {
 				URL.revokeObjectURL(currentFrameUrl);
 			}
-
-			// Create object URL from blob and display
 			currentFrameUrl = URL.createObjectURL(blob);
 			pauseFrameImg.src = currentFrameUrl;
 			pauseFrameImg.style.display = "block";
 		} catch (error) {
-			console.error("❌ Failed to extract frame:", error);
+			console.error("Failed to extract frame:", error);
 		}
 	}
 
-	// Hide arrows if only one video
-	if (videoPlaylist.length <= 1) {
-		prevBtn.style.display = "none";
-		nextBtn.style.display = "none";
-	} else {
-		// Show arrows on hover (desktop only)
-		videoContainer.addEventListener("mouseenter", () => {
-			if (window.innerWidth > 768) {
-				// Desktop only
-				prevBtn.style.opacity = "0.7";
-				nextBtn.style.opacity = "0.7";
-			}
-		});
-
-		videoContainer.addEventListener("mouseleave", () => {
-			prevBtn.style.opacity = "0";
-			nextBtn.style.opacity = "0";
-		});
-
-		// Arrow hover effects
-		prevBtn.addEventListener("mouseenter", () => {
-			prevBtn.style.opacity = "1";
-			prevBtn.style.background = "rgba(0,0,0,0.8)";
-		});
-		prevBtn.addEventListener("mouseleave", () => {
-			prevBtn.style.background = "rgba(0,0,0,0.6)";
-		});
-
-		nextBtn.addEventListener("mouseenter", () => {
-			nextBtn.style.opacity = "1";
-			nextBtn.style.background = "rgba(0,0,0,0.8)";
-		});
-		nextBtn.addEventListener("mouseleave", () => {
-			nextBtn.style.background = "rgba(0,0,0,0.6)";
-		});
-
-		// Click handlers
-		prevBtn.addEventListener("click", e => {
-			e.stopPropagation();
-			navigateToVideo(-1);
-		});
-
-		nextBtn.addEventListener("click", e => {
-			e.stopPropagation();
-			navigateToVideo(1);
-		});
-
-		// Swipe detection for mobile
-		let touchStartX = 0;
-		let touchEndX = 0;
-		const minSwipeDistance = 50;
-
-		videoContainer.addEventListener("touchstart", e => {
-			touchStartX = e.changedTouches[0].screenX;
-		});
-
-		videoContainer.addEventListener("touchend", e => {
-			touchEndX = e.changedTouches[0].screenX;
-			const swipeDistance = touchEndX - touchStartX;
-
-			if (Math.abs(swipeDistance) > minSwipeDistance) {
-				if (swipeDistance > 0) {
-					// Swipe right = previous video
-					navigateToVideo(-1);
-				} else {
-					// Swipe left = next video
-					navigateToVideo(1);
-				}
-			}
-		});
+	if (prevBtn) {
+		prevBtn.addEventListener("click", () => navigateToVideo(-1));
+	}
+	if (nextBtn) {
+		nextBtn.addEventListener("click", () => navigateToVideo(1));
 	}
 
-	// Initialize Shaka Player
+	let touchStartX = 0;
+	const minSwipeDistance = 50;
+	videoContainer.addEventListener(
+		"touchstart",
+		e => {
+			touchStartX = e.changedTouches[0].screenX;
+		},
+		{ passive: true }
+	);
+	videoContainer.addEventListener(
+		"touchend",
+		e => {
+			const touchEndX = e.changedTouches[0].screenX;
+			const swipeDistance = touchEndX - touchStartX;
+			if (Math.abs(swipeDistance) > minSwipeDistance) {
+				navigateToVideo(swipeDistance > 0 ? -1 : 1);
+			}
+		},
+		{ passive: true }
+	);
+
 	shaka.polyfill.installAll();
 
 	if (shaka.Player.isBrowserSupported()) {
 		const player = new shaka.Player(video);
 
-		// Configure Shaka UI with professional video editing controls
 		const uiConfig = {
 			controlPanelElements: [
 				"play_pause",
@@ -365,7 +231,6 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 			],
 			overflowMenuButtons: [
 				"picture_in_picture",
-				"quality",
 				"playback_rate",
 				"save_video_frame",
 				"statistics"
@@ -377,7 +242,7 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 			seekBarColors: {
 				base: "rgba(255, 255, 255, 0.3)",
 				buffered: "rgba(76, 175, 80, 0.4)",
-				played: "rgb(255, 152, 0)" // Match orange theme
+				played: "rgb(255, 152, 0)"
 			}
 		};
 
@@ -389,13 +254,8 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		const playbackElement = controls?.getLocalVideo?.() || video;
 
 		const clearPauseFrame = () => {
-			// Cancel any pending frame extractions
 			frameExtractionId++;
-
-			// Hide the pause frame overlay
 			pauseFrameImg.style.display = "none";
-
-			// Clean up the object URL
 			if (currentFrameUrl) {
 				URL.revokeObjectURL(currentFrameUrl);
 				currentFrameUrl = null;
@@ -405,19 +265,16 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		const handlePause = event => {
 			const target = event.currentTarget || playbackElement;
 			clearPauseFrame();
-
 			if (target.currentTime >= target.duration) {
 				return;
 			}
-
 			extractAndDisplayFrame(target.currentTime, target);
 		};
 
-		const handlePlay = event => {
+		const handlePlay = () => {
 			clearPauseFrame();
 		};
 
-		// Override save_video_frame button to extract from original file
 		setTimeout(() => {
 			const saveFrameBtn =
 				videoContainer.querySelector('button[aria-label*="Save"]') ||
@@ -428,19 +285,17 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 					async e => {
 						e.preventDefault();
 						e.stopPropagation();
-
 						try {
 							const blob = await extractFrameBlob(
 								filename,
 								directory,
-								video.currentTime
+								video.currentTime,
+								fileid
 							);
 							const url = URL.createObjectURL(blob);
 							const a = document.createElement("a");
 							a.href = url;
-							a.download = `${
-								filename.split(".")[0]
-							}_frame_${Math.floor(video.currentTime)}s.png`;
+							a.download = `${filename.split(".")[0]}_frame_${Math.floor(video.currentTime)}s.png`;
 							document.body.appendChild(a);
 							a.click();
 							document.body.removeChild(a);
@@ -454,19 +309,28 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 			}
 		}, 500);
 
-		// Build manifest URL
-		const encodedCachePath = encodeURIComponent(cachePath);
-		const masterUrl = `${OC.generateUrl(
-			"/apps/hyperviewer/hls"
-		)}/${encodedCachePath}/master.m3u8`;
-		const playlistUrl = `${OC.generateUrl(
-			"/apps/hyperviewer/hls"
-		)}/${encodedCachePath}/playlist.m3u8`;
+		const enc = encodeURIComponent(fingerprint);
+		const base = OC.generateUrl("/apps/hyperviewer/hls");
+		const masterUrl = `${base}/${enc}/master.m3u8`;
+		const playlistUrl = `${base}/${enc}/playlist.m3u8`;
 
-		// Try master.m3u8 first, fallback to playlist.m3u8
 		player.load(masterUrl).catch(() => player.load(playlistUrl));
 
-		// Video event listeners
+		player.addEventListener("trackschanged", () => {
+			const variants = player.getVariantTracks().filter(t => t.type === "variant");
+			if (variants.length > 1) {
+				ui.configure({
+					overflowMenuButtons: [
+						"picture_in_picture",
+						"quality",
+						"playback_rate",
+						"save_video_frame",
+						"statistics"
+					]
+				});
+			}
+		});
+
 		video.addEventListener("loadedmetadata", () => {
 			clipEditor.setVideoDuration(video.duration);
 		});
@@ -477,46 +341,36 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 			}
 		});
 
-		// Listen to native HTML5 video pause/play events (Shaka playback element)
 		playbackElement.addEventListener("pause", handlePause, false);
 		playbackElement.addEventListener("play", handlePlay, false);
 		playbackElement.addEventListener(
 			"seeking",
 			() => {
-				console.log("🔍 Video seeking - clearing pause frame");
 				clearPauseFrame();
 			},
 			false
 		);
 	}
 
-	// Clipping functionality
-	clipEditor.init()
+	clipEditor.init();
 
-	// Timeline interactions
 	const timelineContainer = modal.querySelector("#timeline-container");
-
-	// Timeline click to seek
 	timelineContainer.addEventListener("click", e => {
-		if (clipEditor.isDragging) return; // Don't seek while dragging
-
+		if (clipEditor.isDragging) {
+			return;
+		}
 		const rect = timelineContainer.getBoundingClientRect();
 		const clickX = e.clientX - rect.left;
 		const clickPercent = Math.max(0, Math.min(1, clickX / rect.width));
-		const seekTime = clickPercent * clipEditor.videoDuration;
-		video.currentTime = seekTime;
+		video.currentTime = clickPercent * clipEditor.videoDuration;
 	});
 
-	// Keyboard controls for video clipping
 	function handleKeyDown(e) {
-		// Handle ESC to close modal (works always)
 		if (e.key === "Escape") {
 			e.preventDefault();
 			closeModal();
 			return;
 		}
-
-		// Handle spacebar for play/pause (works always)
 		if (e.key === " " || e.key === "Spacebar") {
 			e.preventDefault();
 			if (video.paused) {
@@ -526,8 +380,6 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 			}
 			return;
 		}
-
-		// Handle video navigation with Shift+Arrow keys (works always, unless typing in input)
 		if (
 			e.shiftKey &&
 			e.key === "ArrowRight" &&
@@ -535,11 +387,10 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		) {
 			e.preventDefault();
 			if (videoPlaylist.length > 1) {
-				navigateToVideo(1); // Next video
+				navigateToVideo(1);
 			}
 			return;
 		}
-
 		if (
 			e.shiftKey &&
 			e.key === "ArrowLeft" &&
@@ -547,19 +398,13 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		) {
 			e.preventDefault();
 			if (videoPlaylist.length > 1) {
-				navigateToVideo(-1); // Previous video
+				navigateToVideo(-1);
 			}
 			return;
 		}
-
-		// Only handle keys when clipping mode is active
-		if (
-			!clipEditor.isClipMode
-		) {
+		if (!clipEditor.isClipMode) {
 			return;
 		}
-
-		// Prevent default for our handled keys
 		const handledKeys = ["ArrowLeft", "ArrowRight", "Enter"];
 		if (
 			handledKeys.includes(e.key) ||
@@ -567,17 +412,13 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		) {
 			e.preventDefault();
 		}
-
 		switch (e.key) {
 			case "ArrowLeft":
-				// Move playback cursor back one frame
 				if (video.currentTime > 0) {
 					video.currentTime = Math.max(0, video.currentTime - 1 / 30);
 				}
 				break;
-
 			case "ArrowRight":
-				// Move playback cursor forward one frame
 				if (video.currentTime < video.duration) {
 					video.currentTime = Math.min(
 						video.duration,
@@ -585,16 +426,11 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 					);
 				}
 				break;
-
 			case "Enter":
 				if (e.ctrlKey || e.metaKey) {
-					// Ctrl/Cmd + Enter: Open export dialog
 					clipEditor.showExportModal();
 				} else {
-					// Just Enter: Start export (if export modal is open)
-					const exportModal = document.querySelector(
-						"#confirm-export"
-					);
+					const exportModal = document.querySelector("#confirm-export");
 					if (exportModal) {
 						exportModal.click();
 					}
@@ -603,10 +439,7 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		}
 	}
 
-	// Add keyboard event listener
 	document.addEventListener("keydown", handleKeyDown);
-
-	// Clean up keyboard listener when modal is closed
 	const originalClose = modal.remove;
 	modal.remove = function() {
 		document.removeEventListener("keydown", handleKeyDown);

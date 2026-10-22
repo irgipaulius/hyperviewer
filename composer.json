@@ -1,27 +1,6 @@
 {
 	"name": "nextcloud/hyperviewer",
-	"description": "<![CDATA[Save time, storage, and bandwidth.
-
-Hyper Viewer brings powerful remote video clipping directly into your Nextcloud Files app.
-Rather than downloading huge RAW or MOV files just to check or trim them, Hyper Viewer automatically generates lightweight HLS proxies for smooth streaming. Browse your footage instantly — even from mobile.
-
-When you find the perfect moment, open the clipping tool and export only the selected segment in full original quality. No re-encoding, no quality loss, no wasted data.
-
-Perfect for:
-✅ Cinematographers
-✅ Video production teams
-✅ YouTubers & content creators
-✅ Anyone managing large video archives
-
-Key Features
-• Automatic HLS proxy generation for smooth streaming
-• Shaka Player integration with timeline preview
-• Frame-accurate start/end clip selection
-• Original-quality export of selected clips
-• No deletion or degradation of source files
-• Clean and intuitive UI inside Files
-
-Turn your Nextcloud into a lightweight remote video editing station — where you only download the footage you need.]]>",
+	"description": "Hyper Viewer — HLS proxies, Shaka playback, and lossless clip export for Nextcloud Files.",
 	"license": "AGPL-3.0-or-later",
 	"authors": [
 		{
@@ -55,8 +34,7 @@ Turn your Nextcloud into a lightweight remote video editing station — where yo
 		"php": "^8.1"
 	},
 	"require-dev": {
-		"nextcloud/ocp": "dev-stable30",
-		"roave/security-advisories": "dev-latest"
+		"nextcloud/ocp": "dev-stable30"
 	},
 	"config": {
 		"allow-plugins": {
@@ -65,7 +43,7 @@ Turn your Nextcloud into a lightweight remote video editing station — where yo
 		"optimize-autoloader": true,
 		"sort-packages": true,
 		"platform": {
-			"php": "8.1"
+			"php": "8.4"
 		}
 	}
 }

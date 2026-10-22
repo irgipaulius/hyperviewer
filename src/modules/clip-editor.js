@@ -1,12 +1,14 @@
 import exportModalTemplate from "../templates/export-modal.html";
+import { showError, showSuccess } from "@nextcloud/dialogs";
 
 export class ClipEditor {
 
-	constructor(modal, video, context, filename) {
+	constructor(modal, video, context, filename, fileid = 0) {
 		this.modal = modal;
 		this.video = video;
 		this.context = context;
 		this.filename = filename;
+		this.fileid = fileid;
 		this.timelineContainer = modal.querySelector('#timeline-container');
 
 		this.isClipMode = false;
@@ -331,13 +333,6 @@ export class ClipEditor {
 			// Show immediate notification
 			this.showExportNotification(clipFilename, exportPath);
 
-			// Get the full file path for the original video
-			const originalPath =
-				this.context.dir === "/"
-					? `/${this.filename}`
-					: `${this.context.dir}/${this.filename}`;
-
-			// Call the export API
 			const response = await fetch(
 				OC.generateUrl("/apps/hyperviewer/api/export-clip"),
 				{
@@ -347,7 +342,7 @@ export class ClipEditor {
 						requesttoken: OC.requestToken
 					},
 					body: JSON.stringify({
-						originalPath,
+						fileid: this.fileid,
 						startTime: this.startTime,
 						endTime: this.endTime,
 						exportPath,
@@ -362,11 +357,38 @@ export class ClipEditor {
 				throw new Error(result.error || "Export failed");
 			}
 
-			console.log("✅ Export started successfully:", result);
+			if (result.jobId) {
+				showSuccess(`Queued (job #${result.jobId})`);
+				await this.pollClipJob(result.jobId, clipFilename, exportPath);
+			}
+
+			console.log("✅ Export finished:", result);
 		} catch (error) {
 			console.error("❌ Export failed:", error);
-			OC.dialogs.alert(`Export failed: ${error.message}`, "Export Error");
+			showError(`Export failed: ${error.message}`);
 		}
+	}
+
+	async pollClipJob(jobId, clipFilename, exportPath) {
+		const deadline = Date.now() + 30 * 60 * 1000;
+		while (Date.now() < deadline) {
+			await new Promise(resolve => setTimeout(resolve, 2000));
+			const res = await fetch(
+				OC.generateUrl(`/apps/hyperviewer/api/jobs/${jobId}`),
+				{ headers: { requesttoken: OC.requestToken } }
+			);
+			if (!res.ok) {
+				continue;
+			}
+			const job = await res.json();
+			if (job.state === "done") {
+				return;
+			}
+			if (job.state === "failed" || job.state === "cancelled") {
+				throw new Error(job.error || "Clip export failed");
+			}
+		}
+		throw new Error("Clip export timed out");
 	}
 
 	showExportNotification(clipFilename, exportPath) {

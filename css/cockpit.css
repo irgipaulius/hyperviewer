@@ -1,0 +1,139 @@
+.hv-cockpit {
+	max-width: 1400px;
+}
+
+.hv-worker-banner {
+	padding: 12px 16px;
+	border-radius: var(--border-radius-large);
+	margin-bottom: 1rem;
+	border: 1px solid var(--color-border);
+}
+
+.hv-worker-running {
+	background: var(--color-success-background, rgba(46, 125, 50, 0.12));
+	border-color: var(--color-success, #2e7d32);
+}
+
+.hv-worker-stopped {
+	background: var(--color-warning-background, rgba(255, 152, 0, 0.12));
+	border-color: var(--color-warning, #ff9800);
+}
+
+.hv-worker-stale {
+	background: var(--color-error-background, rgba(198, 40, 40, 0.1));
+	border-color: var(--color-error, #c62828);
+}
+
+.hv-worker-meta {
+	margin: 0.35rem 0 0;
+	font-size: 0.9em;
+	opacity: 0.9;
+}
+
+.hv-summary-cards {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	margin-bottom: 1rem;
+}
+
+.hv-card {
+	padding: 0.5rem 1rem;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large);
+	min-width: 6rem;
+}
+
+.hv-card-n {
+	display: block;
+	font-size: 1.4rem;
+	font-weight: 600;
+}
+
+.hv-cache-strip {
+	margin-bottom: 1rem;
+	font-size: 0.95em;
+}
+
+.hv-tabs {
+	display: flex;
+	gap: 0.5rem;
+	margin-bottom: 1rem;
+}
+
+.hv-tabs button {
+	padding: 0.4rem 0.8rem;
+	border-radius: var(--border-radius-large);
+	border: 1px solid var(--color-border);
+	background: var(--color-main-background);
+}
+
+.hv-tabs button.active {
+	background: var(--color-primary-element);
+	color: var(--color-primary-text);
+}
+
+.hv-filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 1rem;
+	margin-bottom: 0.75rem;
+}
+
+.hv-jobs-table {
+	width: 100%;
+	font-size: 0.85rem;
+}
+
+.hv-jobs-table th {
+	text-align: left;
+}
+
+.hv-file-cell {
+	max-width: 220px;
+	word-break: break-word;
+}
+
+.hv-path-muted {
+	font-size: 0.8em;
+	opacity: 0.65;
+}
+
+.hv-state-queued { color: var(--color-warning-text, #e65100); }
+.hv-state-running { color: var(--color-primary-element, #0082c9); }
+.hv-state-failed { color: var(--color-error, #c62828); }
+.hv-state-done { color: var(--color-success, #2e7d32); }
+
+.hv-actions button {
+	margin-inline-end: 0.25rem;
+}
+
+.hv-job-error {
+	margin-top: 0.5rem;
+}
+
+.hv-error-toggle {
+	font-size: 0.85rem;
+}
+
+.hv-pagination {
+	margin-top: 1rem;
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+
+.hv-setting-row {
+	display: grid;
+	grid-template-columns: 1fr 2fr auto;
+	gap: 0.5rem;
+	align-items: center;
+	margin-bottom: 0.5rem;
+}
+
+.hv-logs pre {
+	font-size: 12px;
+	border-bottom: 1px solid var(--color-border);
+	margin: 0;
+	padding: 0.25rem 0;
+}

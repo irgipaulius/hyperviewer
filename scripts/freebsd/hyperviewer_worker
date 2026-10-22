@@ -1,0 +1,116 @@
+#!/bin/sh
+# FreeBSD rc.d script: Hyper Viewer queue worker (runs as www).
+# Uses plain `daemon -f -u` + an sh restart loop, because FreeBSD 13.5's
+# daemon(8) supervisor mode (-p/-P/-o/-r) dies on the TrueNAS 13.1 kernel.
+#
+# Install: cp this /usr/local/etc/rc.d/hyperviewer_worker && chmod 555 it
+# Enable:  sysrc hyperviewer_worker_enable=YES
+
+# PROVIDE: hyperviewer_worker
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="hyperviewer_worker"
+rcvar="hyperviewer_worker_enable"
+load_rc_config $name
+
+: ${hyperviewer_worker_enable:="NO"}
+: ${hyperviewer_worker_user:="www"}
+: ${hyperviewer_worker_php:="/usr/local/bin/php"}
+: ${hyperviewer_worker_occ:="/usr/local/www/nextcloud/occ"}
+: ${hyperviewer_worker_concurrency:="1"}
+: ${hyperviewer_worker_log:="/var/log/hyperviewer_worker.log"}
+: ${hyperviewer_worker_rundir:="/var/run/hyperviewer_worker"}
+: ${hyperviewer_worker_restart_delay:="10"}
+: ${hyperviewer_worker_stop_timeout:="60"}
+
+pidfile="${hyperviewer_worker_rundir}/loop.pid"
+childpidfile="${hyperviewer_worker_rundir}/worker.pid"
+
+extra_commands="status"
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+status_cmd="${name}_status"
+
+# Runs as the worker user under daemon -f. $1..$7 are passed by start.
+_loop='
+php="$1"; occ="$2"; conc="$3"; log="$4"; pidf="$5"; cpidf="$6"; delay="$7"
+echo $$ > "$pidf"
+stop=0; child=""
+trap '"'"'stop=1; [ -n "$child" ] && kill -TERM "$child" 2>/dev/null'"'"' TERM INT HUP
+while [ "$stop" = 0 ]; do
+	echo "$(date "+%Y-%m-%d %H:%M:%S") starting hyperviewer:worker" >> "$log"
+	env HV_WORKER=1 "$php" "$occ" hyperviewer:worker --concurrency="$conc" </dev/null >> "$log" 2>&1 &
+	child=$!
+	echo "$child" > "$cpidf"
+	while kill -0 "$child" 2>/dev/null; do wait "$child"; done
+	wait "$child" 2>/dev/null; rc=$?
+	child=""; rm -f "$cpidf"
+	[ "$stop" = 1 ] && break
+	echo "$(date "+%Y-%m-%d %H:%M:%S") worker exited (rc=$rc), restarting in ${delay}s" >> "$log"
+	sleep "$delay" & s=$!; wait "$s"; kill "$s" 2>/dev/null
+done
+echo "$(date "+%Y-%m-%d %H:%M:%S") loop stopped" >> "$log"
+rm -f "$pidf" "$cpidf"
+'
+
+_hv_running() {
+	[ -f "${pidfile}" ] && kill -0 "$(cat "${pidfile}")" 2>/dev/null
+}
+
+hyperviewer_worker_start() {
+	if _hv_running; then
+		[ -z "${rc_quiet}" ] && echo "${name} already running as pid $(cat "${pidfile}")."
+		return 0
+	fi
+	install -d -o "${hyperviewer_worker_user}" -m 755 "${hyperviewer_worker_rundir}"
+	[ -f "${hyperviewer_worker_log}" ] || install -o "${hyperviewer_worker_user}" -m 640 /dev/null "${hyperviewer_worker_log}"
+	chown "${hyperviewer_worker_user}" "${hyperviewer_worker_log}"
+	rm -f "${pidfile}" "${childpidfile}"
+	[ -z "${rc_quiet}" ] && echo "Starting ${name}."
+	/usr/sbin/daemon -f -u "${hyperviewer_worker_user}" /bin/sh -c "${_loop}" hv_loop \
+		"${hyperviewer_worker_php}" "${hyperviewer_worker_occ}" "${hyperviewer_worker_concurrency}" \
+		"${hyperviewer_worker_log}" "${pidfile}" "${childpidfile}" "${hyperviewer_worker_restart_delay}"
+	_i=0
+	while [ ! -f "${pidfile}" ] && [ "${_i}" -lt 10 ]; do sleep 1; _i=$((_i + 1)); done
+	_hv_running || { echo "${name} failed to start; see ${hyperviewer_worker_log}"; return 1; }
+}
+
+hyperviewer_worker_stop() {
+	if ! _hv_running; then
+		[ -z "${rc_quiet}" ] && echo "${name} not running."
+		rm -f "${pidfile}" "${childpidfile}"
+		return 0
+	fi
+	_lp=$(cat "${pidfile}")
+	_cp=$(cat "${childpidfile}" 2>/dev/null)
+	echo "Stopping ${name} (waiting up to ${hyperviewer_worker_stop_timeout}s for the current encode)."
+	kill -TERM "${_lp}" 2>/dev/null
+	[ -n "${_cp}" ] && kill -TERM "${_cp}" 2>/dev/null
+	_i=0
+	while [ "${_i}" -lt "${hyperviewer_worker_stop_timeout}" ]; do
+		kill -0 "${_lp}" 2>/dev/null || { [ -n "${_cp}" ] && kill -0 "${_cp}" 2>/dev/null; } || break
+		sleep 1; _i=$((_i + 1))
+	done
+	if kill -0 "${_lp}" 2>/dev/null || { [ -n "${_cp}" ] && kill -0 "${_cp}" 2>/dev/null; }; then
+		echo "${name} did not stop in time; killing."
+		[ -n "${_cp}" ] && pkill -KILL -P "${_cp}" 2>/dev/null
+		[ -n "${_cp}" ] && kill -KILL "${_cp}" 2>/dev/null
+		kill -KILL "${_lp}" 2>/dev/null
+	fi
+	rm -f "${pidfile}" "${childpidfile}"
+}
+
+hyperviewer_worker_status() {
+	if _hv_running; then
+		_cp=$(cat "${childpidfile}" 2>/dev/null)
+		echo "${name} is running as pid $(cat "${pidfile}") (worker pid ${_cp:-restarting})."
+		return 0
+	fi
+	echo "${name} is not running."
+	return 1
+}
+
+run_rc_command "$1"
