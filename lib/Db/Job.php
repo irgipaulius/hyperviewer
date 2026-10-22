@@ -45,12 +45,12 @@ use OCP\AppFramework\Db\Entity;
  * @method void setFinishedAt(?int $finishedAt)
  */
 class Job extends Entity {
-	protected $type = '';
+	protected $type = null;
 	protected $fileid = null;
 	protected $mediaId = null;
-	protected $userId = '';
+	protected $userId = null;
 	protected $payload = null;
-	protected $state = 'queued';
+	protected $state = null;
 	protected $priority = 100;
 	protected $progress = 0;
 	protected $attempts = 0;

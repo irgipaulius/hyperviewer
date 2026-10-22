@@ -1,4 +1,5 @@
 import exportModalTemplate from "../templates/export-modal.html";
+import { showError, showSuccess } from "@nextcloud/dialogs";
 
 export class ClipEditor {
 
@@ -357,13 +358,14 @@ export class ClipEditor {
 			}
 
 			if (result.jobId) {
+				showSuccess(`Queued (job #${result.jobId})`);
 				await this.pollClipJob(result.jobId, clipFilename, exportPath);
 			}
 
 			console.log("✅ Export finished:", result);
 		} catch (error) {
 			console.error("❌ Export failed:", error);
-			OC.dialogs.alert(`Export failed: ${error.message}`, "Export Error");
+			showError(`Export failed: ${error.message}`);
 		}
 	}
 

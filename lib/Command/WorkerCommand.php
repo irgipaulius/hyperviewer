@@ -9,6 +9,7 @@ use OCA\HyperViewer\Service\ConfigService;
 use OCA\HyperViewer\Service\JobProcessorService;
 use OCA\HyperViewer\Service\QueueService;
 use OCA\HyperViewer\Service\WorkerLifecycle;
+use OCA\HyperViewer\Service\WorkerStatusService;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -20,6 +21,7 @@ class WorkerCommand extends Command {
 		private JobProcessorService $processor,
 		private QueueService $queueService,
 		private ConfigService $config,
+		private WorkerStatusService $workerStatus,
 	) {
 		parent::__construct();
 	}
@@ -49,6 +51,8 @@ class WorkerCommand extends Command {
 			pcntl_signal(SIGTERM, $handler);
 			pcntl_signal(SIGINT, $handler);
 		}
+		$this->workerStatus->registerWorker($concurrency);
+		try {
 		do {
 			if (WorkerLifecycle::isTerminating()) {
 				break;
@@ -69,12 +73,18 @@ class WorkerCommand extends Command {
 				break;
 			}
 			if ($claimed === 0) {
+				$this->workerStatus->heartbeat();
 				sleep(2);
+			} else {
+				$this->workerStatus->heartbeat();
 			}
 			if (function_exists('pcntl_signal_dispatch')) {
 				pcntl_signal_dispatch();
 			}
 		} while (!$once);
+		} finally {
+			$this->workerStatus->unregisterWorker();
+		}
 		if ($this->jobMapper->countByState('queued') > 0 && !WorkerLifecycle::isTerminating()) {
 			$this->queueService->ensureWakeJob();
 		}

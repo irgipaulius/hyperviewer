@@ -102,22 +102,30 @@ class MediaController extends Controller {
 		}
 		$fileids = array_values(array_unique(array_map('intval', $fileids)));
 		$enqueued = 0;
+		$jobIds = [];
 		foreach ($fileids as $fileid) {
 			if ($fileid <= 0) {
 				continue;
 			}
 			$this->mediaIndex->resolveFileForUser($user->getUID(), $fileid);
 			try {
-				$this->queueService->enqueueFingerprint($user->getUID(), $fileid, [
+				$job = $this->queueService->enqueueFingerprint($user->getUID(), $fileid, [
 					'resolutions' => $resolutions,
 					'autoEncode' => true,
 				]);
+				$jobIds[] = $job->getId();
 				$enqueued++;
 			} catch (\RuntimeException) {
 				// already queued
 			}
 		}
-		return new JSONResponse(['success' => true, 'enqueued' => $enqueued, 'filesCount' => $enqueued]);
+		return new JSONResponse([
+			'success' => true,
+			'enqueued' => $enqueued,
+			'filesCount' => $enqueued,
+			'jobIds' => $jobIds,
+			'jobId' => $jobIds[0] ?? null,
+		]);
 	}
 
 	#[NoAdminRequired]
@@ -151,11 +159,22 @@ class MediaController extends Controller {
 			}
 		}
 		$ready = $media !== null && in_array($media->getCacheState(), ['partial', 'ready'], true);
+		$activeJob = $fileid > 0 ? $this->jobMapper->findLatestActiveForFileid($fileid) : null;
+		$jobPayload = null;
+		if ($activeJob !== null) {
+			$jobPayload = [
+				'id' => $activeJob->getId(),
+				'state' => $activeJob->getState(),
+				'progress' => $activeJob->getProgress(),
+				'type' => $activeJob->getType(),
+			];
+		}
 		return new JSONResponse([
 			'exists' => $ready,
 			'cache_state' => $media?->getCacheState() ?? 'none',
 			'fingerprint' => $media?->getFingerprint(),
 			'fileid' => $fileid,
+			'job' => $jobPayload,
 		]);
 	}
 }

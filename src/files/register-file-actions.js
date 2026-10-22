@@ -118,6 +118,19 @@ export function registerHyperViewerFileActions(handlers) {
 				directory,
 			)
 			const state = status.cache_state ?? (status.exists ? 'ready' : 'none')
+			const job = status.job
+			if (job && (job.state === 'queued' || job.state === 'running')) {
+				const badge = document.createElement('span')
+				badge.className = 'hls-badge hls-badge-partial'
+				if (job.state === 'running' && job.progress > 0) {
+					badge.textContent = `${job.progress}%`
+					badge.title = t('hyperviewer', 'Encoding in progress')
+				} else {
+					badge.textContent = t('hyperviewer', 'Queued')
+					badge.title = t('hyperviewer', 'Job #{id} queued', { id: job.id })
+				}
+				return badge
+			}
 			if (state !== 'ready' && state !== 'partial') {
 				return null
 			}

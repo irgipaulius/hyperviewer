@@ -5,6 +5,7 @@
 import "./styles/cache-modal.css";
 import { registerHyperViewerFileActions } from "./files/register-file-actions.js";
 import { folderPath } from "./files/nodePaths.js";
+import { showError, showSuccess } from "@nextcloud/dialogs";
 
 console.log("🎬 Hyper Viewer Files integration loading…");
 
@@ -695,26 +696,22 @@ async function startCacheGeneration(files, directoryPath = null) {
 		const result = await response.json();
 
 		if (result.success) {
-			console.log("HLS cache generation started successfully", result);
-
-			// Start progress tracking
-			if (result.jobId) {
-				console.log(`📈 Tracking progress for job: ${result.jobId}`);
+			const ids = result.jobIds || (result.jobId ? [result.jobId] : []);
+			if (ids.length === 1) {
+				showSuccess(`Queued (job #${ids[0]})`);
+			} else if (ids.length > 1) {
+				showSuccess(`Queued ${ids.length} jobs (#${ids.join(", #")})`);
+			} else {
+				showSuccess(
+					`Cache generation queued for ${files.length} file(s). Start the worker to process jobs.`
+				);
 			}
-
-			OC.dialogs.info(
-				`Cache generation started for ${files.length} file(s).\n\nResolutions: ${options.resolutions.join(", ")}\n\nJobs run in the background worker.`,
-				"HLS Cache Generation Started"
-			);
 		} else {
 			throw new Error(result.error || "Unknown error occurred");
 		}
 	} catch (error) {
 		console.error("Failed to start HLS cache generation:", error);
-		OC.dialogs.alert(
-			`Failed to start cache generation: ${error.message}`,
-			"Error"
-		);
+		showError(`Failed to start cache generation: ${error.message}`);
 	}
 }
 

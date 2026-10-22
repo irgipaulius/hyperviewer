@@ -90,6 +90,18 @@ class JobMapper extends QBMapper {
 		return (int)($row['cnt'] ?? 0);
 	}
 
+	public function countByStateSince(string $state, int $sinceTimestamp): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('*', 'cnt'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('state', $qb->createNamedParameter($state)))
+			->andWhere($qb->expr()->gte('finished_at', $qb->createNamedParameter($sinceTimestamp, IQueryBuilder::PARAM_INT)));
+		$result = $qb->executeQuery();
+		$row = $result->fetch();
+		$result->closeCursor();
+		return (int)($row['cnt'] ?? 0);
+	}
+
 	/** @return Job[] */
 	public function findActiveByUser(string $userId, int $limit = 50): array {
 		$qb = $this->db->getQueryBuilder();
@@ -128,7 +140,13 @@ class JobMapper extends QBMapper {
 	}
 
 	/** @return Job[] */
-	public function listJobs(?string $state, int $limit, int $offset, ?string $userId = null): array {
+	public function listJobs(
+		?string $state,
+		int $limit,
+		int $offset,
+		?string $userId = null,
+		?string $type = null,
+	): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName());
@@ -143,12 +161,67 @@ class JobMapper extends QBMapper {
 				$qb->andWhere($expr);
 			} else {
 				$qb->where($expr);
+				$hasWhere = true;
+			}
+		}
+		if ($type !== null && $type !== '') {
+			if ($type === 'hls') {
+				$expr = $qb->expr()->in(
+					'type',
+					$qb->createNamedParameter(['encode', 'upgrade'], IQueryBuilder::PARAM_STR_ARRAY),
+				);
+			} else {
+				$expr = $qb->expr()->eq('type', $qb->createNamedParameter($type));
+			}
+			if ($hasWhere) {
+				$qb->andWhere($expr);
+			} else {
+				$qb->where($expr);
 			}
 		}
 		$qb->orderBy('created_at', 'DESC')
 			->setMaxResults($limit)
 			->setFirstResult($offset);
 		return $this->findEntities($qb);
+	}
+
+	public function findLatestActiveForFileid(int $fileid): ?Job {
+		if ($fileid <= 0) {
+			return null;
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('fileid', $qb->createNamedParameter($fileid, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->in('state', $qb->createNamedParameter(['queued', 'running'], IQueryBuilder::PARAM_STR_ARRAY)))
+			->orderBy('created_at', 'DESC')
+			->setMaxResults(1);
+		try {
+			return $this->findEntity($qb);
+		} catch (\OCP\AppFramework\Db\DoesNotExistException) {
+			return null;
+		}
+	}
+
+	public function findFollowUpEncodeJob(int $fileid, ?int $mediaId, int $afterJobId): ?Job {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->gt('id', $qb->createNamedParameter($afterJobId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->in('type', $qb->createNamedParameter(['encode', 'upgrade'], IQueryBuilder::PARAM_STR_ARRAY)));
+		if ($mediaId !== null && $mediaId > 0) {
+			$qb->andWhere($qb->expr()->eq('media_id', $qb->createNamedParameter($mediaId, IQueryBuilder::PARAM_INT)));
+		} elseif ($fileid > 0) {
+			$qb->andWhere($qb->expr()->eq('fileid', $qb->createNamedParameter($fileid, IQueryBuilder::PARAM_INT)));
+		} else {
+			return null;
+		}
+		$qb->orderBy('id', 'ASC')->setMaxResults(1);
+		try {
+			return $this->findEntity($qb);
+		} catch (\OCP\AppFramework\Db\DoesNotExistException) {
+			return null;
+		}
 	}
 
 	/** @return Job[] */

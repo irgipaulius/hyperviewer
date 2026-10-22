@@ -22,6 +22,7 @@ return [
 		['name' => 'job#statistics', 'url' => '/api/jobs/statistics', 'verb' => 'GET'],
 		['name' => 'job#retry', 'url' => '/api/jobs/{id}/retry', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 		['name' => 'job#cancel', 'url' => '/api/jobs/{id}/cancel', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
+		['name' => 'job#bump', 'url' => '/api/jobs/{id}/bump', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 		['name' => 'job#batchStatus', 'url' => '/api/jobs/batch-status', 'verb' => 'POST'],
 		['name' => 'job#batchDelete', 'url' => '/api/jobs/batch-delete', 'verb' => 'POST'],
 
@@ -31,6 +32,7 @@ return [
 		['name' => 'watch#scanNow', 'url' => '/api/auto-generation/{id}/scan', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 
 		['name' => 'admin#overview', 'url' => '/api/admin/overview', 'verb' => 'GET'],
+		['name' => 'admin#status', 'url' => '/api/admin/status', 'verb' => 'GET'],
 		['name' => 'admin#getSettings', 'url' => '/api/admin/settings', 'verb' => 'GET'],
 		['name' => 'admin#setSetting', 'url' => '/api/admin/settings', 'verb' => 'POST'],
 		['name' => 'admin#resetSetting', 'url' => '/api/admin/settings/reset', 'verb' => 'POST'],

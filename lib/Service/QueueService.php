@@ -93,6 +93,17 @@ class QueueService {
 		return $job;
 	}
 
+	public function bumpPriority(int $jobId): Job {
+		$job = $this->jobMapper->findById($jobId);
+		if ($job->getState() !== 'queued') {
+			throw new \RuntimeException('Only queued jobs can be bumped');
+		}
+		$job->setPriority(max(0, $job->getPriority() - 50));
+		$this->jobMapper->update($job);
+		$this->ensureWakeJob();
+		return $job;
+	}
+
 	public function markFailed(Job $job, string $error): void {
 		$job->setAttempts($job->getAttempts() + 1);
 		$job->setError(mb_substr($error, 0, 2000));

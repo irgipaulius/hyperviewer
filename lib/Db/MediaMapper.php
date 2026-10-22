@@ -53,4 +53,38 @@ class MediaMapper extends QBMapper {
 		$media->setLastAccessAt(time());
 		$this->update($media);
 	}
+
+	/** @return array<string, mixed> */
+	public function getCacheSummary(): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('*', 'cnt'))
+			->addSelect($qb->func()->sum('cache_bytes', 'bytes'))
+			->from($this->getTableName());
+		$res = $qb->executeQuery();
+		$row = $res->fetch();
+		$res->closeCursor();
+		$total = (int)($row['cnt'] ?? 0);
+		$bytes = (int)($row['bytes'] ?? 0);
+
+		$qb2 = $this->db->getQueryBuilder();
+		$qb2->select('cache_state')
+			->addSelect($qb2->func()->count('*', 'cnt'))
+			->from($this->getTableName())
+			->groupBy('cache_state');
+		$res2 = $qb2->executeQuery();
+		$byState = [];
+		while ($r = $res2->fetch()) {
+			$byState[(string)$r['cache_state']] = (int)$r['cnt'];
+		}
+		$res2->closeCursor();
+
+		return [
+			'total_indexed' => $total,
+			'ready' => (int)($byState['ready'] ?? 0),
+			'partial' => (int)($byState['partial'] ?? 0),
+			'none' => (int)($byState['none'] ?? 0),
+			'cache_bytes_db' => $bytes,
+			'by_state' => $byState,
+		];
+	}
 }
