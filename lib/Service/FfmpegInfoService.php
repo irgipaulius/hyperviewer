@@ -43,4 +43,25 @@ class FfmpegInfoService {
 		$free = @disk_free_space($dir);
 		return $free !== false ? (int)$free : null;
 	}
+
+	/** @return list<string> */
+	public function detectHardwareEncoders(): array {
+		$ffmpeg = $this->config->getString(ConfigService::KEY_FFMPEG);
+		if ($ffmpeg === '' || !is_executable($ffmpeg)) {
+			return [];
+		}
+		$cmd = escapeshellarg($ffmpeg) . ' -hide_banner -encoders 2>&1';
+		$out = shell_exec($cmd);
+		if (!is_string($out) || $out === '') {
+			return [];
+		}
+		$needles = ['h264_nvenc', 'hevc_nvenc', 'h264_videotoolbox', 'h264_qsv', 'h264_vaapi'];
+		$found = [];
+		foreach ($needles as $n) {
+			if (str_contains($out, $n)) {
+				$found[] = $n;
+			}
+		}
+		return $found;
+	}
 }

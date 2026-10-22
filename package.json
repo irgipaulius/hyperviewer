@@ -26,7 +26,8 @@
     "scripts": {
         "check:vue-templates": "node scripts/check-inline-vue-template.mjs",
         "test:smoke": "node scripts/smoke-bundles.mjs",
-        "build": "npm run check:vue-templates && NODE_ENV=production webpack --progress --config webpack.js && npm run test:smoke",
+        "test:mount": "node scripts/vue-mount-smoke.mjs",
+        "build": "npm run check:vue-templates && NODE_ENV=production webpack --progress --config webpack.js && npm run test:smoke && npm run test:mount",
         "dev": "NODE_ENV=development webpack --progress --config webpack.js",
         "watch": "NODE_ENV=development webpack --progress --watch --config webpack.js",
         "build:vite": "vite build",
@@ -61,8 +62,11 @@
         "@nextcloud/eslint-config": "^6.0.0",
         "@nextcloud/stylelint-config": "^1.0.0-beta.0",
         "@nextcloud/webpack-vue-config": "^4.0.3",
+        "@vue/test-utils": "^1.3.6",
         "html-loader": "^5.1.0",
-        "prettier": "1.19.1"
+        "jsdom": "^24.0.0",
+        "prettier": "1.19.1",
+        "vue-template-compiler": "^2.6.14"
     },
     "optionalDependencies": {
         "fsevents": "2.3.3"

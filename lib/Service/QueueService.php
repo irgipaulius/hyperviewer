@@ -28,9 +28,20 @@ class QueueService {
 		if ($this->config->getBool(ConfigService::KEY_QUEUE_PAUSED)) {
 			throw new \RuntimeException('Queue is paused');
 		}
+		$userId = (string)($job->getUserId() ?? '');
+		if ($userId !== '') {
+			$max = $this->config->getInt(ConfigService::KEY_MAX_JOBS_PER_USER);
+			if ($max > 0) {
+				$queued = $this->jobMapper->countForUserByState($userId, 'queued');
+				if ($queued >= $max) {
+					throw new \RuntimeException('Maximum queued jobs reached for your account');
+				}
+			}
+		}
+		$this->applyJobDefaults($job);
 		$job->setState('queued');
 		$job->setCreatedAt(time());
-		$job->setNextAttemptAt(time());
+		$job->setNextAttemptAt($this->nextRunnableTimestamp());
 		$inserted = $this->jobMapper->insert($job);
 		$this->ensureWakeJob();
 		$this->logMapper->append('info', 'queue', 'Job enqueued', ['type' => $job->getType(), 'id' => $inserted->getId()], $job->getUserId(), $job->getFileid(), $inserted->getId());
@@ -61,6 +72,28 @@ class QueueService {
 		if ($payload !== null) {
 			$job->setPayload(json_encode($payload));
 		}
+		return $this->enqueue($job);
+	}
+
+	public function enqueueScan(string $userId, string $path, bool $reindex = false): Job {
+		$job = new Job();
+		$job->setType('scan');
+		$job->setUserId($userId);
+		$job->setPayload(json_encode(['path' => $path, 'reindex' => $reindex]));
+		$job->setPriority(self::PRIORITY_SCAN);
+		return $this->enqueue($job);
+	}
+
+	public function enqueueAdopt(string $userId, ?int $limit = null): Job {
+		$job = new Job();
+		$job->setType('adopt');
+		$job->setUserId($userId);
+		$payload = [];
+		if ($limit !== null && $limit > 0) {
+			$payload['limit'] = $limit;
+		}
+		$job->setPayload(json_encode($payload));
+		$job->setPriority(self::PRIORITY_SCAN);
 		return $this->enqueue($job);
 	}
 
@@ -140,5 +173,53 @@ class QueueService {
 		if (!$this->jobList->has(\OCA\HyperViewer\BackgroundJob\ProcessHvQueueJob::class, null)) {
 			$this->jobList->add(\OCA\HyperViewer\BackgroundJob\ProcessHvQueueJob::class);
 		}
+	}
+
+	private function applyJobDefaults(Job $job): void {
+		if ($job->getPriority() === null) {
+			$job->setPriority(100);
+		}
+		if ($job->getProgress() === null) {
+			$job->setProgress(0);
+		}
+		if ($job->getAttempts() === null) {
+			$job->setAttempts(0);
+		}
+		if ($job->getMaxAttempts() === null) {
+			$job->setMaxAttempts(3);
+		}
+	}
+
+	public function nextRunnableTimestamp(?int $base = null): int {
+		$base ??= time();
+		if ($this->isQuietHours($base)) {
+			$end = $this->config->getInt(ConfigService::KEY_QUIET_HOURS_END);
+			$start = $this->config->getInt(ConfigService::KEY_QUIET_HOURS_START);
+			if ($start >= 0 && $end >= 0) {
+				$todayEnd = strtotime(sprintf('today %02d:00:00', $end));
+				if ($todayEnd <= $base) {
+					$todayEnd += 86400;
+				}
+				return $todayEnd;
+			}
+		}
+		return $base;
+	}
+
+	public function isQuietHours(?int $ts = null): bool {
+		$ts ??= time();
+		$start = $this->config->getInt(ConfigService::KEY_QUIET_HOURS_START);
+		$end = $this->config->getInt(ConfigService::KEY_QUIET_HOURS_END);
+		if ($start < 0 || $end < 0) {
+			return false;
+		}
+		$hour = (int)date('G', $ts);
+		if ($start === $end) {
+			return false;
+		}
+		if ($start < $end) {
+			return $hour >= $start && $hour < $end;
+		}
+		return $hour >= $start || $hour < $end;
 	}
 }

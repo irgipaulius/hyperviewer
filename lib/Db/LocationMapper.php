@@ -71,7 +71,7 @@ class LocationMapper extends QBMapper {
 	/** @return list<array{fileid: int, filename: string, directory: string, cache_state: string, cache_bytes: int, files_dir: string}> */
 	public function listLibraryForUser(string $userId, int $limit = 200): array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('l.fileid', 'l.path', 'm.cache_state', 'm.cache_bytes')
+		$qb->select('l.fileid', 'l.path', 'm.cache_state', 'm.cache_bytes', 'm.fingerprint', 'm.renditions', 'm.pinned', 'm.id')
 			->from($this->getTableName(), 'l')
 			->innerJoin('l', 'hv_media', 'm', $qb->expr()->eq('l.media_id', 'm.id'))
 			->where($qb->expr()->eq('l.user_id', $qb->createNamedParameter($userId)))
@@ -79,7 +79,8 @@ class LocationMapper extends QBMapper {
 				'm.cache_state',
 				$qb->createNamedParameter(['ready', 'partial'], \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_STR_ARRAY),
 			))
-			->orderBy('m.last_access_at', 'DESC')
+			->orderBy('m.pinned', 'DESC')
+			->addOrderBy('m.last_access_at', 'DESC')
 			->setMaxResults($limit);
 		$res = $qb->executeQuery();
 		$out = [];
@@ -89,13 +90,18 @@ class LocationMapper extends QBMapper {
 			if ($dir === '.' || $dir === '\\') {
 				$dir = '/';
 			}
+			$renditions = json_decode((string)($row['renditions'] ?? '[]'), true);
 			$out[] = [
 				'fileid' => (int)$row['fileid'],
+				'media_id' => (int)$row['id'],
 				'filename' => basename($path),
 				'directory' => $dir,
 				'files_dir' => $dir,
 				'cache_state' => (string)$row['cache_state'],
 				'cache_bytes' => (int)$row['cache_bytes'],
+				'fingerprint' => (string)$row['fingerprint'],
+				'pinned' => (bool)$row['pinned'],
+				'renditions' => is_array($renditions) ? $renditions : [],
 			];
 		}
 		$res->closeCursor();
@@ -126,5 +132,23 @@ class LocationMapper extends QBMapper {
 		$row = $result->fetch();
 		$result->closeCursor();
 		return (int)($row['cnt'] ?? 0);
+	}
+
+	/** @return list<string> */
+	public function listDistinctUserIds(): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->selectDistinct('user_id')
+			->from($this->getTableName())
+			->where($qb->expr()->neq('user_id', $qb->createNamedParameter('')));
+		$result = $qb->executeQuery();
+		$ids = [];
+		while (($row = $result->fetch()) !== false) {
+			$uid = (string)($row['user_id'] ?? '');
+			if ($uid !== '') {
+				$ids[] = $uid;
+			}
+		}
+		$result->closeCursor();
+		return $ids;
 	}
 }

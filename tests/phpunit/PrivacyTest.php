@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\HyperViewer\Tests;
 
+use OCA\HyperViewer\Db\JobMapper;
 use OCA\HyperViewer\Db\LogMapper;
 use PHPUnit\Framework\TestCase;
 
@@ -27,5 +28,10 @@ class PrivacyTest extends TestCase {
 		self::assertStringNotContainsString('filename', $json);
 		self::assertStringNotContainsString('user_id', $json);
 		self::assertStringNotContainsString('fileid', $json);
+	}
+
+	public function testErrorCategoriesAreAnonymous(): void {
+		self::assertSame('timeout', JobMapper::categorizeError('encode timed out after 3600s'));
+		self::assertSame('disk', JobMapper::categorizeError('No space left on device'));
 	}
 }

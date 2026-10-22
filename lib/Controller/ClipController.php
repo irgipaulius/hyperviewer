@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\HyperViewer\Controller;
 
 use OCA\HyperViewer\Service\MediaIndexService;
+use OCA\HyperViewer\Service\PermissionsService;
 use OCA\HyperViewer\Service\QueueService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -21,6 +22,7 @@ class ClipController extends Controller {
 		private MediaIndexService $mediaIndex,
 		private IRootFolder $rootFolder,
 		private QueueService $queueService,
+		private PermissionsService $permissions,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -30,6 +32,11 @@ class ClipController extends Controller {
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		}
+		try {
+			$this->permissions->assertCanExportClip($user);
+		} catch (\Throwable $e) {
+			return new JSONResponse(['error' => $e->getMessage()], 403);
 		}
 		$params = $this->request->getParams();
 		$body = json_decode((string)file_get_contents('php://input'), true);

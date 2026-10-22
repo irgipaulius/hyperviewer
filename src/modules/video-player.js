@@ -9,10 +9,11 @@ import { ClipEditor } from "./clip-editor";
 import { extractFrameBlob } from "./frame-extractor";
 import { FileType } from "@nextcloud/files";
 import { folderPath, isVideoMime, viewerPath } from "../files/nodePaths.js";
+import { fetchJson } from "../shared/api.js";
 
 async function checkHlsCacheByFileid(fileid, filename, directory) {
 	try {
-		const response = await fetch(
+		const result = await fetchJson(
 			OC.generateUrl("/apps/hyperviewer/cache/check"),
 			{
 				method: "POST",
@@ -23,7 +24,6 @@ async function checkHlsCacheByFileid(fileid, filename, directory) {
 				body: JSON.stringify({ fileid, filename, directory })
 			}
 		);
-		const result = await response.json();
 		return result.exists ? result.fingerprint : null;
 	} catch (error) {
 		console.error("Failed to check HLS cache:", error);
@@ -36,7 +36,7 @@ async function checkHlsCacheByFileid(fileid, filename, directory) {
  * @param {import('@nextcloud/files').IFolder} folder
  * @param {import('@nextcloud/files').INode[]} [contents]
  */
-export async function playVideoSmart(node, folder, contents = []) {
+export async function playVideoSmart(node, folder, contents = [], options = {}) {
 	const directory = folderPath(folder, node);
 	const filename = node.basename;
 	const fileid = node.fileid ?? 0;
@@ -49,7 +49,7 @@ export async function playVideoSmart(node, folder, contents = []) {
 			directory
 		);
 		if (fingerprint) {
-			loadShakaPlayer(node, fingerprint, folder, contents);
+			loadShakaPlayer(node, fingerprint, folder, contents, options);
 		} else {
 			openWithDefaultPlayer(viewerPath(node, folder));
 		}
@@ -83,7 +83,7 @@ function videoPlaylistFromContents(contents) {
  * @param {import('@nextcloud/files').IFolder} folder
  * @param {import('@nextcloud/files').INode[]} contents
  */
-function loadShakaPlayer(node, fingerprint, folder, contents) {
+function loadShakaPlayer(node, fingerprint, folder, contents, options = {}) {
 	const filename = node.basename;
 	const directory = folderPath(folder, node);
 	const fileid = node.fileid ?? 0;
@@ -98,6 +98,7 @@ function loadShakaPlayer(node, fingerprint, folder, contents) {
         background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center;
         padding: 20px; box-sizing: border-box;
     `;
+	modal.className = "hv-player-modal";
 
 	modal.innerHTML = playerModalTemplate.replace(/\$\{videoId\}/g, videoId);
 
@@ -314,20 +315,47 @@ function loadShakaPlayer(node, fingerprint, folder, contents) {
 		const masterUrl = `${base}/${enc}/master.m3u8`;
 		const playlistUrl = `${base}/${enc}/playlist.m3u8`;
 
-		player.load(masterUrl).catch(() => player.load(playlistUrl));
+		const loadMaster = async () => {
+			try {
+				await player.load(masterUrl);
+			} catch {
+				await player.load(playlistUrl);
+			}
+		};
+		loadMaster();
+
+		fetchJson(
+			OC.generateUrl(`/apps/hyperviewer/api/media/status?fileids[]=${fileid}`),
+			{ headers: { requesttoken: OC.requestToken } },
+		)
+			.then(data => {
+				const item = data && data.items && data.items[fileid];
+				const renditions = item && item.renditions;
+				if (!renditions || renditions.length === 0) {
+					const hint = modal.querySelector(".hv-rendition-hint");
+					if (hint) {
+						hint.textContent = "Quality: Auto (from stream)";
+					}
+				}
+			})
+			.catch(() => {});
 
 		player.addEventListener("trackschanged", () => {
 			const variants = player.getVariantTracks().filter(t => t.type === "variant");
-			if (variants.length > 1) {
-				ui.configure({
-					overflowMenuButtons: [
-						"picture_in_picture",
-						"quality",
-						"playback_rate",
-						"save_video_frame",
-						"statistics"
-					]
-				});
+			ui.configure({
+				overflowMenuButtons: [
+					"picture_in_picture",
+					"quality",
+					"playback_rate",
+					"save_video_frame",
+					"statistics"
+				]
+			});
+			if (variants.length <= 1) {
+				const hint = modal.querySelector(".hv-rendition-hint");
+				if (hint) {
+					hint.textContent = "Quality: Auto";
+				}
 			}
 		});
 
@@ -353,6 +381,17 @@ function loadShakaPlayer(node, fingerprint, folder, contents) {
 	}
 
 	clipEditor.init();
+	if (options.clipMode && !clipEditor.isClipMode) {
+		video.addEventListener(
+			"loadedmetadata",
+			() => {
+				if (!clipEditor.isClipMode) {
+					clipEditor.toggleClipMode();
+				}
+			},
+			{ once: true }
+		);
+	}
 
 	const timelineContainer = modal.querySelector("#timeline-container");
 	timelineContainer.addEventListener("click", e => {

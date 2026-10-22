@@ -64,6 +64,37 @@ class CacheStoreService {
 		}
 	}
 
+	/** @return list<string> e.g. 720p, 1080p */
+	public function inferRenditionsFromPlaylist(string $fingerprint): array {
+		$path = $this->resolveFilePath($fingerprint, 'master.m3u8')
+			?? $this->resolveFilePath($fingerprint, 'playlist.m3u8');
+		if ($path === null) {
+			return [];
+		}
+		$content = @file_get_contents($path);
+		if (!is_string($content) || $content === '') {
+			return [];
+		}
+		$out = [];
+		if (preg_match_all('/RESOLUTION=(\d+)x(\d+)/', $content, $matches, PREG_SET_ORDER)) {
+			foreach ($matches as $m) {
+				$h = (int)$m[2];
+				if ($h >= 1080) {
+					$out[] = '1080p';
+				} elseif ($h >= 720) {
+					$out[] = '720p';
+				} elseif ($h >= 480) {
+					$out[] = '480p';
+				} elseif ($h >= 360) {
+					$out[] = '360p';
+				} elseif ($h >= 240) {
+					$out[] = '240p';
+				}
+			}
+		}
+		return array_values(array_unique($out));
+	}
+
 	public function isAllowedHlsFilename(string $filename): bool {
 		return (bool)preg_match('/^[A-Za-z0-9_.-]+\.(m3u8|ts|m4s|mp4)$/', $filename);
 	}

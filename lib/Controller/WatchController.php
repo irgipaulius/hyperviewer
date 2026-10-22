@@ -7,11 +7,13 @@ namespace OCA\HyperViewer\Controller;
 use OCA\HyperViewer\Db\Job;
 use OCA\HyperViewer\Db\WatchDirMapper;
 use OCA\HyperViewer\Service\ConfigService;
+use OCA\HyperViewer\Service\PermissionsService;
 use OCA\HyperViewer\Service\QueueService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
+use OCP\IUser;
 use OCP\IUserSession;
 
 class WatchController extends Controller {
@@ -22,17 +24,19 @@ class WatchController extends Controller {
 		private WatchDirMapper $watchDirMapper,
 		private QueueService $queueService,
 		private ConfigService $config,
+		private PermissionsService $permissions,
 	) {
 		parent::__construct($appName, $request);
 	}
 
 	#[NoAdminRequired]
 	public function list(): JSONResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		$auth = $this->guardAppUser();
+		if ($auth instanceof JSONResponse) {
+			return $auth;
 		}
-		$items = $this->watchDirMapper->findEnabledForUser($user->getUID());
+		$user = $auth;
+		$items = $this->watchDirMapper->findAllForUser($user->getUID());
 		return new JSONResponse(['directories' => array_map(static fn ($w) => [
 			'id' => $w->getId(),
 			'configKey' => (string)$w->getId(),
@@ -45,10 +49,11 @@ class WatchController extends Controller {
 
 	#[NoAdminRequired]
 	public function register(): JSONResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		$auth = $this->guardAppUser();
+		if ($auth instanceof JSONResponse) {
+			return $auth;
 		}
+		$user = $auth;
 		$directory = (string)$this->request->getParam('directory', '');
 		$resolutions = $this->request->getParam('resolutions', $this->config->getDefaultRenditions());
 		$wd = $this->watchDirMapper->upsert($user->getUID(), $directory, null, $resolutions, true, 100);
@@ -57,10 +62,11 @@ class WatchController extends Controller {
 
 	#[NoAdminRequired]
 	public function remove(int $id): JSONResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		$auth = $this->guardAppUser();
+		if ($auth instanceof JSONResponse) {
+			return $auth;
 		}
+		$user = $auth;
 		foreach ($this->watchDirMapper->findEnabledForUser($user->getUID()) as $wd) {
 			if ($wd->getId() === $id) {
 				$this->watchDirMapper->deleteById($id);
@@ -71,12 +77,31 @@ class WatchController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	public function scanNow(int $id): JSONResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return new JSONResponse(['error' => 'Unauthorized'], 401);
+	public function setEnabled(int $id): JSONResponse {
+		$auth = $this->guardAppUser();
+		if ($auth instanceof JSONResponse) {
+			return $auth;
 		}
-		$items = $this->watchDirMapper->findEnabledForUser($user->getUID());
+		$user = $auth;
+		$enabled = filter_var($this->request->getParam('enabled', true), FILTER_VALIDATE_BOOLEAN);
+		foreach ($this->watchDirMapper->findAllForUser($user->getUID()) as $wd) {
+			if ($wd->getId() === $id) {
+				$wd->setEnabled($enabled);
+				$this->watchDirMapper->update($wd);
+				return new JSONResponse(['success' => true, 'enabled' => $enabled]);
+			}
+		}
+		return new JSONResponse(['error' => 'Not found'], 404);
+	}
+
+	#[NoAdminRequired]
+	public function scanNow(int $id): JSONResponse {
+		$auth = $this->guardAppUser();
+		if ($auth instanceof JSONResponse) {
+			return $auth;
+		}
+		$user = $auth;
+		$items = $this->watchDirMapper->findAllForUser($user->getUID());
 		$path = '/';
 		foreach ($items as $item) {
 			if ($item->getId() === $id) {
@@ -91,5 +116,18 @@ class WatchController extends Controller {
 		$job->setPriority(QueueService::PRIORITY_SCAN);
 		$this->queueService->enqueue($job);
 		return new JSONResponse(['success' => true]);
+	}
+
+	private function guardAppUser(): IUser|JSONResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		}
+		try {
+			$this->permissions->assertCanUseApp($user);
+		} catch (\Throwable $e) {
+			return new JSONResponse(['error' => $e->getMessage()], 403);
+		}
+		return $user;
 	}
 }

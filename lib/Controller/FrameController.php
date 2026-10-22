@@ -7,6 +7,7 @@ namespace OCA\HyperViewer\Controller;
 use OCA\HyperViewer\Service\ConfigService;
 use OCA\HyperViewer\Service\FfmpegRunner;
 use OCA\HyperViewer\Service\MediaIndexService;
+use OCA\HyperViewer\Service\PermissionsService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
@@ -27,6 +28,7 @@ class FrameController extends Controller {
 		private FfmpegRunner $ffmpeg,
 		private ConfigService $config,
 		private ITempManager $tempManager,
+		private PermissionsService $permissions,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -41,6 +43,11 @@ class FrameController extends Controller {
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			return new DataResponse(['error' => 'Unauthorized'], 401);
+		}
+		try {
+			$this->permissions->assertCanUseApp($user);
+		} catch (\Throwable $e) {
+			return new DataResponse(['error' => $e->getMessage()], 403);
 		}
 		$params = $this->request->getParams();
 		$body = json_decode((string)file_get_contents('php://input'), true);

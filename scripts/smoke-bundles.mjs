@@ -7,7 +7,7 @@ const jsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'js'
 const bundles = {
 	'cockpit.js': ['hv-cockpit', 'Aggregate control plane'],
 	'personal.js': ['hv-personal', 'Right-click a video'],
-	'files-integration.js': ['hyperviewer-play', 'hyperviewer-hls-chip'],
+	'files-integration.js': ['hyperviewer-play', 'hyperviewer-copy-stream', 'hv-icon-overlay-badge'],
 }
 
 let failed = false

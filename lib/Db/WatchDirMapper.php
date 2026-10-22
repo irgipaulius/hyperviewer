@@ -15,6 +15,15 @@ class WatchDirMapper extends QBMapper {
 	}
 
 	/** @return WatchDir[] */
+	public function findAllForUser(string $userId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)));
+		return $this->findEntities($qb);
+	}
+
+	/** @return WatchDir[] */
 	public function findEnabledForUser(string $userId): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')

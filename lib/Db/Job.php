@@ -51,15 +51,15 @@ class Job extends Entity {
 	protected $userId = null;
 	protected $payload = null;
 	protected $state = null;
-	protected $priority = 100;
-	protected $progress = 0;
-	protected $attempts = 0;
-	protected $maxAttempts = 3;
-	protected $nextAttemptAt = 0;
+	protected $priority = null;
+	protected $progress = null;
+	protected $attempts = null;
+	protected $maxAttempts = null;
+	protected $nextAttemptAt = null;
 	protected $error = null;
 	protected $workerPid = null;
 	protected $heartbeatAt = null;
-	protected $createdAt = 0;
+	protected $createdAt = null;
 	protected $startedAt = null;
 	protected $finishedAt = null;
 

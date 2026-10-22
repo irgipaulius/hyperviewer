@@ -17,3 +17,38 @@
 .hls-badge.failed {
 	background: rgba(244, 67, 54, 0.9);
 }
+
+.hv-icon-overlay-badge {
+	position: absolute;
+	right: 0;
+	bottom: 0;
+	z-index: 3;
+	font-size: 8px;
+	font-weight: 700;
+	padding: 1px 4px;
+	border-radius: 6px;
+	background: var(--color-warning, #e6a700);
+	color: #fff;
+	pointer-events: none;
+}
+
+.hv-icon-overlay-badge.hv-overlay-failed {
+	background: var(--color-error, #e9322d);
+}
+
+.hv-icon-overlay-badge.hv-overlay-progress {
+	background: var(--color-primary-element, #0082c9);
+}
+
+@media (max-width: 768px) {
+	.hv-player-modal #video-player-container {
+		width: 100vw !important;
+		height: 56vh !important;
+		padding-bottom: 40px !important;
+	}
+	.hv-player-modal #clipping-panel {
+		width: 100vw !important;
+		max-height: 40vh;
+		overflow-y: auto;
+	}
+}

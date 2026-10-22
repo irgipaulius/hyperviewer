@@ -4,8 +4,6 @@ const path = require('path')
 // Configure multiple entry points
 webpackConfig.entry = {
 	'files-integration': path.join(__dirname, 'src', 'files-integration.js'),
-	'settings': path.join(__dirname, 'src', 'settings.js'),
-	'job-management': path.join(__dirname, 'src', 'job-management.js'),
 	'cockpit': path.join(__dirname, 'src', 'cockpit', 'main.js'),
 	'personal': path.join(__dirname, 'src', 'personal', 'main.js'),
 }

@@ -7,6 +7,7 @@ namespace OCA\HyperViewer\Controller;
 use OCA\HyperViewer\Db\JobMapper;
 use OCA\HyperViewer\Service\ConfigService;
 use OCA\HyperViewer\Service\JobDisplayService;
+use OCA\HyperViewer\Service\PermissionsService;
 use OCA\HyperViewer\Service\QueueService;
 use OCA\HyperViewer\Service\WorkerStatusService;
 use OCA\HyperViewer\Db\WatchDirMapper;
@@ -16,6 +17,7 @@ use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IGroupManager;
 use OCP\IRequest;
+use OCP\IUser;
 use OCP\IUserSession;
 
 class JobController extends Controller {
@@ -30,16 +32,18 @@ class JobController extends Controller {
 		private IGroupManager $groupManager,
 		private JobDisplayService $jobDisplay,
 		private WorkerStatusService $workerStatus,
+		private PermissionsService $permissions,
 	) {
 		parent::__construct($appName, $request);
 	}
 
 	#[NoAdminRequired]
 	public function get(int $id): JSONResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		$auth = $this->guardAppUser();
+		if ($auth instanceof JSONResponse) {
+			return $auth;
 		}
+		$user = $auth;
 		$job = $this->jobMapper->findById($id);
 		if ($job->getUserId() !== $user->getUID()) {
 			return new JSONResponse(['error' => 'Forbidden'], 403);
@@ -49,9 +53,13 @@ class JobController extends Controller {
 
 	#[NoAdminRequired]
 	public function listJobs(): JSONResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		$auth = $this->guardAppUser();
+		if ($auth instanceof JSONResponse) {
+			return $auth;
+		}
+		$user = $auth;
+		if ($this->request->getParam('user_id') !== null || $this->request->getParam('user') !== null) {
+			return new JSONResponse(['error' => 'Invalid parameter'], 400);
 		}
 		$stateParam = $this->request->getParam('state');
 		$state = (is_string($stateParam) && $stateParam !== '') ? $stateParam : null;
@@ -75,10 +83,11 @@ class JobController extends Controller {
 
 	#[NoAdminRequired]
 	public function active(): JSONResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		$auth = $this->guardAppUser();
+		if ($auth instanceof JSONResponse) {
+			return $auth;
 		}
+		$user = $auth;
 		$jobs = $this->jobMapper->findActiveByUser($user->getUID());
 		$serialized = array_map(fn ($j) => $this->jobDisplay->serialize($j), $jobs);
 		return new JSONResponse([
@@ -104,6 +113,10 @@ class JobController extends Controller {
 
 	#[NoAdminRequired]
 	public function retry(int $id): JSONResponse {
+		$auth = $this->guardAppUser();
+		if ($auth instanceof JSONResponse) {
+			return $auth;
+		}
 		if (!$this->canManageJob($id)) {
 			return new JSONResponse(['error' => 'Forbidden'], 403);
 		}
@@ -113,6 +126,10 @@ class JobController extends Controller {
 
 	#[NoAdminRequired]
 	public function cancel(int $id): JSONResponse {
+		$auth = $this->guardAppUser();
+		if ($auth instanceof JSONResponse) {
+			return $auth;
+		}
 		if (!$this->canManageJob($id)) {
 			return new JSONResponse(['error' => 'Forbidden'], 403);
 		}
@@ -122,6 +139,10 @@ class JobController extends Controller {
 
 	#[NoAdminRequired]
 	public function bump(int $id): JSONResponse {
+		$auth = $this->guardAppUser();
+		if ($auth instanceof JSONResponse) {
+			return $auth;
+		}
 		if (!$this->canManageJob($id)) {
 			return new JSONResponse(['error' => 'Forbidden'], 403);
 		}
@@ -135,10 +156,11 @@ class JobController extends Controller {
 
 	#[NoAdminRequired]
 	public function batchStatus(): JSONResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		$auth = $this->guardAppUser();
+		if ($auth instanceof JSONResponse) {
+			return $auth;
 		}
+		$user = $auth;
 		$body = json_decode((string)file_get_contents('php://input'), true) ?: [];
 		$ids = array_map('intval', $body['ids'] ?? []);
 		$jobs = $this->jobMapper->findByIds($ids);
@@ -153,10 +175,11 @@ class JobController extends Controller {
 
 	#[NoAdminRequired]
 	public function batchDelete(): JSONResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		$auth = $this->guardAppUser();
+		if ($auth instanceof JSONResponse) {
+			return $auth;
 		}
+		$user = $auth;
 		$body = json_decode((string)file_get_contents('php://input'), true) ?: [];
 		$ids = array_map('intval', $body['ids'] ?? []);
 		foreach ($ids as $id) {
@@ -174,9 +197,22 @@ class JobController extends Controller {
 		return new JSONResponse(['success' => true, 'paused' => $paused]);
 	}
 
-	private function canManageJob(int $id): bool {
+	private function guardAppUser(): IUser|JSONResponse {
 		$user = $this->userSession->getUser();
 		if ($user === null) {
+			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		}
+		try {
+			$this->permissions->assertCanUseApp($user);
+		} catch (\Throwable $e) {
+			return new JSONResponse(['error' => $e->getMessage()], 403);
+		}
+		return $user;
+	}
+
+	private function canManageJob(int $id): bool {
+		$user = $this->userSession->getUser();
+		if ($user === null || !$this->permissions->canUseApp($user)) {
 			return false;
 		}
 		try {

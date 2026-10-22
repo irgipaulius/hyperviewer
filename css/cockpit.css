@@ -137,3 +137,12 @@
 	margin: 0;
 	padding: 0.25rem 0;
 }
+
+.hv-danger {
+	color: var(--color-error-text, #fff);
+	background: var(--color-error, #c62828);
+}
+
+.hv-error-cat {
+	color: var(--color-error, #c62828);
+}

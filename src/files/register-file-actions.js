@@ -5,6 +5,8 @@ import {
 	registerFileAction,
 } from '@nextcloud/files'
 import { translate as t } from '@nextcloud/l10n'
+import { generateUrl } from '@nextcloud/router'
+import { showSuccess } from '@nextcloud/dialogs'
 import { playVideoSmart } from '../modules/video-player.js'
 import { resolveFileCacheStatus } from './cache-batch-store.js'
 import { folderPath, isVideoMime } from './nodePaths.js'
@@ -67,7 +69,13 @@ function injectBadgeStyles() {
  * @param {Function} handlers.openDirectoryCacheGenerationDialog
  */
 export function registerHyperViewerFileActions(handlers) {
-	const { openCacheGenerationDialog, openDirectoryCacheGenerationDialog } = handlers
+	const {
+		openCacheGenerationDialog,
+		openDirectoryCacheGenerationDialog,
+		caps = {},
+	} = handlers
+	const canGenerateHls = caps.can_generate_hls !== false
+	const canExportClip = caps.can_export_clip !== false
 
 	injectBadgeStyles()
 
@@ -90,7 +98,8 @@ export function registerHyperViewerFileActions(handlers) {
 		displayName: () => t('hyperviewer', 'Generate HLS Cache'),
 		iconSvgInline: () => ICON_MULTIMEDIA(),
 		enabled: ({ nodes }) =>
-			nodes.length === 1
+			canGenerateHls
+			&& nodes.length === 1
 			&& isVideoMime(nodes[0].mime)
 			&& (nodes[0].permissions & Permission.UPDATE) !== 0,
 		exec: async ({ nodes, folder }) => {
@@ -112,7 +121,8 @@ export function registerHyperViewerFileActions(handlers) {
 		displayName: () => t('hyperviewer', 'Generate HLS Cache (Directory)'),
 		iconSvgInline: () => ICON_MULTIMEDIA(),
 		enabled: ({ nodes }) =>
-			nodes.length === 1
+			canGenerateHls
+			&& nodes.length === 1
 			&& nodes[0].type === FileType.Folder
 			&& (nodes[0].permissions & Permission.UPDATE) !== 0,
 		exec: async ({ nodes, folder }) => {
@@ -122,63 +132,51 @@ export function registerHyperViewerFileActions(handlers) {
 	})
 
 	registerFileAction({
-		id: 'hyperviewer-hls-chip',
-		displayName: () => '',
-		iconSvgInline: () => '',
-		default: DefaultType.HIDDEN,
+		id: 'hyperviewer-open-settings',
+		displayName: () => t('hyperviewer', 'Show in Hyper Viewer'),
+		iconSvgInline: () => ICON_MULTIMEDIA(),
 		enabled: ({ nodes }) =>
 			nodes.length === 1 && isVideoMime(nodes[0].mime),
-		inline: () => true,
-		renderInline: async ({ nodes, folder }) => {
-			const node = nodes[0]
-			const directory = folderPath(folder, node)
-			const status = await resolveFileCacheStatus(
-				node.fileid,
-				node.basename,
-				directory,
-			)
-			const state = status.cache_state ?? (status.exists ? 'ready' : 'none')
-			const wrap = document.createElement('span')
-			wrap.className = 'hv-hls-chip-wrap'
-			wrap.setAttribute('aria-hidden', 'true')
-
-			const job = status.job
-			if (job && job.state === 'failed') {
-				const badge = document.createElement('span')
-				badge.className = 'hls-badge hls-badge-failed'
-				badge.textContent = '!'
-				badge.title = status.job_error || t('hyperviewer', 'Encoding failed — retry from Hyper Viewer queue')
-				wrap.appendChild(badge)
-				return wrap
+		exec: async ({ nodes }) => {
+			if (window.sessionStorage) {
+				window.sessionStorage.setItem('hyperviewer_filter_fileid', String(nodes[0].fileid))
+				window.sessionStorage.setItem('hyperviewer_open_tab', 'library')
 			}
-			if (job && (job.state === 'queued' || job.state === 'running')) {
-				const badge = document.createElement('span')
-				badge.className = 'hls-badge hls-badge-partial'
-				if (job.state === 'running' && job.progress > 0) {
-					badge.textContent = `${job.progress}%`
-					badge.title = t('hyperviewer', 'Encoding {pct}%', { pct: job.progress })
-				} else {
-					badge.textContent = '…'
-					const pos = status.queue_position
-					badge.title = pos
-						? t('hyperviewer', 'Queued, {pos} in line (job #{id})', { pos, id: job.id })
-						: t('hyperviewer', 'Queued (job #{id})', { id: job.id })
-				}
-				wrap.appendChild(badge)
-				return wrap
-			}
-			if (state !== 'ready' && state !== 'partial') {
-				return null
-			}
-			const badge = document.createElement('span')
-			badge.className = 'hls-badge hls-badge-ready' + (state === 'partial' ? ' hls-badge-partial' : '')
-			badge.textContent = 'HLS'
-			badge.title = state === 'partial'
-				? t('hyperviewer', 'HLS encoding in progress')
-				: t('hyperviewer', 'HLS cache available')
-			wrap.appendChild(badge)
-			return wrap
+			window.location.href = generateUrl('/settings/user/hyperviewer')
+			return true
 		},
-		exec: async () => null,
+	})
+
+	registerFileAction({
+		id: 'hyperviewer-export-clip',
+		displayName: () => t('hyperviewer', 'Export clip'),
+		iconSvgInline: () => ICON_MULTIMEDIA(),
+		enabled: ({ nodes }) =>
+			canExportClip
+			&& nodes.length === 1 && isVideoMime(nodes[0].mime),
+		exec: async ({ nodes, folder, contents }) => {
+			await playVideoSmart(nodes[0], folder, contents ?? [], { clipMode: true })
+			return true
+		},
+	})
+
+	registerFileAction({
+		id: 'hyperviewer-copy-stream',
+		displayName: () => t('hyperviewer', 'Copy HLS stream link'),
+		iconSvgInline: () => ICON_MULTIMEDIA(),
+		enabled: ({ nodes }) =>
+			nodes.length === 1 && isVideoMime(nodes[0].mime),
+		exec: async ({ nodes, folder }) => {
+			const directory = folderPath(folder, nodes[0])
+			const status = await resolveFileCacheStatus(nodes[0].fileid, nodes[0].basename, directory)
+			const fp = status.fingerprint
+			if (!fp) {
+				return false
+			}
+			const url = `${window.location.origin}${generateUrl(`/apps/hyperviewer/hls/${encodeURIComponent(fp)}/master.m3u8`)}`
+			await navigator.clipboard.writeText(url)
+			showSuccess(t('hyperviewer', 'Stream URL copied (session auth required)'))
+			return true
+		},
 	})
 }

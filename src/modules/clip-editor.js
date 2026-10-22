@@ -1,6 +1,7 @@
 import exportModalTemplate from "../templates/export-modal.html";
 import { showError } from "@nextcloud/dialogs";
 import { toastQueued } from "../shared/toast-queue.js";
+import { fetchJson } from "../shared/api.js";
 
 export class ClipEditor {
 
@@ -331,7 +332,7 @@ export class ClipEditor {
 			// Show immediate notification
 			this.showExportNotification(clipFilename, exportPath);
 
-			const response = await fetch(
+			const result = await fetchJson(
 				OC.generateUrl("/apps/hyperviewer/api/export-clip"),
 				{
 					method: "POST",
@@ -349,12 +350,6 @@ export class ClipEditor {
 				}
 			);
 
-			const result = await response.json();
-
-			if (!response.ok) {
-				throw new Error(result.error || "Export failed");
-			}
-
 			if (result.jobId) {
 				toastQueued(result.jobId);
 				await this.pollClipJob(result.jobId, clipFilename, exportPath);
@@ -371,14 +366,15 @@ export class ClipEditor {
 		const deadline = Date.now() + 30 * 60 * 1000;
 		while (Date.now() < deadline) {
 			await new Promise(resolve => setTimeout(resolve, 2000));
-			const res = await fetch(
-				OC.generateUrl(`/apps/hyperviewer/api/jobs/${jobId}`),
-				{ headers: { requesttoken: OC.requestToken } }
-			);
-			if (!res.ok) {
+			let job;
+			try {
+				job = await fetchJson(
+					OC.generateUrl(`/apps/hyperviewer/api/jobs/${jobId}`),
+					{ headers: { requesttoken: OC.requestToken } },
+				);
+			} catch {
 				continue;
 			}
-			const job = await res.json();
 			if (job.state === "done") {
 				return;
 			}

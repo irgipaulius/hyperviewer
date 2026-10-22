@@ -4,9 +4,11 @@
 
 import "./styles/cache-modal.css";
 import { registerHyperViewerFileActions } from "./files/register-file-actions.js";
+import { startIconOverlayObserver } from "./files/icon-overlay.js";
 import { folderPath } from "./files/nodePaths.js";
 import { showError, showSuccess } from "@nextcloud/dialogs";
 import { toastQueued } from "./shared/toast-queue.js";
+import { fetchJson } from "./shared/api.js";
 
 console.log("🎬 Hyper Viewer Files integration loading…");
 
@@ -496,7 +498,7 @@ async function openDirectoryCacheGenerationDialog(node, folder) {
  */
 async function discoverVideoFilesInDirectory(directoryPath) {
 	try {
-		const response = await fetch(
+		const result = await fetchJson(
 			OC.generateUrl("/apps/hyperviewer/cache/discover-videos"),
 			{
 				method: "POST",
@@ -509,8 +511,6 @@ async function discoverVideoFilesInDirectory(directoryPath) {
 				})
 			}
 		);
-
-		const result = await response.json();
 
 		if (result.success) {
 			return result.files || [];
@@ -567,7 +567,7 @@ async function startDirectoryCacheGeneration(videoFiles, directoryPath) {
 		// If auto-generation is enabled, register the directory for monitoring
 		if (enableAutoGeneration) {
 			try {
-				const registerResponse = await fetch(
+				await fetchJson(
 					OC.generateUrl(
 						"/apps/hyperviewer/cache/register-auto-generation"
 					),
@@ -583,14 +583,7 @@ async function startDirectoryCacheGeneration(videoFiles, directoryPath) {
 						})
 					}
 				);
-
-				if (registerResponse.ok) {
-					console.log("✅ Directory registered for auto-generation");
-				} else {
-					console.error(
-						"❌ Failed to register directory for auto-generation"
-					);
-				}
+				console.log("✅ Directory registered for auto-generation");
 			} catch (error) {
 				console.error(
 					"Error registering directory for auto-generation:",
@@ -671,7 +664,7 @@ async function startCacheGeneration(files, directoryPath = null) {
 	
 	try {
 		// Send to backend for processing
-		const response = await fetch(
+		const result = await fetchJson(
 			OC.generateUrl("/apps/hyperviewer/cache/generate"),
 			{
 				method: "POST",
@@ -686,8 +679,6 @@ async function startCacheGeneration(files, directoryPath = null) {
 				})
 			}
 		);
-
-		const result = await response.json();
 
 		if (result.success) {
 			const ids = result.jobIds || (result.jobId ? [result.jobId] : []);
@@ -709,8 +700,32 @@ async function startCacheGeneration(files, directoryPath = null) {
 	}
 }
 
-registerHyperViewerFileActions({
-	openCacheGenerationDialog,
-	openDirectoryCacheGenerationDialog,
-});
-console.log("✅ Hyper Viewer file actions registered (@nextcloud/files v4)");
+async function bootstrapFilesIntegration() {
+	let caps = {
+		can_use_app: true,
+		can_generate_hls: true,
+		can_export_clip: true,
+		can_create_public_link: true,
+	};
+	try {
+		caps = await fetchJson(
+			OC.generateUrl("/apps/hyperviewer/api/user/capabilities"),
+			{ headers: { requesttoken: OC.requestToken } },
+		);
+	} catch (error) {
+		console.warn("Hyper Viewer capabilities unavailable:", error);
+	}
+	if (!caps.can_use_app) {
+		console.log("Hyper Viewer Files integration disabled for this account");
+		return;
+	}
+	registerHyperViewerFileActions({
+		openCacheGenerationDialog,
+		openDirectoryCacheGenerationDialog,
+		caps,
+	});
+	startIconOverlayObserver();
+	console.log("✅ Hyper Viewer file actions registered (@nextcloud/files v4)");
+}
+
+bootstrapFilesIntegration();

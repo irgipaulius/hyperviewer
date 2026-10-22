@@ -9,6 +9,7 @@ use OCA\HyperViewer\Db\JobMapper;
 use OCA\HyperViewer\Db\LogMapper;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
+use OCP\Activity\IManager as IActivityManager;
 use OCP\Notification\IManager as INotificationManager;
 use OCP\Notification\INotification;
 
@@ -24,7 +25,10 @@ class JobProcessorService {
 		private ConfigService $config,
 		private IRootFolder $rootFolder,
 		private INotificationManager $notificationManager,
+		private IActivityManager $activityManager,
+		private UserPreferencesService $userPreferences,
 		private LogMapper $logMapper,
+		private CacheAdoptService $cacheAdopt,
 	) {
 	}
 
@@ -39,10 +43,12 @@ class JobProcessorService {
 				'encode', 'upgrade' => $this->processEncode($job),
 				'clip' => $this->processClip($job),
 				'scan' => $this->processScan($job),
+				'adopt' => $this->processAdopt($job),
 				default => throw new \RuntimeException('Unknown job type'),
 			};
 			if ($job->getType() === 'clip') {
 				$this->notifyJob($job, 'clip_ready', 'Clip export finished');
+				$this->publishActivity($job, 'clip_export');
 			}
 			$this->queueService->markDone($job);
 		} catch (\Throwable $e) {
@@ -153,6 +159,16 @@ class JobProcessorService {
 		}
 	}
 
+	private function processAdopt(Job $job): void {
+		$payload = json_decode($job->getPayload() ?? '{}', true) ?: [];
+		$limit = isset($payload['limit']) ? (int)$payload['limit'] : null;
+		$options = ['user' => $job->getUserId()];
+		if ($limit !== null && $limit > 0) {
+			$options['limit'] = $limit;
+		}
+		$this->cacheAdopt->run($options);
+	}
+
 	private function processScan(Job $job): void {
 		$payload = json_decode($job->getPayload() ?? '{}', true) ?: [];
 		$path = (string)($payload['path'] ?? '/');
@@ -242,9 +258,30 @@ class JobProcessorService {
 			$success ? 'encode_ready' : 'encode_failed',
 			$success ? 'HLS cache is ready' : ($error ?? 'Encode failed'),
 		);
+		if ($success) {
+			$this->publishActivity($job, 'hls_ready');
+		}
+	}
+
+	private function publishActivity(Job $job, string $subject): void {
+		try {
+			$event = $this->activityManager->generateEvent();
+			$event->setApp('hyperviewer')
+				->setType('hyperviewer')
+				->setSubject($subject)
+				->setAffectedUser((string)$job->getUserId())
+				->setAuthor((string)$job->getUserId())
+				->setTimestamp(time());
+			$this->activityManager->publish($event);
+		} catch (\Throwable) {
+		}
 	}
 
 	private function notifyJob(Job $job, string $subject, string $message): void {
+		$uid = (string)$job->getUserId();
+		if ($uid !== '' && !$this->userPreferences->getBool($uid, UserPreferencesService::KEY_NOTIFY_DONE, true)) {
+			return;
+		}
 		try {
 			$n = $this->notificationManager->createNotification();
 			$n->setApp('hyperviewer')

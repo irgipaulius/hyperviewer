@@ -8,6 +8,7 @@ use OCA\HyperViewer\Db\WatchDirMapper;
 use OCA\HyperViewer\Service\ConfigService;
 use OCA\HyperViewer\Service\MediaIndexService;
 use OCA\HyperViewer\Service\QueueService;
+use OCA\HyperViewer\Service\UserPreferencesService;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Files\Events\Node\NodeCopiedEvent;
@@ -24,6 +25,7 @@ class FileEventListener implements IEventListener {
 		private QueueService $queueService,
 		private MediaIndexService $mediaIndex,
 		private ConfigService $config,
+		private UserPreferencesService $userPreferences,
 	) {
 	}
 
@@ -75,7 +77,16 @@ class FileEventListener implements IEventListener {
 			if ($userId === null) {
 				return;
 			}
-			if (!$this->config->getBool(ConfigService::KEY_AUTO_ENCODE_ALL) && !$this->isWatched($userId, $node->getPath())) {
+			$userAuto = $this->userPreferences->getBool(
+				$userId,
+				UserPreferencesService::KEY_AUTO_GENERATE,
+				false,
+			);
+			if (
+				!$this->config->getBool(ConfigService::KEY_AUTO_ENCODE_ALL)
+				&& !$this->isWatched($userId, $node->getPath())
+				&& !$userAuto
+			) {
 				return;
 			}
 			$this->queueService->enqueueFingerprint($userId, $node->getId());

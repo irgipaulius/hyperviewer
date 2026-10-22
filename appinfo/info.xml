@@ -32,6 +32,9 @@
         <type>video/quicktime</type>
         <type>video/mp4</type>
     </types>
+    <activity>
+        <provider>OCA\HyperViewer\Activity\Provider</provider>
+    </activity>
     <settings>
         <admin>OCA\HyperViewer\Settings\AdminSettings</admin>
         <admin-section>OCA\HyperViewer\Settings\AdminSection</admin-section>

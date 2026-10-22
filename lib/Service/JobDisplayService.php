@@ -30,6 +30,14 @@ class JobDisplayService {
 
 		$chain = $this->buildChainHint($job);
 		$queuePosition = $this->jobMapper->countQueuedAhead($job);
+		$etaSeconds = null;
+		if ($job->getState() === 'running' && $started !== null && $started > 0) {
+			$progress = max(1, min(99, (int)$job->getProgress()));
+			$elapsed = time() - $started;
+			if ($elapsed > 0) {
+				$etaSeconds = (int)round($elapsed * (100 - $progress) / $progress);
+			}
+		}
 
 		return [
 			'id' => $job->getId(),
@@ -55,6 +63,7 @@ class JobDisplayService {
 			'duration_seconds' => $duration,
 			'chain' => $chain,
 			'queue_position' => $job->getState() === 'queued' ? $queuePosition : null,
+			'eta_seconds' => $etaSeconds,
 		];
 	}
 
@@ -110,6 +119,7 @@ class JobDisplayService {
 			'encode', 'upgrade' => 'hls',
 			'clip' => 'clip',
 			'scan' => 'scan',
+			'adopt' => 'adopt',
 			default => $type,
 		};
 	}

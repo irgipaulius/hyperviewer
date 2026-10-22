@@ -18,6 +18,8 @@ use OCP\Files\Events\Node\NodeDeletedEvent;
 use OCP\Files\Events\Node\NodeRenamedEvent;
 use OCP\Files\Events\Node\NodeWrittenEvent;
 use OCP\Security\CSP\AddContentSecurityPolicyEvent;
+use OCA\HyperViewer\Notification\Notifier;
+
 class Application extends App implements IBootstrap {
 	public const APP_ID = 'hyperviewer';
 
@@ -33,6 +35,7 @@ class Application extends App implements IBootstrap {
 		$context->registerEventListener(NodeRenamedEvent::class, FileEventListener::class);
 		$context->registerEventListener(NodeCopiedEvent::class, FileEventListener::class);
 		$context->registerEventListener(NodeDeletedEvent::class, FileEventListener::class);
+		$context->registerNotifierService(Notifier::class);
 	}
 
 	public function boot(IBootContext $context): void {

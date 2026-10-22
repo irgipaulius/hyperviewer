@@ -8,8 +8,11 @@ use OCA\HyperViewer\Db\JobMapper;
 use OCA\HyperViewer\Db\LogMapper;
 use OCA\HyperViewer\Db\MediaMapper;
 use OCA\HyperViewer\Db\WatchDirMapper;
+use OCA\HyperViewer\Service\CacheIntegrityService;
 use OCA\HyperViewer\Service\ConfigService;
+use OCA\HyperViewer\Service\QueueService;
 use OCA\HyperViewer\Service\WorkerStatusService;
+use OCA\HyperViewer\Db\LocationMapper;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\AdminRequired;
 use OCP\AppFramework\Http\JSONResponse;
@@ -28,6 +31,9 @@ class AdminController extends Controller {
 		private LogMapper $logMapper,
 		private WatchDirMapper $watchDirMapper,
 		private WorkerStatusService $workerStatus,
+		private CacheIntegrityService $cacheIntegrity,
+		private QueueService $queueService,
+		private LocationMapper $locationMapper,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -48,6 +54,7 @@ class AdminController extends Controller {
 		$cache = $this->mediaMapper->getCacheSummary();
 		$cacheDir = $this->config->getString(ConfigService::KEY_CACHE_DIR);
 		$diskBytes = $this->getDiskBytesCached($cacheDir);
+		$avgEncode = $this->jobMapper->avgDoneEncodeDurationSince($since);
 
 		return [
 			'worker' => $this->workerStatus->getSnapshot(),
@@ -59,6 +66,11 @@ class AdminController extends Controller {
 				'cancelled' => $this->jobMapper->countByState('cancelled'),
 				'paused' => $this->config->getBool(ConfigService::KEY_QUEUE_PAUSED),
 				'by_type' => $this->jobMapper->countQueuedGroupedByType(),
+				'users_with_queued' => $this->jobMapper->countDistinctUsersWithQueued(),
+				'max_queued_per_user' => $this->jobMapper->maxQueuedDepthPerUser(),
+				'avg_encode_seconds_24h' => $avgEncode,
+				'last_failed_category' => $this->jobMapper->latestFailedErrorCategory(),
+				'queued_depth_histogram' => $this->jobMapper->queuedDepthHistogram(),
 			],
 			'cache' => array_merge($cache, [
 				'cache_directory' => $cacheDir,
@@ -168,5 +180,53 @@ class AdminController extends Controller {
 		$days = max(1, $this->config->getInt(ConfigService::KEY_LOG_RETENTION_DAYS));
 		$purged = $this->logMapper->pruneOlderThan($days * 86400);
 		return new JSONResponse(['success' => true, 'purged' => $purged]);
+	}
+
+	#[AdminRequired]
+	public function drainQueue(): JSONResponse {
+		$n = $this->jobMapper->cancelAllQueued();
+		return new JSONResponse(['success' => true, 'cancelled' => $n]);
+	}
+
+	#[AdminRequired]
+	public function verifyCache(): JSONResponse {
+		return new JSONResponse($this->cacheIntegrity->verifyReadyCaches(1000));
+	}
+
+	#[AdminRequired]
+	public function purgeHistory(): JSONResponse {
+		$days = max(1, $this->config->getInt(ConfigService::KEY_LOG_RETENTION_DAYS));
+		$purged = $this->jobMapper->purgeFinishedOlderThan($days * 86400);
+		return new JSONResponse(['success' => true, 'purged' => $purged]);
+	}
+
+	#[AdminRequired]
+	public function rebuildIndex(): JSONResponse {
+		$scanJobs = 0;
+		$adoptJobs = 0;
+		$userIds = [];
+		foreach ($this->watchDirMapper->findAllEnabled() as $wd) {
+			$userIds[$wd->getUserId()] = true;
+			try {
+				$this->queueService->enqueueScan($wd->getUserId(), $wd->getPath(), true);
+				$scanJobs++;
+			} catch (\Throwable) {
+			}
+		}
+		foreach ($this->locationMapper->listDistinctUserIds() as $uid) {
+			$userIds[$uid] = true;
+		}
+		foreach (array_keys($userIds) as $uid) {
+			try {
+				$this->queueService->enqueueAdopt($uid);
+				$adoptJobs++;
+			} catch (\Throwable) {
+			}
+		}
+		return new JSONResponse([
+			'success' => true,
+			'scan_jobs' => $scanJobs,
+			'adopt_jobs' => $adoptJobs,
+		]);
 	}
 }

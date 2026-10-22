@@ -26,6 +26,16 @@ class ConfigService {
 	public const KEY_LOG_RETENTION_DAYS = 'log_retention_days';
 	public const KEY_QUEUE_PAUSED = 'queue_paused';
 	public const KEY_EXTRACT_FRAME_TIMEOUT = 'extract_frame_timeout_seconds';
+	public const KEY_ALLOWED_GROUPS = 'allowed_groups';
+	public const KEY_GROUP_GENERATE_HLS = 'group_generate_hls';
+	public const KEY_GROUP_EXPORT_CLIP = 'group_export_clip';
+	public const KEY_GROUP_PUBLIC_LINKS = 'group_public_links';
+	public const KEY_MAX_JOBS_PER_USER = 'max_jobs_per_user';
+	public const KEY_QUIET_HOURS_START = 'quiet_hours_start';
+	public const KEY_QUIET_HOURS_END = 'quiet_hours_end';
+	public const KEY_USER_CACHE_QUOTA_GB = 'default_user_cache_quota_gb';
+	public const KEY_USER_ALLOWED_RENDITIONS = 'user_allowed_renditions';
+	public const KEY_HLS_SEGMENT_SECONDS = 'hls_segment_seconds';
 
 	/** @var array<string, mixed> */
 	private array $defaults = [
@@ -47,6 +57,16 @@ class ConfigService {
 		self::KEY_LOG_RETENTION_DAYS => 14,
 		self::KEY_QUEUE_PAUSED => false,
 		self::KEY_EXTRACT_FRAME_TIMEOUT => 30,
+		self::KEY_ALLOWED_GROUPS => '',
+		self::KEY_GROUP_GENERATE_HLS => '',
+		self::KEY_GROUP_EXPORT_CLIP => '',
+		self::KEY_GROUP_PUBLIC_LINKS => '',
+		self::KEY_MAX_JOBS_PER_USER => 0,
+		self::KEY_QUIET_HOURS_START => -1,
+		self::KEY_QUIET_HOURS_END => -1,
+		self::KEY_USER_CACHE_QUOTA_GB => 0,
+		self::KEY_USER_ALLOWED_RENDITIONS => '',
+		self::KEY_HLS_SEGMENT_SECONDS => 4,
 	];
 
 	public function __construct(
@@ -120,6 +140,27 @@ class ConfigService {
 	public function getDefaultRenditions(): array {
 		$raw = $this->getString(self::KEY_DEFAULT_RENDITIONS);
 		return array_values(array_filter(array_map('trim', explode(',', $raw))));
+	}
+
+	/** @return list<string> */
+	public function getUserAllowedRenditions(): array {
+		$raw = trim($this->getString(self::KEY_USER_ALLOWED_RENDITIONS));
+		if ($raw === '') {
+			return $this->getDefaultRenditions();
+		}
+		return array_values(array_filter(array_map('trim', explode(',', $raw))));
+	}
+
+	/** @param list<string> $requested */
+	public function filterRenditions(array $requested): array {
+		$allowed = $this->getUserAllowedRenditions();
+		$out = array_values(array_intersect($requested, $allowed));
+		return $out !== [] ? $out : $allowed;
+	}
+
+	public function defaultUserCacheQuotaBytes(): ?int {
+		$gb = $this->getInt(self::KEY_USER_CACHE_QUOTA_GB);
+		return $gb > 0 ? $gb * 1024 * 1024 * 1024 : null;
 	}
 
 	private function cast(string $key, string $value): mixed {

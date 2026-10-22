@@ -18,7 +18,22 @@ class MediaIndexService {
 		private MediaMapper $mediaMapper,
 		private LocationMapper $locationMapper,
 		private FingerprintService $fingerprintService,
+		private CacheStoreService $cacheStore,
 	) {
+	}
+
+	public function backfillRenditionsIfEmpty(Media $media): Media {
+		$raw = $media->getRenditions();
+		$decoded = json_decode($raw ?? '[]', true);
+		if (is_array($decoded) && $decoded !== []) {
+			return $media;
+		}
+		$inferred = $this->cacheStore->inferRenditionsFromPlaylist($media->getFingerprint());
+		if ($inferred === []) {
+			return $media;
+		}
+		$media->setRenditions(json_encode($inferred));
+		return $this->mediaMapper->update($media);
 	}
 
 	public function resolveFileForUser(string $userId, int $fileid): File {

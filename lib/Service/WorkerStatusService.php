@@ -83,6 +83,7 @@ class WorkerStatusService {
 			'cache_directory' => $this->config->getString(ConfigService::KEY_CACHE_DIR),
 			'ffmpeg' => $this->ffmpegInfo->getVersions(),
 			'disk_free_bytes' => $this->ffmpegInfo->diskFreeAtCachePath(),
+			'hardware_encoders' => $this->ffmpegInfo->detectHardwareEncoders(),
 		];
 	}
 }

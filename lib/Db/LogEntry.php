@@ -34,7 +34,7 @@ class LogEntry extends Entity {
 	protected $userId = null;
 	protected $fileid = null;
 	protected $jobId = null;
-	protected $createdAt = 0;
+	protected $createdAt = null;
 
 	public function __construct() {
 		$this->addType('fileid', 'integer');

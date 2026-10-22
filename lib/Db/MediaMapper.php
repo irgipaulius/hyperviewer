@@ -87,4 +87,20 @@ class MediaMapper extends QBMapper {
 			'by_state' => $byState,
 		];
 	}
+
+	/** @return list<string> */
+	public function listReadyFingerprints(int $limit = 500): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('fingerprint')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('cache_state', $qb->createNamedParameter('ready')))
+			->setMaxResults($limit);
+		$res = $qb->executeQuery();
+		$out = [];
+		while ($row = $res->fetch()) {
+			$out[] = (string)$row['fingerprint'];
+		}
+		$res->closeCursor();
+		return $out;
+	}
 }
