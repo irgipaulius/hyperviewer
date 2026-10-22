@@ -518,10 +518,7 @@ async function discoverVideoFilesInDirectory(directoryPath) {
 		}
 	} catch (error) {
 		console.error("Failed to discover video files:", error);
-		OC.dialogs.alert(
-			`Failed to scan directory: ${error.message}`,
-			"Discovery Error"
-		);
+		showError(`Failed to scan directory: ${error.message}`);
 		return [];
 	}
 }
@@ -617,17 +614,13 @@ async function startDirectoryCacheGeneration(videoFiles, directoryPath) {
 			console.log(
 				`✅ Auto-generation enabled for ${directoryPath} - will monitor for new videos`
 			);
-			OC.dialogs.info(
-				`Auto-generation has been enabled for "${directoryPath}".\n\nNew video files added to this directory will automatically have HLS cache generated.`,
-				"Auto-Generation Enabled"
+			showSuccess(
+				`Auto-generation enabled for ${directoryPath}. New videos will be queued for HLS.`
 			);
 		}
 	} catch (error) {
 		console.error("Failed to start directory cache generation:", error);
-		OC.dialogs.alert(
-			`Failed to start directory processing: ${error.message}`,
-			"Processing Error"
-		);
+		showError(`Failed to start directory processing: ${error.message}`);
 	}
 }
 

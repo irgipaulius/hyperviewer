@@ -68,6 +68,55 @@ class LocationMapper extends QBMapper {
 		}
 	}
 
+	/** @return list<array{fileid: int, filename: string, directory: string, cache_state: string, cache_bytes: int, files_dir: string}> */
+	public function listLibraryForUser(string $userId, int $limit = 200): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('l.fileid', 'l.path', 'm.cache_state', 'm.cache_bytes')
+			->from($this->getTableName(), 'l')
+			->innerJoin('l', 'hv_media', 'm', $qb->expr()->eq('l.media_id', 'm.id'))
+			->where($qb->expr()->eq('l.user_id', $qb->createNamedParameter($userId)))
+			->andWhere($qb->expr()->in(
+				'm.cache_state',
+				$qb->createNamedParameter(['ready', 'partial'], \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_STR_ARRAY),
+			))
+			->orderBy('m.last_access_at', 'DESC')
+			->setMaxResults($limit);
+		$res = $qb->executeQuery();
+		$out = [];
+		while ($row = $res->fetch()) {
+			$path = (string)$row['path'];
+			$dir = dirname($path);
+			if ($dir === '.' || $dir === '\\') {
+				$dir = '/';
+			}
+			$out[] = [
+				'fileid' => (int)$row['fileid'],
+				'filename' => basename($path),
+				'directory' => $dir,
+				'files_dir' => $dir,
+				'cache_state' => (string)$row['cache_state'],
+				'cache_bytes' => (int)$row['cache_bytes'],
+			];
+		}
+		$res->closeCursor();
+		return $out;
+	}
+
+	public function findPrimaryForUserMedia(string $userId, int $mediaId): ?Location {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+			->andWhere($qb->expr()->eq('media_id', $qb->createNamedParameter($mediaId, IQueryBuilder::PARAM_INT)))
+			->orderBy('seen_at', 'DESC')
+			->setMaxResults(1);
+		try {
+			return $this->findEntity($qb);
+		} catch (\OCP\AppFramework\Db\DoesNotExistException) {
+			return null;
+		}
+	}
+
 	public function countByMediaId(int $mediaId): int {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select($qb->func()->count('*', 'cnt'))

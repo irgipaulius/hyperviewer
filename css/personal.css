@@ -1,0 +1,46 @@
+@import url('cockpit.css');
+
+.hv-personal .hv-progress-bar {
+	height: 6px;
+	background: var(--color-background-dark, #eee);
+	border-radius: 3px;
+	overflow: hidden;
+	margin-bottom: 4px;
+}
+
+.hv-progress-fill {
+	height: 100%;
+	background: var(--color-primary-element, #0082c9);
+}
+
+.hv-empty-hint {
+	opacity: 0.85;
+	margin: 1rem 0;
+}
+
+.hv-library-list {
+	list-style: none;
+	padding: 0;
+}
+
+.hv-library-list li {
+	padding: 0.35rem 0;
+	border-bottom: 1px solid var(--color-border);
+}
+
+.hv-privacy-note {
+	font-size: 0.9em;
+	opacity: 0.8;
+}
+
+.hv-type-breakdown {
+	margin-bottom: 1rem;
+}
+
+.hv-type-pill {
+	display: inline-block;
+	margin-inline-end: 0.5rem;
+	padding: 2px 8px;
+	border-radius: var(--border-radius-pill);
+	background: var(--color-background-dark);
+}

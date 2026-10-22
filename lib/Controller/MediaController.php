@@ -161,6 +161,7 @@ class MediaController extends Controller {
 		$ready = $media !== null && in_array($media->getCacheState(), ['partial', 'ready'], true);
 		$activeJob = $fileid > 0 ? $this->jobMapper->findLatestActiveForFileid($fileid) : null;
 		$jobPayload = null;
+		$jobError = null;
 		if ($activeJob !== null) {
 			$jobPayload = [
 				'id' => $activeJob->getId(),
@@ -168,6 +169,9 @@ class MediaController extends Controller {
 				'progress' => $activeJob->getProgress(),
 				'type' => $activeJob->getType(),
 			];
+			if ($activeJob->getState() === 'failed') {
+				$jobError = $activeJob->getError();
+			}
 		}
 		return new JSONResponse([
 			'exists' => $ready,
@@ -175,6 +179,7 @@ class MediaController extends Controller {
 			'fingerprint' => $media?->getFingerprint(),
 			'fileid' => $fileid,
 			'job' => $jobPayload,
+			'job_error' => $jobError,
 		]);
 	}
 }

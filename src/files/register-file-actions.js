@@ -22,21 +22,41 @@ function injectBadgeStyles() {
 	const style = document.createElement('style')
 	style.id = 'hyperviewer-hls-badge-style'
 	style.textContent = `
-		.hls-badge {
+		.hv-hls-chip-wrap {
+			position: relative;
 			display: inline-block;
-			margin-inline-start: 6px;
-			background: rgba(60, 60, 60, 0.95);
-			color: #FF9800;
-			padding: 2px 6px;
-			border-radius: 3px;
-			font-size: 9px;
-			font-weight: bold;
-			letter-spacing: 0.5px;
-			line-height: 1.2;
 			vertical-align: middle;
-			pointer-events: none;
+			margin-inline-start: 4px;
 		}
-		.hls-badge-partial { color: #FFC107; }
+		.hls-badge {
+			position: absolute;
+			right: -2px;
+			bottom: -2px;
+			z-index: 2;
+			min-width: 22px;
+			text-align: center;
+			background: var(--color-warning, #e6a700);
+			color: var(--color-main-background, #fff);
+			padding: 1px 5px;
+			border-radius: 8px;
+			font-size: 9px;
+			font-weight: 700;
+			line-height: 1.3;
+			pointer-events: auto;
+			box-shadow: 0 0 0 1px var(--color-main-background);
+		}
+		.hls-badge-ready {
+			background: var(--color-warning, #e6a700);
+		}
+		.hls-badge-partial {
+			background: transparent;
+			color: var(--color-warning-text, #a85d00);
+			box-shadow: inset 0 0 0 1px var(--color-warning, #e6a700);
+		}
+		.hls-badge-failed {
+			background: var(--color-error, #e9322d);
+			color: var(--color-error-text, #fff);
+		}
 	`
 	document.head.appendChild(style)
 }
@@ -118,29 +138,43 @@ export function registerHyperViewerFileActions(handlers) {
 				directory,
 			)
 			const state = status.cache_state ?? (status.exists ? 'ready' : 'none')
+			const wrap = document.createElement('span')
+			wrap.className = 'hv-hls-chip-wrap'
+			wrap.setAttribute('aria-hidden', 'true')
+
 			const job = status.job
+			if (job && job.state === 'failed') {
+				const badge = document.createElement('span')
+				badge.className = 'hls-badge hls-badge-failed'
+				badge.textContent = '!'
+				badge.title = status.job_error || t('hyperviewer', 'Encoding failed — retry from Hyper Viewer queue')
+				wrap.appendChild(badge)
+				return wrap
+			}
 			if (job && (job.state === 'queued' || job.state === 'running')) {
 				const badge = document.createElement('span')
 				badge.className = 'hls-badge hls-badge-partial'
 				if (job.state === 'running' && job.progress > 0) {
 					badge.textContent = `${job.progress}%`
-					badge.title = t('hyperviewer', 'Encoding in progress')
+					badge.title = t('hyperviewer', 'Encoding {pct}%', { pct: job.progress })
 				} else {
-					badge.textContent = t('hyperviewer', 'Queued')
-					badge.title = t('hyperviewer', 'Job #{id} queued', { id: job.id })
+					badge.textContent = '…'
+					badge.title = t('hyperviewer', 'Queued (job #{id})', { id: job.id })
 				}
-				return badge
+				wrap.appendChild(badge)
+				return wrap
 			}
 			if (state !== 'ready' && state !== 'partial') {
 				return null
 			}
 			const badge = document.createElement('span')
-			badge.className = 'hls-badge' + (state === 'partial' ? ' hls-badge-partial' : '')
-			badge.textContent = state === 'partial' ? 'HLS…' : 'HLS'
+			badge.className = 'hls-badge hls-badge-ready' + (state === 'partial' ? ' hls-badge-partial' : '')
+			badge.textContent = 'HLS'
 			badge.title = state === 'partial'
 				? t('hyperviewer', 'HLS encoding in progress')
 				: t('hyperviewer', 'HLS cache available')
-			return badge
+			wrap.appendChild(badge)
+			return wrap
 		},
 		exec: async () => null,
 	})

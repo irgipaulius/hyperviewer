@@ -54,6 +54,26 @@ class LogMapper extends QBMapper {
 		return $this->findEntities($qb);
 	}
 
+	/** @return LogEntry[] */
+	public function tailSystemForAdmin(int $limit = 200): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->in(
+				'channel',
+				$qb->createNamedParameter(['worker', 'queue', 'system'], IQueryBuilder::PARAM_STR_ARRAY),
+			))
+			->orderBy('id', 'DESC')
+			->setMaxResults($limit);
+		return $this->findEntities($qb);
+	}
+
+	public static function redactMessage(string $message): string {
+		$message = preg_replace('#/[\\w./-]+/\\w+\\.\\w+#', '[path]', $message) ?? $message;
+		$message = preg_replace('#\\bfileid\\s*[:=]\\s*\\d+#i', 'fileid=[redacted]', $message) ?? $message;
+		return $message;
+	}
+
 	public function pruneOlderThan(int $seconds): int {
 		$cutoff = time() - $seconds;
 		$qb = $this->db->getQueryBuilder();

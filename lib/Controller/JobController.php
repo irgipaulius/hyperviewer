@@ -41,7 +41,7 @@ class JobController extends Controller {
 			return new JSONResponse(['error' => 'Unauthorized'], 401);
 		}
 		$job = $this->jobMapper->findById($id);
-		if ($job->getUserId() !== $user->getUID() && !$this->groupManager->isAdmin($user->getUID())) {
+		if ($job->getUserId() !== $user->getUID()) {
 			return new JSONResponse(['error' => 'Forbidden'], 403);
 		}
 		return new JSONResponse($this->jobDisplay->serialize($job));
@@ -53,25 +53,17 @@ class JobController extends Controller {
 		if ($user === null) {
 			return new JSONResponse(['error' => 'Unauthorized'], 401);
 		}
-		$state = $this->request->getParam('state');
-		$type = $this->request->getParam('type');
-		$filterUser = $this->request->getParam('user');
+		$stateParam = $this->request->getParam('state');
+		$state = (is_string($stateParam) && $stateParam !== '') ? $stateParam : null;
+		$typeParam = $this->request->getParam('type');
+		$type = (is_string($typeParam) && $typeParam !== '') ? $typeParam : null;
 		$limit = min(200, max(1, (int)$this->request->getParam('limit', 50)));
 		$offset = max(0, (int)$this->request->getParam('offset', 0));
-		$scope = (string)$this->request->getParam('scope', 'mine');
-		$isAdmin = $this->groupManager->isAdmin($user->getUID());
-		$userId = ($scope === 'all' && $isAdmin) ? null : $user->getUID();
-		if ($scope === 'all' && !$isAdmin) {
-			return new JSONResponse(['error' => 'Forbidden'], 403);
-		}
-		if ($filterUser !== null && $filterUser !== '' && $isAdmin) {
-			$userId = (string)$filterUser;
-		}
 		$jobs = $this->jobMapper->listJobs(
 			is_string($state) ? $state : null,
 			$limit,
 			$offset,
-			$userId,
+			$user->getUID(),
 			is_string($type) ? $type : null,
 		);
 		return new JSONResponse([
@@ -128,8 +120,11 @@ class JobController extends Controller {
 		return new JSONResponse(['success' => true]);
 	}
 
-	#[AdminRequired]
+	#[NoAdminRequired]
 	public function bump(int $id): JSONResponse {
+		if (!$this->canManageJob($id)) {
+			return new JSONResponse(['error' => 'Forbidden'], 403);
+		}
 		try {
 			$this->queueService->bumpPriority($id);
 		} catch (\RuntimeException $e) {
@@ -147,10 +142,9 @@ class JobController extends Controller {
 		$body = json_decode((string)file_get_contents('php://input'), true) ?: [];
 		$ids = array_map('intval', $body['ids'] ?? []);
 		$jobs = $this->jobMapper->findByIds($ids);
-		$isAdmin = $this->groupManager->isAdmin($user->getUID());
 		$jobs = array_values(array_filter(
 			$jobs,
-			fn ($j) => $isAdmin || $j->getUserId() === $user->getUID(),
+			fn ($j) => $j->getUserId() === $user->getUID(),
 		));
 		return new JSONResponse([
 			'jobs' => array_map(fn ($j) => $this->jobDisplay->serialize($j), $jobs),
@@ -184,9 +178,6 @@ class JobController extends Controller {
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			return false;
-		}
-		if ($this->groupManager->isAdmin($user->getUID())) {
-			return true;
 		}
 		try {
 			$job = $this->jobMapper->findById($id);

@@ -31,8 +31,12 @@ return [
 		['name' => 'watch#remove', 'url' => '/api/auto-generation/{id}', 'verb' => 'DELETE', 'requirements' => ['id' => '\d+']],
 		['name' => 'watch#scanNow', 'url' => '/api/auto-generation/{id}/scan', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],
 
+		['name' => 'user#overview', 'url' => '/api/user/overview', 'verb' => 'GET'],
+		['name' => 'user#library', 'url' => '/api/user/library', 'verb' => 'GET'],
+
 		['name' => 'admin#overview', 'url' => '/api/admin/overview', 'verb' => 'GET'],
 		['name' => 'admin#status', 'url' => '/api/admin/status', 'verb' => 'GET'],
+		['name' => 'admin#pauseQueue', 'url' => '/api/admin/queue/pause', 'verb' => 'POST'],
 		['name' => 'admin#getSettings', 'url' => '/api/admin/settings', 'verb' => 'GET'],
 		['name' => 'admin#setSetting', 'url' => '/api/admin/settings', 'verb' => 'POST'],
 		['name' => 'admin#resetSetting', 'url' => '/api/admin/settings/reset', 'verb' => 'POST'],

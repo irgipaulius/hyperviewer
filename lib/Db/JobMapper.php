@@ -186,14 +186,18 @@ class JobMapper extends QBMapper {
 	}
 
 	public function findLatestActiveForFileid(int $fileid): ?Job {
-		if ($fileid <= 0) {
+		return $this->findLatestForFileidStates($fileid, ['queued', 'running', 'failed']);
+	}
+
+	public function findLatestForFileidStates(int $fileid, array $states): ?Job {
+		if ($fileid <= 0 || $states === []) {
 			return null;
 		}
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())
 			->where($qb->expr()->eq('fileid', $qb->createNamedParameter($fileid, IQueryBuilder::PARAM_INT)))
-			->andWhere($qb->expr()->in('state', $qb->createNamedParameter(['queued', 'running'], IQueryBuilder::PARAM_STR_ARRAY)))
+			->andWhere($qb->expr()->in('state', $qb->createNamedParameter($states, IQueryBuilder::PARAM_STR_ARRAY)))
 			->orderBy('created_at', 'DESC')
 			->setMaxResults(1);
 		try {
@@ -201,6 +205,74 @@ class JobMapper extends QBMapper {
 		} catch (\OCP\AppFramework\Db\DoesNotExistException) {
 			return null;
 		}
+	}
+
+	public function countForUserSince(string $userId, int $sinceTs): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('*', 'cnt'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+			->andWhere($qb->expr()->gte('created_at', $qb->createNamedParameter($sinceTs, IQueryBuilder::PARAM_INT)));
+		$result = $qb->executeQuery();
+		$row = $result->fetch();
+		$result->closeCursor();
+		return (int)($row['cnt'] ?? 0);
+	}
+
+	public function countForUserByState(string $userId, string $state): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('*', 'cnt'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+			->andWhere($qb->expr()->eq('state', $qb->createNamedParameter($state)));
+		$result = $qb->executeQuery();
+		$row = $result->fetch();
+		$result->closeCursor();
+		return (int)($row['cnt'] ?? 0);
+	}
+
+	/** @return array<string, int> */
+	public function countQueuedGroupedByType(): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('type')
+			->addSelect($qb->func()->count('*', 'cnt'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('state', $qb->createNamedParameter('queued')))
+			->groupBy('type');
+		$result = $qb->executeQuery();
+		$out = [];
+		while ($row = $result->fetch()) {
+			$type = (string)$row['type'];
+			if ($type === 'encode' || $type === 'upgrade') {
+				$type = 'hls';
+			}
+			$out[$type] = ($out[$type] ?? 0) + (int)$row['cnt'];
+		}
+		$result->closeCursor();
+		return $out;
+	}
+
+	public function countQueuedAhead(Job $job): int {
+		if ($job->getState() !== 'queued') {
+			return 0;
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('*', 'cnt'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('state', $qb->createNamedParameter('queued')))
+			->andWhere(
+				$qb->expr()->orX(
+					$qb->expr()->lt('priority', $qb->createNamedParameter($job->getPriority(), IQueryBuilder::PARAM_INT)),
+					$qb->expr()->andX(
+						$qb->expr()->eq('priority', $qb->createNamedParameter($job->getPriority(), IQueryBuilder::PARAM_INT)),
+						$qb->expr()->lt('created_at', $qb->createNamedParameter($job->getCreatedAt(), IQueryBuilder::PARAM_INT)),
+					),
+				),
+			);
+		$result = $qb->executeQuery();
+		$row = $result->fetch();
+		$result->closeCursor();
+		return (int)($row['cnt'] ?? 0) + 1;
 	}
 
 	public function findFollowUpEncodeJob(int $fileid, ?int $mediaId, int $afterJobId): ?Job {

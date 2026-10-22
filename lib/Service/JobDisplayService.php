@@ -12,28 +12,13 @@ class JobDisplayService {
 	public function __construct(
 		private JobMapper $jobMapper,
 		private LocationMapper $locationMapper,
+		private MediaIndexService $mediaIndex,
 	) {
 	}
 
 	/** @return array<string, mixed> */
 	public function serialize(Job $job): array {
-		$fileid = (int)($job->getFileid() ?? 0);
-		$filename = '';
-		$directory = '/';
-		$filesDir = '/';
-
-		if ($fileid > 0) {
-			$loc = $this->locationMapper->findByFileid($fileid);
-			if ($loc !== null) {
-				$path = $loc->getPath();
-				$filename = basename($path);
-				$directory = dirname($path);
-				if ($directory === '.' || $directory === '\\') {
-					$directory = '/';
-				}
-				$filesDir = $directory;
-			}
-		}
+		[$filename, $directory, $filesDir] = $this->resolvePath($job);
 
 		$started = $job->getStartedAt();
 		$finished = $job->getFinishedAt();
@@ -44,12 +29,13 @@ class JobDisplayService {
 		}
 
 		$chain = $this->buildChainHint($job);
+		$queuePosition = $this->jobMapper->countQueuedAhead($job);
 
 		return [
 			'id' => $job->getId(),
 			'type' => $job->getType(),
-			'type_label' => $this->typeLabel($job->getType()),
-			'fileid' => $fileid > 0 ? $fileid : null,
+			'type_label' => $this->typeLabel($job->getType() ?? ''),
+			'fileid' => ($job->getFileid() ?? 0) > 0 ? (int)$job->getFileid() : null,
 			'filename' => $filename,
 			'directory' => $directory,
 			'files_dir' => $filesDir,
@@ -68,7 +54,54 @@ class JobDisplayService {
 			'finished_at' => $finished,
 			'duration_seconds' => $duration,
 			'chain' => $chain,
+			'queue_position' => $job->getState() === 'queued' ? $queuePosition : null,
 		];
+	}
+
+	/** @return array{0: string, 1: string, 2: string} */
+	private function resolvePath(Job $job): array {
+		$filename = '';
+		$directory = '/';
+		$filesDir = '/';
+		$fileid = (int)($job->getFileid() ?? 0);
+		$userId = (string)($job->getUserId() ?? '');
+
+		if ($fileid > 0) {
+			$loc = $this->locationMapper->findByFileid($fileid);
+			if ($loc !== null && $loc->getUserId() === $userId) {
+				return $this->pathParts($loc->getPath());
+			}
+		}
+
+		$mediaId = $job->getMediaId();
+		if ($mediaId !== null && $mediaId > 0 && $userId !== '') {
+			$loc = $this->locationMapper->findPrimaryForUserMedia($userId, $mediaId);
+			if ($loc !== null) {
+				return $this->pathParts($loc->getPath());
+			}
+		}
+
+		if ($fileid > 0 && $userId !== '') {
+			try {
+				$file = $this->mediaIndex->resolveFileForUser($userId, $fileid);
+				$internal = $file->getInternalPath();
+				$path = '/' . ltrim($internal, '/');
+				return $this->pathParts($path);
+			} catch (\Throwable) {
+			}
+		}
+
+		return [$filename, $directory, $filesDir];
+	}
+
+	/** @return array{0: string, 1: string, 2: string} */
+	private function pathParts(string $path): array {
+		$filename = basename($path);
+		$directory = dirname($path);
+		if ($directory === '.' || $directory === '\\') {
+			$directory = '/';
+		}
+		return [$filename, $directory, $directory];
 	}
 
 	private function typeLabel(string $type): string {
@@ -89,7 +122,7 @@ class JobDisplayService {
 		if ($job->getType() === 'fingerprint') {
 			$auto = (bool)($payload['autoEncode'] ?? false);
 			if ($auto) {
-				$hint['label'] = 'next: HLS encode';
+				$hint['label'] = 'fingerprint → HLS encode';
 				$follow = $this->jobMapper->findFollowUpEncodeJob(
 					(int)($job->getFileid() ?? 0),
 					$job->getMediaId(),
@@ -98,11 +131,15 @@ class JobDisplayService {
 				if ($follow !== null) {
 					$hint['follow_up_job_id'] = $follow->getId();
 					$hint['follow_up_state'] = $follow->getState();
-					$hint['label'] = 'HLS encode → #' . $follow->getId();
 				}
+			} else {
+				$hint['label'] = 'fingerprint';
 			}
 		} elseif ($job->getType() === 'encode' || $job->getType() === 'upgrade') {
-			$hint['label'] = 'HLS encode';
+			$res = $payload['resolutions'] ?? [];
+			$hint['label'] = is_array($res) && $res !== []
+				? 'HLS ' . implode('/', $res)
+				: 'HLS encode';
 		} elseif ($job->getType() === 'clip') {
 			$hint['label'] = 'clip export';
 		}

@@ -33,7 +33,8 @@ export async function fetchCacheStatus(fileid, filename, directory) {
 			if (!response.ok) {
 				return { exists: false, cache_state: 'none' }
 			}
-			return await response.json()
+			const data = await response.json()
+			return data
 		} catch {
 			return { exists: false, cache_state: 'none' }
 		} finally {

@@ -287,10 +287,7 @@ export class ClipEditor {
 				.querySelector("#export-path")
 				.value.trim();
 			if (!exportPath) {
-				OC.dialogs.alert(
-					"Please enter an export location.",
-					"Export Error"
-				);
+				showError("Please enter an export location.");
 				return;
 			}
 

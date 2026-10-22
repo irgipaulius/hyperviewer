@@ -29,15 +29,15 @@ use OCP\AppFramework\Db\Entity;
  * @method void setSeenAt(int $seenAt)
  */
 class Location extends Entity {
-	protected $mediaId = 0;
+	protected $mediaId = null;
 	protected ?int $fileid = null;
-	protected $storageId = 0;
-	protected $pathHash = '';
-	protected $path = '';
-	protected $userId = '';
-	protected $size = 0;
-	protected $mtime = 0;
-	protected $seenAt = 0;
+	protected $storageId = null;
+	protected $pathHash = null;
+	protected $path = null;
+	protected $userId = null;
+	protected $size = null;
+	protected $mtime = null;
+	protected $seenAt = null;
 
 	public function __construct() {
 		$this->addType('mediaId', 'integer');

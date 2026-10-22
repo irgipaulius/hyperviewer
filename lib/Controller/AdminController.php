@@ -58,6 +58,7 @@ class AdminController extends Controller {
 				'done_24h' => $this->jobMapper->countByStateSince('done', $since),
 				'cancelled' => $this->jobMapper->countByState('cancelled'),
 				'paused' => $this->config->getBool(ConfigService::KEY_QUEUE_PAUSED),
+				'by_type' => $this->jobMapper->countQueuedGroupedByType(),
 			],
 			'cache' => array_merge($cache, [
 				'cache_directory' => $cacheDir,
@@ -127,18 +128,22 @@ class AdminController extends Controller {
 
 	#[AdminRequired]
 	public function logs(): JSONResponse {
-		$level = $this->request->getParam('level');
-		$channel = $this->request->getParam('channel');
-		$since = (int)$this->request->getParam('sinceId', 0);
-		$entries = $this->logMapper->tail($level, $channel, 200, $since);
+		$entries = $this->logMapper->tailSystemForAdmin(200);
 		return new JSONResponse(['entries' => array_map(static fn ($e) => [
 			'id' => $e->getId(),
 			'level' => $e->getLevel(),
 			'channel' => $e->getChannel(),
-			'message' => $e->getMessage(),
-			'context' => $e->getContext(),
+			'message' => LogMapper::redactMessage((string)$e->getMessage()),
 			'created_at' => $e->getCreatedAt(),
 		], $entries)]);
+	}
+
+	#[AdminRequired]
+	public function pauseQueue(): JSONResponse {
+		$body = json_decode((string)file_get_contents('php://input'), true) ?: [];
+		$paused = filter_var($body['paused'] ?? $this->request->getParam('paused', false), FILTER_VALIDATE_BOOLEAN);
+		$this->config->setOverride(ConfigService::KEY_QUEUE_PAUSED, $paused ? 'true' : 'false');
+		return new JSONResponse(['success' => true, 'paused' => $paused]);
 	}
 
 	#[AdminRequired]

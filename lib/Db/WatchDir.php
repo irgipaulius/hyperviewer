@@ -27,14 +27,14 @@ use OCP\AppFramework\Db\Entity;
  * @method void setCreatedAt(int $createdAt)
  */
 class WatchDir extends Entity {
-	protected $userId = '';
-	protected $path = '';
+	protected $userId = null;
+	protected $path = null;
 	protected $storageId = null;
 	protected $resolutions = null;
-	protected $enabled = true;
-	protected $priority = 100;
+	protected $enabled = null;
+	protected $priority = null;
 	protected $lastScanAt = null;
-	protected $createdAt = 0;
+	protected $createdAt = null;
 
 	public function __construct() {
 		$this->addType('storageId', 'integer');

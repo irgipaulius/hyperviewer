@@ -39,20 +39,20 @@ use OCP\AppFramework\Db\Entity;
  * @method void setLastAccessAt(int $lastAccessAt)
  */
 class Media extends Entity {
-	protected $fingerprint = '';
-	protected $size = 0;
+	protected $fingerprint = null;
+	protected $size = null;
 	protected $duration = null;
 	protected $fps = null;
 	protected $width = null;
 	protected $height = null;
-	protected $hasAudio = false;
-	protected $cacheState = 'none';
+	protected $hasAudio = null;
+	protected $cacheState = null;
 	protected $renditions = null;
-	protected $cacheBytes = 0;
-	protected $pinned = false;
-	protected $autoDisabled = false;
-	protected $createdAt = 0;
-	protected $lastAccessAt = 0;
+	protected $cacheBytes = null;
+	protected $pinned = null;
+	protected $autoDisabled = null;
+	protected $createdAt = null;
+	protected $lastAccessAt = null;
 
 	public function __construct() {
 		$this->addType('size', 'integer');
