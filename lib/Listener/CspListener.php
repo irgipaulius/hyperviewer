@@ -1,42 +1,32 @@
 <?php
+
 declare(strict_types=1);
 
 namespace OCA\HyperViewer\Listener;
 
 use OCP\AppFramework\Http\EmptyContentSecurityPolicy;
-use OCP\AppFramework\Http\Events\AddContentSecurityPolicyEvent;
+use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
+use OCP\Security\CSP\AddContentSecurityPolicyEvent;
 
-/**
- * Append blob: support for MSE / Shaka
- */
+/** @implements IEventListener<Event> */
 class CspListener implements IEventListener {
-	public function handle($event): void {
-		if (!($event instanceof AddContentSecurityPolicyEvent)) {
+	public function handle(Event $event): void {
+		if (!$event instanceof AddContentSecurityPolicyEvent) {
 			return;
 		}
 
 		$policy = new EmptyContentSecurityPolicy();
-
-		// ✅ Explicitly allow blob: for media
 		$policy->addAllowedMediaDomain("'self'");
-		$policy->addAllowedMediaDomain("blob:");
-
-		// ✅ Scripts (for Shaka workers)
+		$policy->addAllowedMediaDomain('blob:');
 		$policy->addAllowedScriptDomain("'self'");
-		$policy->addAllowedScriptDomain("blob:");
-
-		// ✅ Workers
+		$policy->addAllowedScriptDomain('blob:');
 		$policy->addAllowedWorkerSrcDomain("'self'");
-		$policy->addAllowedWorkerSrcDomain("blob:");
-
-		// Some NC versions also need child-src
+		$policy->addAllowedWorkerSrcDomain('blob:');
 		if (method_exists($policy, 'addAllowedChildSrcDomain')) {
 			$policy->addAllowedChildSrcDomain("'self'");
-			$policy->addAllowedChildSrcDomain("blob:");
+			$policy->addAllowedChildSrcDomain('blob:');
 		}
-
-		// Important: append to event
 		$event->addPolicy($policy);
 	}
 }

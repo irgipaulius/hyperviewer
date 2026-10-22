@@ -12,7 +12,8 @@ Professional video processing toolkit for Nextcloud. Automatically generates HLS
 
 ## Features
 
-- 🎬 **Automatic HLS Proxy Generation** - Background jobs create adaptive bitrate streams (720p, 480p, 360p, 240p) automatically for your directories
+- 🎬 **Queue-backed HLS encoding** - Fingerprint-addressed cache store, first-rendition-fast then background upgrades (720p–1080p)
+- ⚙️ **Dedicated worker** - Run `HV_WORKER=1 occ hyperviewer:worker` (see `scripts/freebsd/hyperviewer_worker` for rc.d)
 - 🎞️ **Shaka Player Integration** - Professional HLS video playback interface
 - 📱 **Mobile Friendly** - Responsive UI works on all devices
 
@@ -63,21 +64,26 @@ composer test:unit              # Run tests
 
 ## Configuration
 
-In Nextcloud, navigate to **Settings → Personal → Hyper Viewer** to:
-- Configure HLS cache location
-- Monitor active FFmpeg jobs with real-time progress
-- Manage auto-generation directories
-- View job statistics
+- **Settings → Administration → Hyper Viewer** — queue overview, settings overrides, logs (admin cockpit)
+- **Settings → Personal → Hyper Viewer** — watch directories, job board, cache path hints
+
+### CLI (occ)
+
+| Command | Purpose |
+|---------|---------|
+| `hyperviewer:worker` | Process `hv_jobs` (set `HV_WORKER=1`) |
+| `hyperviewer:scan` | Metadata scan + enqueue fingerprint/encode jobs |
+| `hyperviewer:reindex` | Rebuild fileid ↔ fingerprint index |
+| `hyperviewer:cache:convert-legacy` | Import old `.cached_hls` trees into the fingerprint store |
+| `hyperviewer:cache:stats` | Cache size / entry counts |
 
 ## How It Works
 
 ### HLS Streaming
-1. Right-click any MOV/MP4 file → **Generate HLS Cache**
-   > alternatively, right-click a directory which recursively generates HLS cache for all MOV/MP4 files in it
-2. Select quality variants (720p, 480p, 360p, 240p)
-3. FFmpeg generates adaptive HLS stream in background
-4. Click your gigantic MOV/MP4 file and enjoy HLS video stream within just a second!
-5. Video seeks, quality switching, and mobile playback all supported
+1. Right-click any MOV/MP4 file → **Generate HLS Cache** (enqueues jobs; no heavy fingerprinting in the web request)
+2. Select quality variants; the worker fingerprints content and encodes into the shared cache store
+3. Playback uses Shaka against `/apps/hyperviewer/hls/{fingerprint}/…` while APIs stay fileid-based
+4. Watched folders and `hyperviewer:scan` keep external renames/moves in sync via fingerprint rebind
 
 ### Video Clipping & Export
 1. Open any video file in the HLS player

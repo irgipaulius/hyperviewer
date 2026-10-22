@@ -1,0 +1,36 @@
+.hv-cockpit {
+	max-width: 1200px;
+}
+
+.hv-tabs {
+	display: flex;
+	gap: 0.5rem;
+	margin-bottom: 1rem;
+}
+
+.hv-tabs button {
+	padding: 0.4rem 0.8rem;
+	border-radius: var(--border-radius-large);
+	border: 1px solid var(--color-border);
+	background: var(--color-main-background);
+}
+
+.hv-tabs button.active {
+	background: var(--color-primary-element);
+	color: var(--color-primary-text);
+}
+
+.hv-setting-row {
+	display: grid;
+	grid-template-columns: 1fr 2fr auto;
+	gap: 0.5rem;
+	align-items: center;
+	margin-bottom: 0.5rem;
+}
+
+.hv-logs pre {
+	font-size: 12px;
+	border-bottom: 1px solid var(--color-border);
+	margin: 0;
+	padding: 0.25rem 0;
+}

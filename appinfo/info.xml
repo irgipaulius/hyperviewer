@@ -4,28 +4,8 @@
     <id>hyperviewer</id>
     <name>Hyper Viewer</name>
     <summary>Review footage instantly, choose highlights, and export only what you need in full quality.</summary>
-    <description><![CDATA[Save time, storage, and bandwidth.
-
-Hyper Viewer brings powerful remote video clipping directly into your Nextcloud Files app. Rather than downloading huge RAW or MOV files just to check or trim them, Hyper Viewer automatically generates lightweight HLS proxies for smooth streaming. Browse your footage instantly — even from mobile.
-
-When you find the perfect moment, open the clipping tool and export only the selected segment in full original quality. No re-encoding, no quality loss, no wasted data.
-
-**Perfect for:**
-- Cinematographers
-- Video production teams
-- YouTubers & content creators
-- Anyone managing large video archives
-
-**Key Features:**
-- Automatic HLS proxy generation for smooth streaming
-- Shaka Player integration with timeline preview
-- Frame-accurate start/end clip selection
-- Original-quality export of selected clips
-- No deletion or degradation of source files
-- Clean and intuitive UI inside Files
-
-Turn your Nextcloud into a lightweight remote video editing station — where you only download the footage you need.]]></description>
-    <version>1.0.0</version>
+    <description><![CDATA[HLS proxies, Shaka playback, frame-accurate clipping, and original-quality export — with a queue-backed encoder for Nextcloud 35.]]></description>
+    <version>2.0.0</version>
     <licence>agpl</licence>
     <author mail="irgipaulius@gmail.com" homepage="https://github.com/irgipaulius">Paulius Jacinkevičius</author>
     <namespace>HyperViewer</namespace>
@@ -33,21 +13,36 @@ Turn your Nextcloud into a lightweight remote video editing station — where yo
     <category>multimedia</category>
     <bugs>https://github.com/irgipaulius/hyperviewer/issues</bugs>
     <dependencies>
-        <nextcloud min-version="25" max-version="32"/>
+        <nextcloud min-version="30" max-version="35"/>
+        <php min-version="8.1" max-version="8.4"/>
     </dependencies>
+    <repair-steps>
+        <post-migration>
+            <step>OCA\HyperViewer\Migration\RepairImportLegacyConfig</step>
+            <step>OCA\HyperViewer\Migration\RepairRemoveLegacyJobs</step>
+        </post-migration>
+    </repair-steps>
+    <background-jobs>
+        <job>OCA\HyperViewer\BackgroundJob\ProcessHvQueueJob</job>
+        <job>OCA\HyperViewer\BackgroundJob\ScheduledScanJob</job>
+        <job>OCA\HyperViewer\BackgroundJob\CacheGcJob</job>
+        <job>OCA\HyperViewer\BackgroundJob\StaleJobRecoveryJob</job>
+    </background-jobs>
+    <commands>
+        <command>OCA\HyperViewer\Command\WorkerCommand</command>
+        <command>OCA\HyperViewer\Command\ScanCommand</command>
+        <command>OCA\HyperViewer\Command\ReindexCommand</command>
+        <command>OCA\HyperViewer\Command\ConvertLegacyCacheCommand</command>
+        <command>OCA\HyperViewer\Command\CacheStatsCommand</command>
+    </commands>
     <types>
         <type>video/quicktime</type>
         <type>video/mp4</type>
     </types>
-    <commands>
-        <command>OCA\HyperViewer\Command\RunJobCommand</command>
-    </commands>
     <settings>
+        <admin>OCA\HyperViewer\Settings\AdminSettings</admin>
+        <admin-section>OCA\HyperViewer\Settings\AdminSection</admin-section>
         <personal>OCA\HyperViewer\Settings\PersonalSettings</personal>
         <personal-section>OCA\HyperViewer\Settings\PersonalSection</personal-section>
     </settings>
-    <background-jobs>
-        <job>OCA\HyperViewer\BackgroundJob\AutoHlsGenerationJob</job>
-        <job>OCA\HyperViewer\BackgroundJob\ProcessQueueJob</job>
-    </background-jobs>
 </info>

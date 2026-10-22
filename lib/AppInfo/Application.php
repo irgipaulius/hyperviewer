@@ -4,15 +4,21 @@ declare(strict_types=1);
 
 namespace OCA\HyperViewer\AppInfo;
 
+use OCA\HyperViewer\Listener\CspListener;
+use OCA\HyperViewer\Listener\FileEventListener;
+use OCA\HyperViewer\Listener\LoadFilesScriptsListener;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
-use OCP\BackgroundJob\IJobList;
+use OCP\Files\Events\LoadAdditionalScriptsEvent;
+use OCP\Files\Events\Node\NodeCopiedEvent;
+use OCP\Files\Events\Node\NodeCreatedEvent;
+use OCP\Files\Events\Node\NodeDeletedEvent;
+use OCP\Files\Events\Node\NodeRenamedEvent;
+use OCP\Files\Events\Node\NodeWrittenEvent;
+use OCP\Security\CSP\AddContentSecurityPolicyEvent;
 use OCP\Util;
-use OCA\HyperViewer\BackgroundJob\AutoHlsGenerationJob;
-use OCA\HyperViewer\BackgroundJob\ProcessQueueJob;
-use OCA\HyperViewer\Command\RunJobCommand;
 
 class Application extends App implements IBootstrap {
 	public const APP_ID = 'hyperviewer';
@@ -22,39 +28,17 @@ class Application extends App implements IBootstrap {
 	}
 
 	public function register(IRegistrationContext $context): void {
-		$context->registerService('AutoHlsGenerationJob', function () {
-			return \OC::$server->get(AutoHlsGenerationJob::class);
-		});
-
-		$context->registerService('ProcessQueueJob', function () {
-			return \OC::$server->get(ProcessQueueJob::class);
-		});
-
-		$context->registerService('RunJobCommand', function () {
-			return \OC::$server->get(RunJobCommand::class);
-		});
-
-		// registerCommand is available on newer NC; guard for older API versions
-		if (method_exists($context, 'registerCommand')) {
-			$context->registerCommand(RunJobCommand::class);
-		}
+		$context->registerEventListener(AddContentSecurityPolicyEvent::class, CspListener::class);
+		$context->registerEventListener(LoadAdditionalScriptsEvent::class, LoadFilesScriptsListener::class);
+		$context->registerEventListener(NodeCreatedEvent::class, FileEventListener::class);
+		$context->registerEventListener(NodeWrittenEvent::class, FileEventListener::class);
+		$context->registerEventListener(NodeRenamedEvent::class, FileEventListener::class);
+		$context->registerEventListener(NodeCopiedEvent::class, FileEventListener::class);
+		$context->registerEventListener(NodeDeletedEvent::class, FileEventListener::class);
 	}
 
 	public function boot(IBootContext $context): void {
-		// JS integration
+		// Fallback for environments where LoadAdditionalScriptsEvent is not emitted.
 		Util::addScript(self::APP_ID, 'files-integration');
-
-		/** @var IJobList $jobList */
-		$jobList = $context->getServerContainer()->get(IJobList::class);
-
-		// Register auto-generation cron job once
-		if (!$jobList->has(AutoHlsGenerationJob::class, null)) {
-			$jobList->add(AutoHlsGenerationJob::class, null);
-		}
-
-		// Register FFmpeg queue processor once
-		if (!$jobList->has(ProcessQueueJob::class, null)) {
-			$jobList->add(ProcessQueueJob::class, null);
-		}
 	}
 }

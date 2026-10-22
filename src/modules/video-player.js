@@ -14,8 +14,22 @@ import { extractFrameBlob } from "./frame-extractor";
  * @param filename
  * @param directory
  */
-async function checkHlsCache(filename, directory) {
+function resolveFileid(filename, directory, context) {
+	if (context?.fileInfoModel?.id) {
+		return context.fileInfoModel.id;
+	}
+	if (context?.fileList?.files) {
+		const match = context.fileList.files.find(f => f.name === filename);
+		if (match?.id) {
+			return match.id;
+		}
+	}
+	return 0;
+}
+
+async function checkHlsCache(filename, directory, context) {
 	try {
+		const fileid = resolveFileid(filename, directory, context);
 		const response = await fetch(
 			OC.generateUrl("/apps/hyperviewer/cache/check"),
 			{
@@ -26,13 +40,14 @@ async function checkHlsCache(filename, directory) {
 				},
 				body: JSON.stringify({
 					filename,
-					directory
+					directory,
+					fileid
 				})
 			}
 		);
 
 		const result = await response.json();
-		return result.exists ? result.cachePath : null;
+		return result.exists ? result.fingerprint : null;
 	} catch (error) {
 		console.error("Failed to check HLS cache:", error);
 		return null;
@@ -51,12 +66,12 @@ export async function playVideoSmart(filename, directory, context) {
 
 	try {
 		// Check if HLS cache exists
-		const cachePath = await checkHlsCache(filename, directory);
+		const fingerprint = await checkHlsCache(filename, directory, context);
 
-		if (cachePath) {
+		if (fingerprint) {
 			console.log(`✅ HLS cache found, using Shaka Player`);
 			// Load Shaka Player with HLS
-			loadShakaPlayer(filename, cachePath, context, directory);
+			loadShakaPlayer(filename, fingerprint, context, directory);
 		} else {
 			console.log(`ℹ️ No HLS cache, using default player`);
 			// Fall back to default Nextcloud video player
@@ -120,11 +135,11 @@ function openWithDefaultPlayer(filename, directory, context) {
  * Load Shaka Player in a modal
  *
  * @param {string} filename - Video filename
- * @param {string} cachePath - HLS cache path
+ * @param {string} fingerprint - Content fingerprint for HLS cache
  * @param {object} context - File context
  * @param {string} directory - Current directory path
  */
-function loadShakaPlayer(filename, cachePath, context, directory) {
+function loadShakaPlayer(filename, fingerprint, context, directory) {
 	const videoId = `hyperVideo_${Date.now()}`;
 
 	// Ensure directory is set
@@ -192,7 +207,8 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 	const video = document.getElementById(videoId);
 
 	// Clipping state
-	const clipEditor = new ClipEditor(modal, video, context, filename);
+	const fileid = resolveFileid(filename, directory, context);
+	const clipEditor = new ClipEditor(modal, video, context, filename, fileid);
 
 	// Add close button event listener
 	modal.querySelector(".close-btn").addEventListener("click", closeModal);
@@ -455,13 +471,10 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
 		}, 500);
 
 		// Build manifest URL
-		const encodedCachePath = encodeURIComponent(cachePath);
-		const masterUrl = `${OC.generateUrl(
-			"/apps/hyperviewer/hls"
-		)}/${encodedCachePath}/master.m3u8`;
-		const playlistUrl = `${OC.generateUrl(
-			"/apps/hyperviewer/hls"
-		)}/${encodedCachePath}/playlist.m3u8`;
+		const enc = encodeURIComponent(fingerprint);
+		const base = OC.generateUrl("/apps/hyperviewer/hls");
+		const masterUrl = `${base}/${enc}/master.m3u8`;
+		const playlistUrl = `${base}/${enc}/playlist.m3u8`;
 
 		// Try master.m3u8 first, fallback to playlist.m3u8
 		player.load(masterUrl).catch(() => player.load(playlistUrl));

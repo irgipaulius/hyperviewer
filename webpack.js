@@ -6,6 +6,7 @@ webpackConfig.entry = {
 	'files-integration': path.join(__dirname, 'src', 'files-integration.js'),
 	'settings': path.join(__dirname, 'src', 'settings.js'),
 	'job-management': path.join(__dirname, 'src', 'job-management.js'),
+	'cockpit': path.join(__dirname, 'src', 'cockpit', 'main.js'),
 }
 
 // Fix output filename to avoid double app name
