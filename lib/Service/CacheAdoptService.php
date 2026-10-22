@@ -58,7 +58,7 @@ class CacheAdoptService {
 				if ($limit !== null && $count >= $limit) {
 					break 2;
 				}
-				$result = $this->adoptFolder($entry, (string)$userId, $dryRun, $force);
+				$result = $this->adoptFolder($entry, $userFolder, (string)$userId, $dryRun, $force);
 				$report[$result]++;
 				$count++;
 			}
@@ -90,15 +90,12 @@ class CacheAdoptService {
 		return array_values(array_unique(array_filter($paths)));
 	}
 
-	private function adoptFolder(Folder $cacheFolder, string $userId, bool $dryRun, bool $force): string {
+	private function adoptFolder(Folder $cacheFolder, Folder $userFolder, string $userId, bool $dryRun, bool $force): string {
 		$local = $cacheFolder->getStorage()->getLocalFile($cacheFolder->getInternalPath());
-		if ($local === false) {
+		if ($local === false || !$this->validateLegacyCacheComplete($local)) {
 			return 'broken';
 		}
-		if (!is_file($local . '/master.m3u8') && !is_file($local . '/playlist.m3u8') && (glob($local . '/playlist_*.m3u8') ?: []) === []) {
-			return 'broken';
-		}
-		$candidates = $this->findSourceCandidates($userId, $cacheFolder, $local);
+		$candidates = $this->findSourceCandidates($userId, $userFolder, $cacheFolder, $local);
 		if ($candidates === []) {
 			return 'orphaned';
 		}
@@ -116,8 +113,7 @@ class CacheAdoptService {
 		}
 		$existingMedia = $this->mediaMapper->findByFingerprint($fp);
 		$target = $this->cacheStore->getMediaDir($fp, false);
-		if (!$force && $existingMedia !== null && $existingMedia->getCacheState() === 'ready'
-			&& $target !== '' && is_dir($target) && (is_file($target . '/master.m3u8') || is_file($target . '/playlist.m3u8'))) {
+		if (!$force && $existingMedia !== null && $this->isStoreComplete($target)) {
 			if (!$dryRun) {
 				$this->mediaIndex->indexOrRebind($file, $userId);
 			}
@@ -131,18 +127,28 @@ class CacheAdoptService {
 			$media = new Media();
 			$media->setFingerprint($fp);
 			$media->setSize($file->getSize());
-			$media->setCacheState('ready');
+			$media->setCacheState('none');
 			$media->setCreatedAt(time());
 			$media->setLastAccessAt(time());
 			$media = $this->mediaMapper->insert($media);
+		} else {
+			$media->setCacheState('none');
+			$this->mediaMapper->update($media);
 		}
 		$this->mediaIndex->indexOrRebind($file, $userId);
+		$tempDir = $this->cacheStore->getTempEncodeDir($fp, random_int(100000, 999999999));
+		$this->copyDir($local, $tempDir);
+		if (!$this->validateLegacyCacheComplete($tempDir)) {
+			$this->removeDir($tempDir);
+			return 'broken';
+		}
 		if ($force && $target !== '' && is_dir($target)) {
 			$this->cacheStore->removeMediaCache($fp);
 		}
-		$target = $this->cacheStore->getMediaDir($fp, true);
-		if (!is_file($target . '/master.m3u8') && !is_file($target . '/playlist.m3u8')) {
-			$this->copyDir($local, $target);
+		$this->cacheStore->finalizeEncode($fp, $tempDir);
+		$target = $this->cacheStore->getMediaDir($fp, false);
+		if (!$this->isStoreComplete($target)) {
+			return 'broken';
 		}
 		$media->setCacheState('ready');
 		$media->setCacheBytes($this->cacheStore->computeCacheBytes($fp));
@@ -150,29 +156,90 @@ class CacheAdoptService {
 		return 'adopted';
 	}
 
+	private function userRelativePath(Folder $userFolder, Folder $node): string {
+		$rel = $userFolder->getRelativePath($node->getPath());
+		if ($rel === false || $rel === null || $rel === '') {
+			return ltrim($node->getInternalPath(), '/');
+		}
+		return trim($rel, '/');
+	}
+
 	/** @return list<File> */
-	private function findSourceCandidates(string $userId, Folder $cacheFolder, string $cacheLocal): array {
-		$userFolder = $this->rootFolder->getUserFolder($userId);
+	private function findSourceCandidates(string $userId, Folder $userFolder, Folder $cacheFolder, string $cacheLocal): array {
 		$baseName = $cacheFolder->getName();
 		$baseStem = pathinfo($baseName, PATHINFO_FILENAME);
-		$internal = $cacheFolder->getInternalPath();
+		$userRel = $this->userRelativePath($userFolder, $cacheFolder);
 		$candidates = [];
 		$fromProgress = $this->candidatesFromProgressJson($userFolder, $cacheLocal);
 		if ($fromProgress !== []) {
 			$candidates = array_merge($candidates, $fromProgress);
 		}
-		if (str_contains($internal, '/.cached_hls/')) {
-			[$videoDir] = explode('/.cached_hls/', $internal, 2);
-			$candidates = array_merge($candidates, $this->matchVideosInRelativeDir($userFolder, $videoDir, $baseStem, $baseName));
-		} elseif (str_starts_with($internal, '.cached_hls/') || $internal === '.cached_hls') {
+		if (str_contains($userRel, '/.cached_hls/')) {
+			[$videoDir] = explode('/.cached_hls/', $userRel, 2);
+			$candidates = array_merge($candidates, $this->matchVideosNearCacheDir($userFolder, $videoDir, $baseStem, $baseName));
+		} elseif (str_contains($userRel, '.cached_hls/')) {
+			$before = explode('.cached_hls/', $userRel, 2)[0];
+			$videoDir = rtrim($before, '/');
+			if ($videoDir !== '') {
+				$candidates = array_merge($candidates, $this->matchVideosNearCacheDir($userFolder, $videoDir, $baseStem, $baseName));
+			}
+			$candidates = array_merge($candidates, $this->searchUserVideosByBasename($userId, $userFolder, $baseStem, $baseName));
+		} elseif (str_starts_with($userRel, '.cached_hls/') || $userRel === '.cached_hls') {
 			$candidates = array_merge($candidates, $this->searchUserVideosByBasename($userId, $userFolder, $baseStem, $baseName));
 		} else {
-			$parentRel = dirname($internal);
+			$parentRel = dirname($userRel);
 			if ($parentRel !== '.' && $parentRel !== '') {
-				$candidates = array_merge($candidates, $this->matchVideosInRelativeDir($userFolder, $parentRel, $baseStem, $baseName));
+				$candidates = array_merge($candidates, $this->matchVideosNearCacheDir($userFolder, $parentRel, $baseStem, $baseName));
 			}
 		}
 		return $this->uniqueFiles($candidates);
+	}
+
+	/** @return list<File> */
+	private function matchVideosNearCacheDir(Folder $userFolder, string $relDir, string $baseStem, string $baseName): array {
+		$relDir = trim($relDir, '/');
+		if ($relDir === '' || !$userFolder->nodeExists($relDir)) {
+			return [];
+		}
+		$folder = $userFolder->get($relDir);
+		if (!$folder instanceof Folder) {
+			return [];
+		}
+		$out = $this->matchVideosInFolder($folder, $baseStem, $baseName);
+		foreach ($folder->getDirectoryListing() as $node) {
+			if (!$node instanceof Folder || $node->getName() === '.cached_hls') {
+				continue;
+			}
+			$out = array_merge($out, $this->matchVideosInFolder($node, $baseStem, $baseName));
+		}
+		$parentRel = dirname($relDir);
+		if ($parentRel !== '.' && $parentRel !== '' && $userFolder->nodeExists($parentRel)) {
+			$parent = $userFolder->get($parentRel);
+			if ($parent instanceof Folder) {
+				foreach ($parent->getDirectoryListing() as $node) {
+					if (!$node instanceof Folder || $node->getName() === '.cached_hls') {
+						continue;
+					}
+					$out = array_merge($out, $this->matchVideosInFolder($node, $baseStem, $baseName));
+				}
+			}
+		}
+		return $out;
+	}
+
+	/** @return list<File> */
+	private function matchVideosInFolder(Folder $folder, string $baseStem, string $baseName): array {
+		$out = [];
+		foreach ($folder->getDirectoryListing() as $node) {
+			if (!$node instanceof File || !$this->isVideoFile($node)) {
+				continue;
+			}
+			$stem = pathinfo($node->getName(), PATHINFO_FILENAME);
+			if (strcasecmp($stem, $baseStem) === 0 || strcasecmp($node->getName(), $baseName) === 0) {
+				$out[] = $node;
+			}
+		}
+		return $out;
 	}
 
 	/** @return list<File> */
@@ -206,29 +273,6 @@ class CacheAdoptService {
 				if ($node instanceof File && $this->isVideoFile($node)) {
 					$out[] = $node;
 				}
-			}
-		}
-		return $out;
-	}
-
-	/** @return list<File> */
-	private function matchVideosInRelativeDir(Folder $userFolder, string $relDir, string $baseStem, string $baseName): array {
-		$relDir = trim($relDir, '/');
-		if ($relDir === '' || !$userFolder->nodeExists($relDir)) {
-			return [];
-		}
-		$folder = $userFolder->get($relDir);
-		if (!$folder instanceof Folder) {
-			return [];
-		}
-		$out = [];
-		foreach ($folder->getDirectoryListing() as $node) {
-			if (!$node instanceof File || !$this->isVideoFile($node)) {
-				continue;
-			}
-			$stem = pathinfo($node->getName(), PATHINFO_FILENAME);
-			if (strcasecmp($stem, $baseStem) === 0 || strcasecmp($node->getName(), $baseName) === 0) {
-				$out[] = $node;
 			}
 		}
 		return $out;
@@ -302,7 +346,10 @@ class CacheAdoptService {
 
 	/** @param list<File> $candidates */
 	private function disambiguateByDuration(string $cacheLocal, array $candidates): array {
-		$cacheDur = $this->sumExtinf($cacheLocal);
+		$cacheDur = $this->cacheDurationFromOnePlaylist($cacheLocal);
+		if ($cacheDur <= 0) {
+			return $candidates;
+		}
 		$matched = [];
 		foreach ($candidates as $file) {
 			$local = $file->getStorage()->getLocalFile($file->getInternalPath());
@@ -322,24 +369,80 @@ class CacheAdoptService {
 		return $matched;
 	}
 
-	private function sumExtinf(string $cacheLocal): float {
-		$total = 0.0;
-		$files = array_merge(
-			glob($cacheLocal . '/*.m3u8') ?: [],
-			glob($cacheLocal . '/playlist_*.m3u8') ?: [],
-		);
-		foreach ($files as $pl) {
-			$content = file_get_contents($pl);
-			if ($content === false) {
-				continue;
-			}
-			if (preg_match_all('/#EXTINF:([\d.]+)/', $content, $m)) {
-				foreach ($m[1] as $sec) {
-					$total += (float)$sec;
+	private function cacheDurationFromOnePlaylist(string $cacheLocal): float {
+		$playlist = $this->pickSingleVariantPlaylist($cacheLocal);
+		if ($playlist === null) {
+			return 0.0;
+		}
+		return $this->sumExtinfFile($playlist);
+	}
+
+	private function pickSingleVariantPlaylist(string $cacheLocal): ?string {
+		if (is_file($cacheLocal . '/master.m3u8')) {
+			$lines = file($cacheLocal . '/master.m3u8', FILE_IGNORE_NEW_LINES) ?: [];
+			for ($i = 0, $c = count($lines); $i < $c; $i++) {
+				if (str_starts_with($lines[$i], '#EXT-X-STREAM-INF')) {
+					for ($j = $i + 1; $j < $c; $j++) {
+						$line = trim($lines[$j]);
+						if ($line === '' || str_starts_with($line, '#')) {
+							continue;
+						}
+						$candidate = $cacheLocal . '/' . $line;
+						if (is_file($candidate)) {
+							return $candidate;
+						}
+						break;
+					}
 				}
 			}
 		}
+		if (is_file($cacheLocal . '/playlist.m3u8')) {
+			return $cacheLocal . '/playlist.m3u8';
+		}
+		$variants = glob($cacheLocal . '/playlist_*.m3u8') ?: [];
+		return $variants[0] ?? null;
+	}
+
+	private function sumExtinfFile(string $playlistPath): float {
+		$content = file_get_contents($playlistPath);
+		if ($content === false) {
+			return 0.0;
+		}
+		$total = 0.0;
+		if (preg_match_all('/#EXTINF:([\d.]+)/', $content, $m)) {
+			foreach ($m[1] as $sec) {
+				$total += (float)$sec;
+			}
+		}
 		return $total;
+	}
+
+	private function validateLegacyCacheComplete(string $dir): bool {
+		$playlist = $this->pickSingleVariantPlaylist($dir);
+		if ($playlist === null) {
+			return false;
+		}
+		$content = file_get_contents($playlist);
+		if ($content === false || !str_contains($content, '#EXT-X-ENDLIST')) {
+			return false;
+		}
+		$base = dirname($playlist);
+		if (preg_match_all('/\n([^#\n][^\n]*\.ts)\b/', $content, $m)) {
+			foreach ($m[1] as $seg) {
+				$seg = trim($seg);
+				if (!is_file($base . '/' . $seg) && !is_file($dir . '/' . $seg)) {
+					return false;
+				}
+			}
+		}
+		return is_file($dir . '/master.m3u8') || is_file($dir . '/playlist.m3u8') || (glob($dir . '/playlist_*.m3u8') ?: []) !== [];
+	}
+
+	private function isStoreComplete(string $target): bool {
+		if ($target === '' || !is_dir($target)) {
+			return false;
+		}
+		return $this->validateLegacyCacheComplete($target);
 	}
 
 	private function copyDir(string $src, string $dst): void {
@@ -354,9 +457,27 @@ class CacheAdoptService {
 				if (!is_dir($target)) {
 					mkdir($target, 0775, true);
 				}
-			} elseif (!is_file($target)) {
+			} else {
 				copy($file->getPathname(), $target);
 			}
 		}
+	}
+
+	private function removeDir(string $dir): void {
+		if (!is_dir($dir)) {
+			return;
+		}
+		$it = new \RecursiveIteratorIterator(
+			new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+			\RecursiveIteratorIterator::CHILD_FIRST,
+		);
+		foreach ($it as $file) {
+			if ($file->isDir()) {
+				rmdir($file->getPathname());
+			} else {
+				unlink($file->getPathname());
+			}
+		}
+		rmdir($dir);
 	}
 }
