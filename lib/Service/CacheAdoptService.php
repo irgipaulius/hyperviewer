@@ -79,6 +79,15 @@ class CacheAdoptService {
 				$paths[] = rtrim((string)$loc, '/');
 			}
 		}
+		// Legacy 1.x app recorded every .cached_hls it created per user.
+		$legacy = json_decode($this->config->getAppValue('hyperviewer', 'cached_hls_dirs_' . $userId, '[]'), true);
+		if (is_array($legacy)) {
+			foreach ($legacy as $loc) {
+				if (is_string($loc)) {
+					$paths[] = rtrim($loc, '/');
+				}
+			}
+		}
 		foreach ($this->watchDirMapper->findEnabledForUser($userId) as $watch) {
 			$watchPath = trim($watch->getPath(), '/');
 			if ($watchPath !== '') {
@@ -278,51 +287,56 @@ class CacheAdoptService {
 		return $out;
 	}
 
-	/** @return list<File> */
-	private function searchUserVideosByBasename(string $userId, Folder $userFolder, string $baseStem, string $baseName): array {
-		$roots = [''];
-		foreach ($this->watchDirMapper->findEnabledForUser($userId) as $watch) {
-			$roots[] = trim($watch->getPath(), '/');
-		}
-		$roots = array_values(array_unique($roots));
-		$out = [];
-		foreach ($roots as $rootRel) {
-			$out = array_merge($out, $this->walkForBasename($userFolder, $rootRel, $baseStem, $baseName, 0, 12));
-		}
-		return $out;
-	}
+	/** @var array<string, array<string, list<File>>> per-user index: lowercase stem/name => files */
+	private array $videoIndex = [];
 
 	/** @return list<File> */
-	private function walkForBasename(Folder $userFolder, string $relPath, string $baseStem, string $baseName, int $depth, int $maxDepth): array {
+	private function searchUserVideosByBasename(string $userId, Folder $userFolder, string $baseStem, string $baseName): array {
+		if (!isset($this->videoIndex[$userId])) {
+			$roots = [''];
+			foreach ($this->watchDirMapper->findEnabledForUser($userId) as $watch) {
+				$roots[] = trim($watch->getPath(), '/');
+			}
+			$index = [];
+			foreach (array_values(array_unique($roots)) as $rootRel) {
+				$this->indexVideos($userFolder, $rootRel, 0, 12, $index);
+			}
+			$this->videoIndex[$userId] = $index;
+		}
+		$index = $this->videoIndex[$userId];
+		return array_merge($index[strtolower($baseStem)] ?? [], strtolower($baseName) !== strtolower($baseStem) ? ($index[strtolower($baseName)] ?? []) : []);
+	}
+
+	/** Walks the tree once, indexing video files by lowercase stem and by lowercase full name. */
+	private function indexVideos(Folder $userFolder, string $relPath, int $depth, int $maxDepth, array &$index): void {
 		if ($depth > $maxDepth) {
-			return [];
+			return;
 		}
 		$relPath = trim($relPath, '/');
 		if ($relPath !== '' && !$userFolder->nodeExists($relPath)) {
-			return [];
+			return;
 		}
 		$folder = $relPath === '' ? $userFolder : $userFolder->get($relPath);
 		if (!$folder instanceof Folder) {
-			return [];
+			return;
 		}
-		$out = [];
 		foreach ($folder->getDirectoryListing() as $node) {
 			if ($node instanceof File) {
-				if (!$this->isVideoFile($node)) {
-					continue;
-				}
-				$stem = pathinfo($node->getName(), PATHINFO_FILENAME);
-				if (strcasecmp($stem, $baseStem) === 0 || strcasecmp($node->getName(), $baseName) === 0) {
-					$out[] = $node;
+				if ($this->isVideoFile($node)) {
+					$stem = strtolower(pathinfo($node->getName(), PATHINFO_FILENAME));
+					$name = strtolower($node->getName());
+					$index[$stem][] = $node;
+					if ($name !== $stem) {
+						$index[$name][] = $node;
+					}
 				}
 				continue;
 			}
 			if ($node instanceof Folder && $node->getName() !== '.cached_hls') {
 				$childRel = $relPath === '' ? $node->getName() : $relPath . '/' . $node->getName();
-				$out = array_merge($out, $this->walkForBasename($userFolder, $childRel, $baseStem, $baseName, $depth + 1, $maxDepth));
+				$this->indexVideos($userFolder, $childRel, $depth + 1, $maxDepth, $index);
 			}
 		}
-		return $out;
 	}
 
 	private function isVideoFile(File $file): bool {
