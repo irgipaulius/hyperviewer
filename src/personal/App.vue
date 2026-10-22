@@ -13,7 +13,7 @@
 			</button>
 		</nav>
 
-		<div v-if="loading && tab === 'overview'" class="emptycontent">
+		<div v-if="loading" class="emptycontent">
 			Loading…
 		</div>
 
@@ -23,23 +23,28 @@
 					<span class="hv-card-n">{{ overview.ready_count || 0 }}</span> videos ready
 				</div>
 				<div class="hv-card">
-					<span class="hv-card-n">{{ formatBytes(overview.cache_bytes) }}</span> cache used
+					<span class="hv-card-n">{{ overview.video_minutes_ready || 0 }}</span> min ready
 				</div>
 				<div class="hv-card">
-					<span class="hv-card-n">{{ overview.jobs_today || 0 }}</span> jobs today
+					<span class="hv-card-n">{{ formatBytes(overview.cache_bytes) }}</span> cache used
 				</div>
 				<div class="hv-card">
 					<span class="hv-card-n">{{ overview.queued || 0 }}</span> in queue
 				</div>
 			</div>
 			<p v-if="overview && overview.ready_count === 0" class="hv-empty-hint">
-				Right-click a video in Files → <strong>Generate HLS Cache</strong>, or use the queue tab after queuing work.
+				Right-click a video in Files → <strong>Generate HLS Cache</strong>.
 			</p>
 		</div>
 
 		<div v-else-if="tab === 'queue'" class="hv-panel">
+			<div class="hv-queue-toolbar">
+				<button type="button" @click="cancelAllQueued">
+					Pause all mine (cancel queued)
+				</button>
+			</div>
 			<div v-if="jobs.length === 0" class="hv-empty-hint">
-				No active jobs. Generate HLS from Files to see progress here.
+				No active jobs.
 			</div>
 			<table v-else class="grid hv-jobs-table">
 				<thead>
@@ -86,9 +91,21 @@
 					</tr>
 				</tbody>
 			</table>
-			<div v-for="j in jobs.filter(x => x.error)" :key="'e-' + j.id" class="hv-job-error">
-				<strong>{{ j.filename || ('Job #' + j.id) }}</strong>: {{ j.error }}
+		</div>
+
+		<div v-else-if="tab === 'history'" class="hv-panel">
+			<div v-if="historyJobs.length === 0" class="hv-empty-hint">
+				No finished jobs yet.
 			</div>
+			<ul v-else class="hv-library-list">
+				<li v-for="j in historyJobs" :key="j.id">
+					<strong>#{{ j.id }}</strong> {{ j.filename || '?' }} — {{ j.state }}
+					<span class="hv-path-muted">{{ formatTs(j.finished_at || j.created_at) }}</span>
+					<button v-if="j.state === 'failed'" type="button" @click="retryJob(j.id)">
+						Re-run
+					</button>
+				</li>
+			</ul>
 		</div>
 
 		<div v-else-if="tab === 'library'" class="hv-panel">
@@ -103,17 +120,32 @@
 			</ul>
 		</div>
 
-		<div v-else class="hv-panel hv-empty-hint">
-			More sections (history, links, watch folders, preferences) coming in the next release.
+		<div v-else-if="tab === 'watch'" class="hv-panel">
+			<p class="hv-empty-hint">
+				Watch folders auto-queue new videos for HLS. Add one from Files → folder → Generate HLS (Directory) with auto-generation enabled.
+			</p>
+			<ul v-if="watchDirs.length" class="hv-library-list">
+				<li v-for="w in watchDirs" :key="w.id">
+					{{ w.directory }}
+					<span class="hv-path-muted">{{ (w.resolutions || []).join(', ') }}</span>
+					<button type="button" @click="removeWatch(w.id)">
+						Remove
+					</button>
+				</li>
+			</ul>
+		</div>
+
+		<div v-else-if="tab === 'logs'" class="hv-panel hv-logs">
+			<pre v-for="l in userLogs" :key="l.id">[{{ l.level }}] {{ l.message }}</pre>
 		</div>
 	</div>
 </template>
 
 <script>
 import { generateUrl } from '@nextcloud/router'
-import { showError } from '@nextcloud/dialogs'
-import { apiGet, apiPost } from '../shared/api.js'
-import { formatBytes, filesLink } from '../shared/format.js'
+import { showError, showSuccess } from '@nextcloud/dialogs'
+import { apiDelete, apiGet, apiPost } from '../shared/api.js'
+import { formatBytes, filesLink, formatTs } from '../shared/format.js'
 
 export default {
 	name: 'App',
@@ -123,16 +155,26 @@ export default {
 			tabs: [
 				{ id: 'overview', label: 'Overview' },
 				{ id: 'queue', label: 'Queue' },
-				{ id: 'library', label: 'My library' },
-				{ id: 'more', label: 'More' },
+				{ id: 'history', label: 'History' },
+				{ id: 'library', label: 'Library' },
+				{ id: 'watch', label: 'Watch folders' },
+				{ id: 'logs', label: 'My logs' },
 			],
 			overview: null,
 			jobs: [],
+			historyJobs: [],
 			library: [],
+			watchDirs: [],
+			userLogs: [],
 			loading: true,
 		}
 	},
 	async mounted() {
+		const open = window.sessionStorage && window.sessionStorage.getItem('hyperviewer_open_tab')
+		if (open) {
+			this.tab = open
+			window.sessionStorage.removeItem('hyperviewer_open_tab')
+		}
 		await this.refresh()
 		this._timer = setInterval(() => this.refresh(), 5000)
 	},
@@ -141,6 +183,7 @@ export default {
 	},
 	methods: {
 		formatBytes,
+		formatTs,
 		filesLink,
 		async refresh() {
 			try {
@@ -148,15 +191,24 @@ export default {
 					this.overview = await apiGet(generateUrl('/apps/hyperviewer/api/user/overview'))
 				}
 				if (this.tab === 'queue' || this.tab === 'overview') {
-					const res = await apiGet(generateUrl('/apps/hyperviewer/api/jobs'), {
-						limit: 100,
-						state: '',
-					})
+					const res = await apiGet(generateUrl('/apps/hyperviewer/api/jobs'), { limit: 100 })
 					this.jobs = (res.jobs || []).filter(j => ['queued', 'running', 'failed'].includes(j.state))
+				}
+				if (this.tab === 'history') {
+					const h = await apiGet(generateUrl('/apps/hyperviewer/api/user/history'), { limit: 50 })
+					this.historyJobs = h.jobs || []
 				}
 				if (this.tab === 'library') {
 					const lib = await apiGet(generateUrl('/apps/hyperviewer/api/user/library'))
 					this.library = lib.items || []
+				}
+				if (this.tab === 'watch') {
+					const w = await apiGet(generateUrl('/apps/hyperviewer/api/auto-generation'))
+					this.watchDirs = w.directories || []
+				}
+				if (this.tab === 'logs') {
+					const lg = await apiGet(generateUrl('/apps/hyperviewer/api/user/logs'))
+					this.userLogs = lg.entries || []
 				}
 			} catch (e) {
 				console.error(e)
@@ -174,6 +226,15 @@ export default {
 		},
 		async bumpJob(id) {
 			await apiPost(generateUrl(`/apps/hyperviewer/api/jobs/${id}/bump`))
+			await this.refresh()
+		},
+		async cancelAllQueued() {
+			await apiPost(generateUrl('/apps/hyperviewer/api/user/queue/cancel-queued'))
+			showSuccess('Queued jobs cancelled')
+			await this.refresh()
+		},
+		async removeWatch(id) {
+			await apiDelete(generateUrl(`/apps/hyperviewer/api/auto-generation/${id}`))
 			await this.refresh()
 		},
 	},

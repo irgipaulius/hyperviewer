@@ -74,6 +74,17 @@ class LogMapper extends QBMapper {
 		return $message;
 	}
 
+	/** @return LogEntry[] */
+	public function tailForUser(string $userId, int $limit = 100): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+			->orderBy('id', 'DESC')
+			->setMaxResults($limit);
+		return $this->findEntities($qb);
+	}
+
 	public function pruneOlderThan(int $seconds): int {
 		$cutoff = time() - $seconds;
 		$qb = $this->db->getQueryBuilder();

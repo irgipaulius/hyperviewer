@@ -57,8 +57,17 @@ class WatchController extends Controller {
 
 	#[NoAdminRequired]
 	public function remove(int $id): JSONResponse {
-		$this->watchDirMapper->deleteById($id);
-		return new JSONResponse(['success' => true]);
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		}
+		foreach ($this->watchDirMapper->findEnabledForUser($user->getUID()) as $wd) {
+			if ($wd->getId() === $id) {
+				$this->watchDirMapper->deleteById($id);
+				return new JSONResponse(['success' => true]);
+			}
+		}
+		return new JSONResponse(['error' => 'Not found'], 404);
 	}
 
 	#[NoAdminRequired]

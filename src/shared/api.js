@@ -16,6 +16,14 @@ export async function apiPost(url, data = {}) {
 	return response.data
 }
 
+export async function apiDelete(url) {
+	const response = await axios.delete(url)
+	if (typeof response.data === 'string') {
+		throw new Error('Unexpected HTML response')
+	}
+	return response.data
+}
+
 export async function fetchJson(url, options = {}) {
 	const response = await fetch(url, options)
 	const ct = response.headers.get('Content-Type') || ''

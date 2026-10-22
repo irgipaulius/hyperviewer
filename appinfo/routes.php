@@ -33,10 +33,16 @@ return [
 
 		['name' => 'user#overview', 'url' => '/api/user/overview', 'verb' => 'GET'],
 		['name' => 'user#library', 'url' => '/api/user/library', 'verb' => 'GET'],
+		['name' => 'user#history', 'url' => '/api/user/history', 'verb' => 'GET'],
+		['name' => 'user#logs', 'url' => '/api/user/logs', 'verb' => 'GET'],
+		['name' => 'user#cancelMyQueued', 'url' => '/api/user/queue/cancel-queued', 'verb' => 'POST'],
 
 		['name' => 'admin#overview', 'url' => '/api/admin/overview', 'verb' => 'GET'],
 		['name' => 'admin#status', 'url' => '/api/admin/status', 'verb' => 'GET'],
 		['name' => 'admin#pauseQueue', 'url' => '/api/admin/queue/pause', 'verb' => 'POST'],
+		['name' => 'admin#cancelFailed', 'url' => '/api/admin/queue/cancel-failed', 'verb' => 'POST'],
+		['name' => 'admin#purgeLogs', 'url' => '/api/admin/logs/purge', 'verb' => 'POST'],
+		['name' => 'admin#diagnosticReport', 'url' => '/api/admin/diagnostic-report', 'verb' => 'GET'],
 		['name' => 'admin#getSettings', 'url' => '/api/admin/settings', 'verb' => 'GET'],
 		['name' => 'admin#setSetting', 'url' => '/api/admin/settings', 'verb' => 'POST'],
 		['name' => 'admin#resetSetting', 'url' => '/api/admin/settings/reset', 'verb' => 'POST'],

@@ -13,6 +13,12 @@
 				· ffmpeg threads {{ dashboard.worker.ffmpeg_threads }}
 				<span v-if="dashboard.queue && dashboard.queue.paused"> · queue paused</span>
 			</p>
+			<p v-if="dashboard.worker && dashboard.worker.ffmpeg" class="hv-worker-meta">
+				<span v-if="dashboard.worker.ffmpeg.ffmpeg">{{ dashboard.worker.ffmpeg.ffmpeg }}</span>
+				<span v-if="dashboard.worker.disk_free_bytes != null">
+					· disk free {{ formatBytes(dashboard.worker.disk_free_bytes) }}
+				</span>
+			</p>
 			<p v-else class="hv-worker-meta">
 				Start: <code>{{ dashboard.worker && dashboard.worker.start_hint_service }}</code> or
 				<code>{{ dashboard.worker && dashboard.worker.start_hint_command }}</code>
@@ -82,6 +88,15 @@
 			<button type="button" @click="togglePause">
 				{{ dashboard.queue && dashboard.queue.paused ? 'Resume queue' : 'Pause queue' }}
 			</button>
+			<button type="button" @click="cancelFailed">
+				Cancel all failed jobs
+			</button>
+			<button type="button" @click="purgeLogs">
+				Purge old system logs
+			</button>
+			<button type="button" @click="copyDiagnostic">
+				Copy diagnostic report
+			</button>
 		</div>
 
 		<div v-else class="hv-panel hv-logs">
@@ -95,7 +110,7 @@
 
 <script>
 import { generateUrl } from '@nextcloud/router'
-import { showError } from '@nextcloud/dialogs'
+import { showError, showSuccess } from '@nextcloud/dialogs'
 import { apiGet, apiPost } from '../shared/api.js'
 import { formatBytes, formatDuration } from '../shared/format.js'
 
@@ -189,6 +204,26 @@ export default {
 				await this.refresh()
 			} catch (e) {
 				showError(e.message || 'Could not update queue')
+			}
+		},
+		async cancelFailed() {
+			await apiPost(generateUrl('/apps/hyperviewer/api/admin/queue/cancel-failed'))
+			showSuccess('Failed jobs cleared from queue')
+			await this.refresh()
+		},
+		async purgeLogs() {
+			await apiPost(generateUrl('/apps/hyperviewer/api/admin/logs/purge'))
+			showSuccess('Old logs purged')
+			await this.refresh()
+		},
+		async copyDiagnostic() {
+			const report = await apiGet(generateUrl('/apps/hyperviewer/api/admin/diagnostic-report'))
+			const text = JSON.stringify(report, null, 2)
+			try {
+				await navigator.clipboard.writeText(text)
+				showSuccess('Diagnostic report copied (no user paths included)')
+			} catch (e) {
+				showError('Could not copy to clipboard')
 			}
 		},
 	},

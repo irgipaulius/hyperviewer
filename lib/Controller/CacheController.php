@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\HyperViewer\Controller;
 
+use OCA\HyperViewer\Db\JobMapper;
 use OCA\HyperViewer\Service\MediaIndexService;
 use OCA\HyperViewer\Service\QueueService;
 use OCA\HyperViewer\Service\ConfigService;
@@ -27,6 +28,7 @@ class CacheController extends Controller {
 		private MediaIndexService $mediaIndex,
 		private QueueService $queueService,
 		private ConfigService $config,
+		private JobMapper $jobMapper,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -53,6 +55,7 @@ class CacheController extends Controller {
 		}
 		$result = [];
 		$cachedVideos = [];
+		$fileidsForJobs = [];
 		foreach ($files as $fileData) {
 			$fileid = (int)($fileData['fileid'] ?? 0);
 			$filename = (string)($fileData['filename'] ?? '');
@@ -88,14 +91,41 @@ class CacheController extends Controller {
 			if ($has && $filename !== '') {
 				$cachedVideos[] = $filename;
 			}
+			if ($fileid > 0) {
+				$fileidsForJobs[] = $fileid;
+			}
 			$result[] = [
 				'filename' => $filename,
 				'fileid' => $fileid,
 				'hasCache' => $has,
 				'cache_state' => $state,
 				'fingerprint' => $media?->getFingerprint(),
+				'job' => null,
+				'job_error' => null,
+				'queue_position' => null,
 			];
 		}
+		$jobMap = $this->jobMapper->mapLatestJobsForFileids($fileidsForJobs);
+		foreach ($result as &$row) {
+			$fid = (int)($row['fileid'] ?? 0);
+			if ($fid <= 0 || !isset($jobMap[$fid])) {
+				continue;
+			}
+			$job = $jobMap[$fid];
+			$row['job'] = [
+				'id' => $job->getId(),
+				'state' => $job->getState(),
+				'progress' => $job->getProgress(),
+				'type' => $job->getType(),
+			];
+			if ($job->getState() === 'failed') {
+				$row['job_error'] = $job->getError();
+			}
+			if ($job->getState() === 'queued') {
+				$row['queue_position'] = $this->jobMapper->countQueuedAhead($job);
+			}
+		}
+		unset($row);
 		return new JSONResponse(['results' => $result, 'cachedVideos' => $cachedVideos]);
 	}
 

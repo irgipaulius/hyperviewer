@@ -252,6 +252,58 @@ class JobMapper extends QBMapper {
 		return $out;
 	}
 
+	/**
+	 * Latest chip-relevant job per fileid (queued, running, failed).
+	 *
+	 * @param int[] $fileids
+	 * @return array<int, Job>
+	 */
+	public function mapLatestJobsForFileids(array $fileids): array {
+		$fileids = array_values(array_unique(array_filter(array_map('intval', $fileids))));
+		if ($fileids === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->in('fileid', $qb->createNamedParameter($fileids, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->in(
+				'state',
+				$qb->createNamedParameter(['queued', 'running', 'failed'], IQueryBuilder::PARAM_STR_ARRAY),
+			))
+			->orderBy('created_at', 'DESC');
+		$jobs = $this->findEntities($qb);
+		$map = [];
+		foreach ($jobs as $job) {
+			$fid = (int)($job->getFileid() ?? 0);
+			if ($fid > 0 && !isset($map[$fid])) {
+				$map[$fid] = $job;
+			}
+		}
+		return $map;
+	}
+
+	public function cancelQueuedForUser(string $userId): int {
+		$qb = $this->db->getQueryBuilder();
+		$now = time();
+		return $qb->update($this->getTableName())
+			->set('state', $qb->createNamedParameter('cancelled'))
+			->set('finished_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+			->andWhere($qb->expr()->eq('state', $qb->createNamedParameter('queued')))
+			->executeStatement();
+	}
+
+	public function cancelAllFailed(): int {
+		$qb = $this->db->getQueryBuilder();
+		$now = time();
+		return $qb->update($this->getTableName())
+			->set('state', $qb->createNamedParameter('cancelled'))
+			->set('finished_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+			->where($qb->expr()->eq('state', $qb->createNamedParameter('failed')))
+			->executeStatement();
+	}
+
 	public function countQueuedAhead(Job $job): int {
 		if ($job->getState() !== 'queued') {
 			return 0;

@@ -41,12 +41,17 @@ class JobProcessorService {
 				'scan' => $this->processScan($job),
 				default => throw new \RuntimeException('Unknown job type'),
 			};
+			if ($job->getType() === 'clip') {
+				$this->notifyJob($job, 'clip_ready', 'Clip export finished');
+			}
 			$this->queueService->markDone($job);
 		} catch (\Throwable $e) {
 			$this->logMapper->append('error', 'worker', $e->getMessage(), ['job' => $job->getId()], $job->getUserId(), $job->getFileid(), $job->getId());
 			$this->queueService->markFailed($job, $e->getMessage());
 			if ($job->getType() === 'encode' || $job->getType() === 'upgrade') {
 				$this->notifyEncode($job, false, $e->getMessage());
+			} elseif ($job->getType() === 'clip') {
+				$this->notifyJob($job, 'clip_failed', $e->getMessage());
 			}
 		} finally {
 			$this->activeJobId = null;
@@ -232,13 +237,24 @@ class JobProcessorService {
 	}
 
 	private function notifyEncode(Job $job, bool $success, ?string $error): void {
-		$n = $this->notificationManager->createNotification();
-		$n->setApp('hyperviewer')
-			->setUser($job->getUserId())
-			->setDateTime(new \DateTime())
-			->setObject('encode', (string)$job->getId())
-			->setSubject($success ? 'encode_ready' : 'encode_failed', ['fileid' => $job->getFileid()])
-			->setMessage($success ? 'ready' : ($error ?? 'failed'));
-		$this->notificationManager->notify($n);
+		$this->notifyJob(
+			$job,
+			$success ? 'encode_ready' : 'encode_failed',
+			$success ? 'HLS cache is ready' : ($error ?? 'Encode failed'),
+		);
+	}
+
+	private function notifyJob(Job $job, string $subject, string $message): void {
+		try {
+			$n = $this->notificationManager->createNotification();
+			$n->setApp('hyperviewer')
+				->setUser($job->getUserId())
+				->setDateTime(new \DateTime())
+				->setObject('job', (string)$job->getId())
+				->setSubject($subject, ['job' => $job->getId()])
+				->setMessage($message);
+			$this->notificationManager->notify($n);
+		} catch (\Throwable) {
+		}
 	}
 }

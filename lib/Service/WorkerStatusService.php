@@ -21,6 +21,7 @@ class WorkerStatusService {
 		private IAppConfig $appConfig,
 		private ConfigService $config,
 		private JobMapper $jobMapper,
+		private FfmpegInfoService $ffmpegInfo,
 	) {
 	}
 
@@ -80,6 +81,8 @@ class WorkerStatusService {
 			'start_hint_service' => 'hyperviewer_worker',
 			'start_hint_command' => 'HV_WORKER=1 occ hyperviewer:worker',
 			'cache_directory' => $this->config->getString(ConfigService::KEY_CACHE_DIR),
+			'ffmpeg' => $this->ffmpegInfo->getVersions(),
+			'disk_free_bytes' => $this->ffmpegInfo->diskFreeAtCachePath(),
 		];
 	}
 }

@@ -1,5 +1,6 @@
 import exportModalTemplate from "../templates/export-modal.html";
-import { showError, showSuccess } from "@nextcloud/dialogs";
+import { showError } from "@nextcloud/dialogs";
+import { toastQueued } from "../shared/toast-queue.js";
 
 export class ClipEditor {
 
@@ -355,7 +356,7 @@ export class ClipEditor {
 			}
 
 			if (result.jobId) {
-				showSuccess(`Queued (job #${result.jobId})`);
+				toastQueued(result.jobId);
 				await this.pollClipJob(result.jobId, clipFilename, exportPath);
 			}
 

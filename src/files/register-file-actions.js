@@ -6,7 +6,7 @@ import {
 } from '@nextcloud/files'
 import { translate as t } from '@nextcloud/l10n'
 import { playVideoSmart } from '../modules/video-player.js'
-import { fetchCacheStatus } from './hls-cache-status.js'
+import { resolveFileCacheStatus } from './cache-batch-store.js'
 import { folderPath, isVideoMime } from './nodePaths.js'
 
 const ICON_MULTIMEDIA = () =>
@@ -132,7 +132,7 @@ export function registerHyperViewerFileActions(handlers) {
 		renderInline: async ({ nodes, folder }) => {
 			const node = nodes[0]
 			const directory = folderPath(folder, node)
-			const status = await fetchCacheStatus(
+			const status = await resolveFileCacheStatus(
 				node.fileid,
 				node.basename,
 				directory,
@@ -159,7 +159,10 @@ export function registerHyperViewerFileActions(handlers) {
 					badge.title = t('hyperviewer', 'Encoding {pct}%', { pct: job.progress })
 				} else {
 					badge.textContent = '…'
-					badge.title = t('hyperviewer', 'Queued (job #{id})', { id: job.id })
+					const pos = status.queue_position
+					badge.title = pos
+						? t('hyperviewer', 'Queued, {pos} in line (job #{id})', { pos, id: job.id })
+						: t('hyperviewer', 'Queued (job #{id})', { id: job.id })
 				}
 				wrap.appendChild(badge)
 				return wrap

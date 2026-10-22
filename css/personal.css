@@ -37,6 +37,10 @@
 	margin-bottom: 1rem;
 }
 
+.hv-queue-toolbar {
+	margin-bottom: 0.75rem;
+}
+
 .hv-type-pill {
 	display: inline-block;
 	margin-inline-end: 0.5rem;

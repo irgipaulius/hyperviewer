@@ -6,6 +6,7 @@ import "./styles/cache-modal.css";
 import { registerHyperViewerFileActions } from "./files/register-file-actions.js";
 import { folderPath } from "./files/nodePaths.js";
 import { showError, showSuccess } from "@nextcloud/dialogs";
+import { toastQueued } from "./shared/toast-queue.js";
 
 console.log("🎬 Hyper Viewer Files integration loading…");
 
@@ -691,9 +692,9 @@ async function startCacheGeneration(files, directoryPath = null) {
 		if (result.success) {
 			const ids = result.jobIds || (result.jobId ? [result.jobId] : []);
 			if (ids.length === 1) {
-				showSuccess(`Queued (job #${ids[0]})`);
+				toastQueued(ids[0]);
 			} else if (ids.length > 1) {
-				showSuccess(`Queued ${ids.length} jobs (#${ids.join(", #")})`);
+				showSuccess(`Queued ${ids.length} jobs (#${ids.join(", #")}). Open Settings → Hyper Viewer → Queue.`);
 			} else {
 				showSuccess(
 					`Cache generation queued for ${files.length} file(s). Start the worker to process jobs.`

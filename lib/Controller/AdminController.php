@@ -149,13 +149,24 @@ class AdminController extends Controller {
 	#[AdminRequired]
 	public function watchDirs(): JSONResponse {
 		$all = $this->watchDirMapper->findAllEnabled();
-		return new JSONResponse(['items' => array_map(static fn ($w) => [
-			'id' => $w->getId(),
-			'user_id' => $w->getUserId(),
-			'path' => $w->getPath(),
-			'enabled' => $w->getEnabled(),
-			'resolutions' => json_decode($w->getResolutions() ?? '[]', true),
-			'last_scan_at' => $w->getLastScanAt(),
-		], $all)]);
+		return new JSONResponse(['enabled_count' => count($all)]);
+	}
+
+	#[AdminRequired]
+	public function diagnosticReport(): JSONResponse {
+		return new JSONResponse($this->buildDashboardPayload());
+	}
+
+	#[AdminRequired]
+	public function cancelFailed(): JSONResponse {
+		$n = $this->jobMapper->cancelAllFailed();
+		return new JSONResponse(['success' => true, 'cancelled' => $n]);
+	}
+
+	#[AdminRequired]
+	public function purgeLogs(): JSONResponse {
+		$days = max(1, $this->config->getInt(ConfigService::KEY_LOG_RETENTION_DAYS));
+		$purged = $this->logMapper->pruneOlderThan($days * 86400);
+		return new JSONResponse(['success' => true, 'purged' => $purged]);
 	}
 }
