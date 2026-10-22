@@ -1,301 +1,12 @@
 /**
- * Files app integration for Hyper Viewer (Nextcloud 25 compatible)
- * Adds "Generate HLS Cache" action to MOV and MP4 files
+ * Files app integration for Hyper Viewer (Nextcloud 35, @nextcloud/files v4)
  */
 
 import "./styles/cache-modal.css";
-import { playVideoSmart } from "./modules/video-player.js";
 import { registerHyperViewerFileActions } from "./files/register-file-actions.js";
+import { folderPath } from "./files/nodePaths.js";
 
-console.log("🎬 Hyper Viewer Files integration loading...");
-
-// Only initialize if we're in the Files app
-/**
- *
- */
-function isInFilesApp() {
-	// Check if we're in the Files app by looking for Files-specific elements
-	return (
-		document.body.id === "body-user" &&
-		(window.location.pathname.includes("/apps/files") ||
-			document.querySelector("#app-content-files") !== null ||
-			document.querySelector(".files-filestable") !== null)
-	);
-}
-
-// Wait for Files app to be ready
-document.addEventListener("DOMContentLoaded", function() {
-	// Only initialize if we're in the Files app
-	if (!isInFilesApp()) {
-		console.log("⏭️ Not in Files app, skipping integration");
-		return;
-	}
-
-	// Wait a bit more for Files app to fully initialize
-	setTimeout(initializeFilesIntegration, 1000);
-});
-
-/**
- * Initialize files integration
- */
-function initializeFilesIntegration() {
-	console.log("✅ Registering Hyper Viewer file actions (NC35 @nextcloud/files)…");
-	registerHyperViewerFileActions({
-		playVideoSmart,
-		openCacheGenerationDialog,
-		openDirectoryCacheGenerationDialog,
-	});
-	addHlsBadgesToFileList();
-}
-
-/**
- * Add HLS badges to videos in the file list
- */
-function addHlsBadgesToFileList() {
-	console.log("🎨 Initializing HLS badges for file list...");
-
-	// Inject CSS for HLS badges (works for both list and grid view)
-	const style = document.createElement("style");
-	style.textContent = `
-		/* HLS Badge styling */
-		.hls-badge {
-			position: absolute;
-			top: 4px;
-			right: 4px;
-			background: rgba(60, 60, 60, 0.95);
-			color: #FF9800;
-			padding: 2px 6px;
-			border-radius: 3px;
-			font-size: 9px;
-			font-weight: bold;
-			letter-spacing: 0.5px;
-			z-index: 1000;
-			pointer-events: none;
-			box-shadow: 0 1px 3px rgba(0,0,0,0.4);
-			backdrop-filter: blur(4px);
-			line-height: 1.2;
-		}
-		
-		/* List view - make thumbnail container relative */
-		.files-fileList tr[data-file] td.filename .thumbnail {
-			position: relative !important;
-		}
-		
-		/* Grid view - make thumbnail container relative */
-		.files-fileList .files-filestable .filename .thumbnail,
-		.files-fileList .grid-item .thumbnail,
-		section.files-grid .grid-item .thumbnail {
-			position: relative !important;
-		}
-	`;
-	document.head.appendChild(style);
-
-	// Function to check and add badges
-	/**
-	 *
-	 */
-	async function updateHlsBadges() {
-		console.log("🔍 Checking for videos to badge...");
-		let now = new Date();
-
-		const directory = document.querySelector("[data-cy-files-content-breadcrumbs]")?.dataset?.dir
-			|| window.OCA?.Files?.App?.currentDir
-			|| window.OCA?.Files?.App?.fileList?.getCurrentDirectory?.()
-			|| "/";
-
-		let batchFiles = [];
-		document.querySelectorAll("[data-cy-files-list-row]").forEach(row => {
-			const mime = row.getAttribute("data-cy-files-list-row-mime") || "";
-			const name = row.getAttribute("data-cy-files-list-row-basename") || row.dataset.file;
-			const fileid = parseInt(row.dataset.fileId || row.getAttribute("data-fileid") || "0", 10);
-			if (!name) {
-				return;
-			}
-			if (mime === "video/mp4" || mime === "video/quicktime" || /\.(mp4|mov)$/i.test(name)) {
-				batchFiles.push({ filename: name, fileid, directory });
-			}
-		});
-
-		const fileList = window.OCA?.Files?.App?.fileList;
-		if (batchFiles.length === 0 && fileList?.files) {
-			batchFiles = fileList.files
-				.filter(f => f.mimetype === "video/quicktime" || f.mimetype === "video/mp4")
-				.map(f => ({ filename: f.name, fileid: f.id, directory }));
-		}
-
-		if (batchFiles.length === 0) {
-			return;
-		}
-
-		const videoFiles = batchFiles;
-		const filenames = videoFiles.map(f => f.filename);
-
-		console.log(`Badge prep time: ${new Date() - now}ms`);
-		now = new Date();
-		try {
-			// Batch check all videos at once (much faster!)
-			const response = await fetch(
-				OC.generateUrl("/apps/hyperviewer/cache/batch-check"),
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						requesttoken: OC.requestToken
-					},
-					body: JSON.stringify({
-						directory,
-						files: videoFiles
-					})
-				}
-			);
-			console.log(`Badge request time: ${new Date() - now}ms`);
-			now = new Date();
-
-			if (!response.ok) {
-				console.error("Batch check failed:", response.status);
-				return;
-			}
-
-			const result = await response.json();
-			const cachedVideos = new Set(result.cachedVideos || []);
-
-			console.log(
-				`✅ Batch check complete [${new Date() - now}ms]: ${cachedVideos.size}/${filenames.length} videos have HLS cache`
-			);
-			now = new Date();
-
-			// Apply badges to videos with cache
-			for (const videoFile of videoFiles) {
-				const filename = videoFile.name;
-				
-				// Skip if video doesn't have cache
-				if (!cachedVideos.has(filename)) {
-					continue;
-				}
-
-				// Escape filename for querySelector (handle special chars)
-				const escapedFilename = CSS.escape(filename);
-
-				// Find the DOM element - try both list and grid view
-				let fileElement = document.querySelector(
-					`tr[data-file="${escapedFilename}"]`
-				); // List view
-				if (!fileElement) {
-					fileElement = document.querySelector(
-						`[data-name="${escapedFilename}"]`
-					); // Grid view
-				}
-				if (!fileElement) {
-					// Try without escaping for older Nextcloud versions
-					fileElement = document.querySelector(
-						`tr[data-file="${filename}"]`
-					);
-				}
-
-				if (!fileElement) {
-					// Skip silently - file might not be visible in current view
-					continue;
-				}
-
-				// Skip if badge already exists
-				if (fileElement.querySelector(".hls-badge")) {
-					continue;
-				}
-
-				// Find thumbnail container in the element
-				const thumbnailContainer =
-					fileElement.querySelector("td.filename .thumbnail") || // List view
-					fileElement.querySelector(".thumbnail") || // Grid view
-					fileElement.querySelector(".files-list__row-icon") || // New list view
-					fileElement.querySelector(".icon");
-
-				if (thumbnailContainer) {
-					// Ensure container has relative positioning
-					thumbnailContainer.style.position = "relative";
-
-					const badge = document.createElement("div");
-					badge.className = "hls-badge";
-					badge.textContent = "HLS";
-					badge.title = "HLS cache available";
-					thumbnailContainer.appendChild(badge);
-				}
-			}
-			console.log(`✅ Added HLS badges to ${videoFiles.length} videos in ${new Date() - now}ms`);
-		} catch (error) {
-			console.error("Failed to batch check HLS cache:", error);
-		}
-	}
-
-	// Update badges with delay for initial load
-	setTimeout(() => {
-		console.log("🚀 Running initial badge update...");
-		updateHlsBadges();
-	}, 3000);
-
-	// Update badges periodically but less frequently (30 seconds instead of 5)
-	// MutationObserver will catch most changes, this is just a safety net
-	// setInterval(updateHlsBadges, 30000);
-
-	// Throttle mechanism for MutationObserver
-	let badgeUpdateTimeout = null;
-	const throttledBadgeUpdate = () => {
-		if (badgeUpdateTimeout) {
-			clearTimeout(badgeUpdateTimeout);
-		}
-		badgeUpdateTimeout = setTimeout(updateHlsBadges, 1000);
-	};
-
-	// Update badges when file list changes (MutationObserver)
-	const observer = new MutationObserver(throttledBadgeUpdate);
-
-	// Observe both list and grid containers
-	const observeFileList = () => {
-		// List view container
-		const listContainer = document.querySelector(
-			"#filestable tbody.files-fileList"
-		);
-		if (listContainer) {
-			observer.observe(listContainer, {
-				childList: true,
-				subtree: true
-			});
-			console.log("👀 Observing list view for changes");
-		}
-
-		// Grid view container
-		const gridContainer = document.querySelector("section.files-grid");
-		if (gridContainer) {
-			observer.observe(gridContainer, {
-				childList: true,
-				subtree: true
-			});
-			console.log("👀 Observing grid view for changes");
-		}
-
-		// If containers don't exist yet, try again
-		if (!listContainer && !gridContainer) {
-			setTimeout(observeFileList, 1000);
-		}
-	};
-
-	observeFileList();
-
-	// Hook into directory changes
-	if (window.OCA?.Files?.App?.fileList) {
-		const originalChangeDirectory =
-			window.OCA.Files.App.fileList.changeDirectory;
-		window.OCA.Files.App.fileList.changeDirectory = function(...args) {
-			const result = originalChangeDirectory.apply(this, args);
-			setTimeout(() => {
-				console.log("📂 Directory changed, updating badges...");
-				updateHlsBadges();
-			}, 1500);
-			return result;
-		};
-	}
-
-	console.log("✅ HLS badge system initialized");
-}
+console.log("🎬 Hyper Viewer Files integration loading…");
 
 /**
  * Open unified cache generation dialog for files or directories
@@ -754,23 +465,14 @@ function openUnifiedCacheDialog(options) {
 }
 
 /**
- * Open directory cache generation dialog with recursive scanning and auto-generation options
- *
- * @param directoryName Name of the directory
- * @param context Directory context from Files app
+ * @param {import('@nextcloud/files').INode} node Folder node
+ * @param {import('@nextcloud/files').IFolder} folder Current Files view folder
  */
-async function openDirectoryCacheGenerationDialog(directoryName, context) {
-	console.log(
-		"🔧 Opening directory cache generation dialog for:",
-		directoryName
-	);
-
-	const directory =
-		context?.dir || context?.fileList?.getCurrentDirectory() || "/";
+async function openDirectoryCacheGenerationDialog(node, folder) {
+	const parent = folderPath(folder, node);
 	const fullPath =
-		directory === "/"
-			? `/${directoryName}`
-			: `${directory}/${directoryName}`;
+		parent === "/" ? `/${node.basename}` : `${parent}/${node.basename}`;
+	console.log("🔧 Opening directory cache generation dialog for:", fullPath);
 
 	// Discover video files in directory
 	console.log("🔍 Discovering video files in directory:", fullPath);
@@ -1015,3 +717,9 @@ async function startCacheGeneration(files, directoryPath = null) {
 		);
 	}
 }
+
+registerHyperViewerFileActions({
+	openCacheGenerationDialog,
+	openDirectoryCacheGenerationDialog,
+});
+console.log("✅ Hyper Viewer file actions registered (@nextcloud/files v4)");

@@ -1,15 +1,13 @@
 // Utilities for extracting a video frame from the server
 
 /**
- * Call backend API to extract a frame image for a given file and timestamp.
- * Returns a Blob (image/*) on success, throws Error on failure.
- *
  * @param {string} filename
  * @param {string} directory
  * @param {number} timestamp
+ * @param {number} [fileid]
  * @returns {Promise<Blob>}
  */
-export async function extractFrameBlob(filename, directory, timestamp) {
+export async function extractFrameBlob(filename, directory, timestamp, fileid = 0) {
 	const response = await fetch(
 		OC.generateUrl("/apps/hyperviewer/api/frame"),
 		{
@@ -18,7 +16,12 @@ export async function extractFrameBlob(filename, directory, timestamp) {
 				"Content-Type": "application/json",
 				requesttoken: OC.requestToken
 			},
-			body: JSON.stringify({ filename, directory, timestamp })
+			body: JSON.stringify({
+				filename,
+				directory,
+				timestamp,
+				fileid
+			})
 		}
 	);
 
@@ -34,7 +37,6 @@ export async function extractFrameBlob(filename, directory, timestamp) {
 		return await response.blob();
 	}
 
-	// Not an image, try to parse error message
 	const text = await response.text();
 	try {
 		const data = JSON.parse(text);
