@@ -74,7 +74,7 @@ composer test:unit              # Run tests
 | `hyperviewer:worker` | Process `hv_jobs` (set `HV_WORKER=1`) |
 | `hyperviewer:scan` | Metadata scan + enqueue fingerprint/encode jobs |
 | `hyperviewer:reindex` | Rebuild fileid ↔ fingerprint index |
-| `scripts/convert_cached_hls.php` | Import old `.cached_hls` trees (standalone; see script header) |
+| `scripts/convert_cached_hls.php` | Import old `.cached_hls` trees (`--dry-run`, `--force` to re-copy) |
 | `hyperviewer:cache:stats` | Cache size / entry counts |
 
 ## How It Works

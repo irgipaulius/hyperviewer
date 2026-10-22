@@ -3,6 +3,10 @@
 # Install: cp scripts/freebsd/hyperviewer_worker /usr/local/etc/rc.d/hyperviewer_worker && chmod +x ...
 # Enable: sysrc hyperviewer_worker_enable=YES
 
+# PROVIDE: hyperviewer_worker
+# REQUIRE: LOGIN mysql redis
+# KEYWORD: shutdown
+
 . /etc/rc.subr
 
 name="hyperviewer_worker"
@@ -17,9 +21,13 @@ load_rc_config $name
 : ${hyperviewer_worker_log:="/var/log/hyperviewer_worker.log"}
 
 pidfile="/var/run/${name}.pid"
+command="${hyperviewer_worker_php}"
+procname="${hyperviewer_worker_php}"
+extra_commands="status"
 
 start_cmd="${name}_start"
 stop_cmd="${name}_stop"
+status_cmd="${name}_status"
 
 hyperviewer_worker_start() {
 	export HV_WORKER=1
@@ -29,9 +37,27 @@ hyperviewer_worker_start() {
 
 hyperviewer_worker_stop() {
 	if [ -f "${pidfile}" ]; then
-		kill "$(cat "${pidfile}")" 2>/dev/null || true
+		kill -TERM "$(cat "${pidfile}")" 2>/dev/null || true
+		_i=0
+		while [ "${_i}" -lt 30 ]; do
+			kill -0 "$(cat "${pidfile}")" 2>/dev/null || break
+			sleep 1
+			_i=$((_i + 1))
+		done
+		if kill -0 "$(cat "${pidfile}")" 2>/dev/null; then
+			kill -KILL "$(cat "${pidfile}")" 2>/dev/null || true
+		fi
 		rm -f "${pidfile}"
 	fi
+}
+
+hyperviewer_worker_status() {
+	if [ -f "${pidfile}" ] && kill -0 "$(cat "${pidfile}")" 2>/dev/null; then
+		echo "${name} is running as pid $(cat "${pidfile}")"
+		return 0
+	fi
+	echo "${name} is not running"
+	return 1
 }
 
 run_rc_command "$1"

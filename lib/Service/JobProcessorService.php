@@ -13,6 +13,8 @@ use OCP\Notification\IManager as INotificationManager;
 use OCP\Notification\INotification;
 
 class JobProcessorService {
+	private ?int $activeJobId = null;
+
 	public function __construct(
 		private JobMapper $jobMapper,
 		private QueueService $queueService,
@@ -30,6 +32,7 @@ class JobProcessorService {
 		if ($job->getState() === 'cancelled') {
 			return;
 		}
+		$this->activeJobId = $job->getId();
 		try {
 			match ($job->getType()) {
 				'fingerprint' => $this->processFingerprint($job),
@@ -44,6 +47,17 @@ class JobProcessorService {
 			$this->queueService->markFailed($job, $e->getMessage());
 			if ($job->getType() === 'encode' || $job->getType() === 'upgrade') {
 				$this->notifyEncode($job, false, $e->getMessage());
+			}
+		} finally {
+			$this->activeJobId = null;
+		}
+	}
+
+	public function requestGracefulShutdown(): void {
+		if ($this->activeJobId !== null) {
+			try {
+				$this->queueService->cancel($this->activeJobId);
+			} catch (\Throwable) {
 			}
 		}
 	}
@@ -71,7 +85,8 @@ class JobProcessorService {
 			$job,
 			$file,
 			$media,
-			fn (): bool => $this->jobMapper->findById($job->getId())->getState() === 'cancelled',
+			fn (): bool => WorkerLifecycle::isTerminating()
+				|| $this->jobMapper->findById($job->getId())->getState() === 'cancelled',
 			function (int $progress) use ($job, &$lastProgressWrite): void {
 				$now = time();
 				if ($now - $lastProgressWrite >= 2) {

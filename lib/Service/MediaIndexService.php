@@ -72,7 +72,7 @@ class MediaIndexService {
 	public function findLocationByFile(File $file, string $userId): ?Location {
 		$internal = $this->toInternalPath($file, $userId);
 		$pathHash = hash('sha256', $internal);
-		$storageId = $file->getStorageId();
+		$storageId = NodeStorageId::getNumericStorageId($file);
 		$loc = $this->locationMapper->findByStorageAndPathHash($storageId, $pathHash);
 		if ($loc !== null) {
 			return $loc;
@@ -122,7 +122,7 @@ class MediaIndexService {
 		$loc->setPathHash(hash('sha256', $internal));
 		$loc->setMtime($file->getMTime());
 		$loc->setSize($file->getSize());
-		$loc->setStorageId($file->getStorageId());
+		$loc->setStorageId(NodeStorageId::getNumericStorageId($file));
 		$loc->setFileid($file->getId() > 0 ? $file->getId() : null);
 		$loc->setSeenAt(time());
 		$this->locationMapper->update($loc);
@@ -155,7 +155,7 @@ class MediaIndexService {
 	private function upsertLocation(Media $media, File $file, string $userId, ?Location $existing): Location {
 		$internal = $this->toInternalPath($file, $userId);
 		$pathHash = hash('sha256', $internal);
-		$storageId = $file->getStorageId();
+		$storageId = NodeStorageId::getNumericStorageId($file);
 		if ($existing === null) {
 			$existing = $this->locationMapper->findByStorageAndPathHash($storageId, $pathHash);
 		}
