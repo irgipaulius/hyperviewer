@@ -75,11 +75,18 @@ class QueueService {
 		return $this->enqueue($job);
 	}
 
-	public function enqueueScan(string $userId, string $path, bool $reindex = false): Job {
+	public function enqueueScan(string $userId, string $path, ?int $watchId = null, bool $reindex = false, bool $overwrite = false): Job {
+		if ($watchId !== null && $this->jobMapper->countQueuedScansForWatch($watchId) > 0) {
+			throw new \RuntimeException('Scan already queued for this watch directory');
+		}
 		$job = new Job();
 		$job->setType('scan');
 		$job->setUserId($userId);
-		$job->setPayload(json_encode(['path' => $path, 'reindex' => $reindex]));
+		$payload = ['path' => $path, 'reindex' => $reindex, 'overwrite' => $overwrite];
+		if ($watchId !== null) {
+			$payload['watchId'] = $watchId;
+		}
+		$job->setPayload(json_encode($payload));
 		$job->setPriority(self::PRIORITY_SCAN);
 		return $this->enqueue($job);
 	}

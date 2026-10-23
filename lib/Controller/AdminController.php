@@ -207,7 +207,7 @@ class AdminController extends Controller {
 		foreach ($this->watchDirMapper->findAllEnabled() as $wd) {
 			$userIds[$wd->getUserId()] = true;
 			try {
-				$this->queueService->enqueueScan($wd->getUserId(), $wd->getPath(), true);
+				$this->queueService->enqueueScan($wd->getUserId(), $wd->getPath(), null, true);
 				$scanJobs++;
 			} catch (\Throwable) {
 			}

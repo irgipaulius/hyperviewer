@@ -46,6 +46,9 @@ class WatchDirMapper extends QBMapper {
 		return $this->findEntities($qb);
 	}
 
+	/**
+	 * @return array{watch: WatchDir, created: bool}
+	 */
 	public function upsert(
 		string $userId,
 		string $path,
@@ -53,7 +56,7 @@ class WatchDirMapper extends QBMapper {
 		array $resolutions,
 		bool $enabled,
 		int $priority,
-	): WatchDir {
+	): array {
 		$path = $this->userPaths->normalizeWatchPath($path, $userId);
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
@@ -69,7 +72,7 @@ class WatchDirMapper extends QBMapper {
 			if ($storageId !== null) {
 				$existing->setStorageId($storageId);
 			}
-			return $this->update($existing);
+			return ['watch' => $this->update($existing), 'created' => false];
 		} catch (\OCP\AppFramework\Db\DoesNotExistException) {
 			$wd = new WatchDir();
 			$wd->setUserId($userId);
@@ -79,7 +82,7 @@ class WatchDirMapper extends QBMapper {
 			$wd->setEnabled($enabled);
 			$wd->setPriority($priority);
 			$wd->setCreatedAt(time());
-			return $this->insert($wd);
+			return ['watch' => $this->insert($wd), 'created' => true];
 		}
 	}
 

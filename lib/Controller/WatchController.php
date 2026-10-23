@@ -10,9 +10,12 @@ use OCA\HyperViewer\Service\ConfigService;
 use OCA\HyperViewer\Service\PermissionsService;
 use OCA\HyperViewer\Service\QueueService;
 use OCA\HyperViewer\Service\UserPathService;
+use OCA\HyperViewer\Service\WatchDirectoryService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\JSONResponse;
+use OCP\Files\Folder;
+use OCP\Files\IRootFolder;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserSession;
@@ -27,6 +30,8 @@ class WatchController extends Controller {
 		private ConfigService $config,
 		private PermissionsService $permissions,
 		private UserPathService $userPaths,
+		private IRootFolder $rootFolder,
+		private WatchDirectoryService $watchDirectoryService,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -62,8 +67,35 @@ class WatchController extends Controller {
 			$user->getUID(),
 		);
 		$resolutions = $this->request->getParam('resolutions', $this->config->getDefaultRenditions());
-		$wd = $this->watchDirMapper->upsert($user->getUID(), $directory, null, $resolutions, true, 100);
-		return new JSONResponse(['success' => true, 'id' => $wd->getId()]);
+		$result = $this->watchDirectoryService->register($user->getUID(), $directory, $resolutions);
+		return new JSONResponse(['success' => true, 'id' => $result['watch']->getId()]);
+	}
+
+	#[NoAdminRequired]
+	public function folderMarkers(): JSONResponse {
+		$auth = $this->guardAppUser();
+		if ($auth instanceof JSONResponse) {
+			return $auth;
+		}
+		$user = $auth;
+		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+		$folders = [];
+		foreach ($this->watchDirMapper->findEnabledForUser($user->getUID()) as $watch) {
+			$path = $this->userPaths->normalizeWatchPath($watch->getPath(), $user->getUID());
+			$rel = ltrim($path, '/');
+			if ($rel === '' || !$userFolder->nodeExists($rel)) {
+				continue;
+			}
+			$node = $userFolder->get($rel);
+			if (!$node instanceof Folder) {
+				continue;
+			}
+			$folders[] = [
+				'fileid' => $node->getId(),
+				'path' => $path,
+			];
+		}
+		return new JSONResponse(['success' => true, 'folders' => $folders]);
 	}
 
 	#[NoAdminRequired]
@@ -115,12 +147,11 @@ class WatchController extends Controller {
 				break;
 			}
 		}
-		$job = new Job();
-		$job->setType('scan');
-		$job->setUserId($user->getUID());
-		$job->setPayload(json_encode(['path' => $path, 'watchId' => $id]));
-		$job->setPriority(QueueService::PRIORITY_SCAN);
-		$this->queueService->enqueue($job);
+		try {
+			$this->queueService->enqueueScan($user->getUID(), $path, $id);
+		} catch (\Throwable $e) {
+			return new JSONResponse(['error' => $e->getMessage()], 409);
+		}
 		return new JSONResponse(['success' => true]);
 	}
 
