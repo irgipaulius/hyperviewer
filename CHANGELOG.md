@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.5] - 2026-10-23
+
+### Fixed
+- Queue worker crash loop: duplicate `Notifier::getId()` (PHP method names are case-insensitive) caused a fatal "Cannot redeclare". Added `npm run test:php-lint`.
+
 ## [2.1.4] - 2026-10-23
 
 ### Fixed
