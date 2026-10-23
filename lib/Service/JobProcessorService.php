@@ -148,7 +148,8 @@ class JobProcessorService {
 		$code = $this->ffmpeg->run($args);
 		if ($code !== 0) {
 			@unlink($tmpFile);
-			throw new \RuntimeException('Clip ffmpeg failed');
+			$err = $this->ffmpeg->getLastStderr();
+			throw new \RuntimeException('Clip ffmpeg failed (exit ' . $code . ')' . ($err !== '' ? ': ' . substr($err, -500) : ''));
 		}
 		$handle = fopen($tmpFile, 'rb');
 		if ($handle === false) {
@@ -160,7 +161,11 @@ class JobProcessorService {
 			}
 			$exportFolder->newFile($clipName, $handle);
 		} finally {
-			fclose($handle);
+			// newFile() may consume and close the stream; a second fclose() is a
+			// TypeError that masked the real outcome and leaked the temp file.
+			if (is_resource($handle)) {
+				fclose($handle);
+			}
 			@unlink($tmpFile);
 		}
 	}
