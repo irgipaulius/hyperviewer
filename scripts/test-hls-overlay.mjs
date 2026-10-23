@@ -42,8 +42,18 @@ const css = fs.readFileSync(path.join(root, 'css/files-integration.css'), 'utf8'
 if (!css.includes('.hv-hls-icon-badge')) {
 	fail('files-integration.css must style .hv-hls-icon-badge')
 }
-if (!css.includes('files-list__tbody--grid')) {
-	fail('files-integration.css must target NC 35 grid tbody (files-list__tbody--grid)')
+// Grid selector must use a class that really exists in NC 35.0.2 Files markup
+const fixture = fs.readFileSync(path.join(root, 'scripts/fixtures/nc35-files-row.txt'), 'utf8')
+if (!/\.files-list--grid\s+\.hv-hls-icon-badge/.test(css)) {
+	fail('files-integration.css must style the chip under .files-list--grid (NC 35 grid root)')
+}
+if (!fixture.includes('files-list--grid')) {
+	fail('fixture must contain the NC 35 grid root class')
+}
+for (const m of css.matchAll(/\.(files-list[\w-]*--grid)/g)) {
+	if (!fixture.includes(m[1]) || fixture.includes(`no ${m[1]}`)) {
+		fail(`css grid selector .${m[1]} does not exist in NC 35 Files markup`)
+	}
 }
 
 if (failed) {

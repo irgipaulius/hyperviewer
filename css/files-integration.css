@@ -19,14 +19,15 @@
 }
 
 .hv-hls-icon-badge.hv-ready {
-	background: var(--color-warning, #e6a700);
-	color: var(--color-main-text, #fff);
+	background: #f0a020;
+	color: #1a1a1a;
 }
 
 .hv-hls-icon-badge.hv-progress {
 	background: transparent;
-	color: var(--color-warning-text, #a85d00);
-	box-shadow: inset 0 0 0 1px var(--color-warning, #e6a700);
+	background: var(--color-main-background, #fff);
+	color: #c77c00;
+	box-shadow: inset 0 0 0 1px #f0a020, 0 0 0 1px var(--color-main-background);
 	animation: hv-hls-pulse 1.2s ease-in-out infinite;
 }
 
@@ -42,9 +43,10 @@
 	50% { opacity: 0.55; }
 }
 
-/* NC 35 grid: tbody.files-list__tbody--grid (FilesListVirtual.vue) */
-tbody.files-list__tbody--grid .hv-hls-icon-badge,
-.files-list__tbody--grid .hv-hls-icon-badge {
+/* NC 35 grid view: the list root gets .files-list--grid (FilesListVirtual.vue) */
+.files-list--grid .hv-hls-icon-badge {
+	right: 4px;
+	bottom: 4px;
 	font-size: 11px;
 	padding: 2px 6px;
 	min-width: 28px;
