@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.6] - 2026-10-23
+
+### Fixed
+- Encodes failed in FreeBSD jails: `idprio` is not permitted for www; now probed and falls back to `nice -n 19`. ffmpeg stderr is included in job errors.
+- Clip export: `fclose()` on a stream already consumed by `newFile()` threw and hid the result.
+
 ## [2.1.5] - 2026-10-23
 
 ### Fixed
