@@ -1,0 +1,7 @@
+// Excerpt from NC 35.0.2 dist/files-main.js (FileEntry row render), captured 2026-10-23:
+attrs:{"data-cy-files-list-row":"","data-cy-files-list-row-fileid":e.fileid,"data-cy-files-list-row-name":e.source.basename,draggable:e.canDrag}
+// mime is only an empty marker on the optional mime column cell:
+t("td",{staticClass:"files-list__row-mime",attrs:{title:e.mime,"data-cy-files-list-row-mime":""}
+// Rendered row from Cedevita NC 35.0.2 (list view), captured 2026-10-23 with headless Brave:
+<tr data-cy-files-list-row="" data-cy-files-list-row-fileid="504169" data-cy-files-list-row-name="Readme.md" draggable="true" class="files-list__row" index="0"> <td class="files-list__row-checkbox">…</td> <td data-cy-files-list-row-name="" class="files-list__row-name"><span class="files-list__row-icon"><span class="files-list__row-icon-preview-container"><img …></span></span>…
+// Grid view root: .files-list.files-list--grid (no files-list__tbody--grid anywhere in NC 35.0.2 files-main.js)

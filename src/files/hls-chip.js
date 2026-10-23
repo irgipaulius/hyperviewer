@@ -1,7 +1,7 @@
 import { translate as t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import { showSuccess } from '@nextcloud/dialogs'
-import { isVideoMime } from './nodePaths.js'
+import { rowVideoInfo } from './nodePaths.js'
 import { resolveFileCacheStatus, subscribeCacheBatchUpdates } from './cache-batch-store.js'
 import { currentFilesDirectory } from './files-router.js'
 import { apiPost } from '../shared/api.js'
@@ -11,15 +11,6 @@ const rowState = new WeakMap()
 
 let observer = null
 let scanScheduled = false
-
-function rowBasename(row) {
-	const named = row.querySelector('[data-cy-files-list-row-name]')
-	if (named?.textContent) {
-		return named.textContent.trim()
-	}
-	const link = row.querySelector('.files-list__row-name')
-	return link?.textContent?.trim() || ''
-}
 
 function findIconHost(row) {
 	return (
@@ -110,9 +101,9 @@ function syncBadgeFileid(badge, fileid) {
 }
 
 function processRow(row) {
-	const fileid = Number(row.getAttribute('data-cy-files-list-row-fileid'))
-	const mime = row.getAttribute('data-cy-files-list-row-mime') || ''
-	if (!fileid || !isVideoMime(mime)) {
+	const info = rowVideoInfo(row)
+	const fileid = info?.fileid
+	if (!info) {
 		const prev = rowState.get(row)
 		if (prev) {
 			prev.badge.remove()
@@ -128,7 +119,7 @@ function processRow(row) {
 	ensureRelativeHost(host)
 
 	const directory = currentFilesDirectory()
-	const basename = rowBasename(row)
+	const basename = info.basename
 	let state = rowState.get(row)
 
 	if (state) {
