@@ -11,7 +11,9 @@ webpackConfig.entry = {
 // Fix output filename to avoid double app name
 webpackConfig.output = {
 	...webpackConfig.output,
-	filename: '[name].js'
+	filename: '[name].js',
+	chunkFilename: 'hyperviewer-[id].js',
+	publicPath: '/apps/hyperviewer/js/',
 }
 
 // Add html-loader for importing HTML files as strings

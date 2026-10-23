@@ -2,6 +2,7 @@
  * Files app integration for Hyper Viewer (Nextcloud 35, @nextcloud/files v4)
  */
 
+import './webpack-public-path.js'
 import "./styles/cache-modal.css";
 import { registerHyperViewerFileActions } from "./files/register-file-actions.js";
 import { registerHlsIconChip } from "./files/hls-chip.js";

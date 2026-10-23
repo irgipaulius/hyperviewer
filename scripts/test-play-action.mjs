@@ -47,6 +47,17 @@ if (log.join(',') !== 'viewer') {
 	fail(`On play error expected viewer fallback, got: ${log.join(',')}`)
 }
 
+log.length = 0
+await executeDefaultPlay(node, folder, [], {
+	loadPlayer: () => Promise.reject(new Error('chunk 404')),
+	openWithViewer: () => {
+		log.push('viewer')
+	},
+})
+if (log.join(',') !== 'viewer') {
+	fail(`On dynamic import failure expected viewer fallback, got: ${log.join(',')}`)
+}
+
 if (failed) {
 	process.exit(1)
 }
