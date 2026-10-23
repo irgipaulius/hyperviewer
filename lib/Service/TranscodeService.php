@@ -96,7 +96,7 @@ class TranscodeService {
 
 		$hasAudio = $this->hasAudioStream($inputPath);
 
-		$cmd = self::BIN_NICE . ' -n 11 ' . self::BIN_FFMPEG . ' -y -autorotate 1 -i ' . escapeshellarg($inputPath);
+		$cmd = self::BIN_NICE . ' -n 11 ' . self::BIN_FFMPEG . ' -y -autorotate -i ' . escapeshellarg($inputPath);
 
 		$streamIndex = 0;
 		$streamMaps = [];

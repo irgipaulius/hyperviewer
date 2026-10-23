@@ -127,7 +127,7 @@ class HlsEncodeService {
 		$threads = (string)$this->config->getInt(ConfigService::KEY_THREADS);
 		$playlist = $outputDir . '/playlist_' . $name . '.m3u8';
 		$args = [
-			'-y', '-fflags', '+genpts', '-avoid_negative_ts', 'make_zero', '-autorotate', '1',
+			'-y', '-fflags', '+genpts', '-avoid_negative_ts', 'make_zero', '-autorotate',
 			'-threads', $threads, '-filter_threads', '1',
 			'-i', $input,
 			'-map', '0:v:0',
