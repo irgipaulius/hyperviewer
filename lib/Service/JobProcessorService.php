@@ -29,6 +29,8 @@ class JobProcessorService {
 		private UserPreferencesService $userPreferences,
 		private LogMapper $logMapper,
 		private CacheAdoptService $cacheAdopt,
+		private WatchScanService $watchScan,
+		private EncodeNotificationService $encodeNotifications,
 	) {
 	}
 
@@ -55,7 +57,7 @@ class JobProcessorService {
 			$this->logMapper->append('error', 'worker', $e->getMessage(), ['job' => $job->getId()], $job->getUserId(), $job->getFileid(), $job->getId());
 			$this->queueService->markFailed($job, $e->getMessage());
 			if ($job->getType() === 'encode' || $job->getType() === 'upgrade') {
-				$this->notifyEncode($job, false, $e->getMessage());
+				$this->encodeNotifications->onEncodeFinished($job, false, $e->getMessage());
 			} elseif ($job->getType() === 'clip') {
 				$this->notifyJob($job, 'clip_failed', $e->getMessage());
 			}
@@ -87,9 +89,16 @@ class JobProcessorService {
 		$this->jobMapper->update($job);
 		$payload = json_decode($job->getPayload() ?? '{}', true) ?: [];
 		$autoEncode = (bool)($payload['autoEncode'] ?? false);
-		if ($autoEncode && $media->getCacheState() === 'none' && !$media->getAutoDisabled()) {
+		$overwrite = (bool)($payload['overwrite'] ?? false);
+		$state = $media->getCacheState();
+		$canEncode = !$media->getAutoDisabled()
+			&& ($overwrite || !in_array($state, ['ready', 'partial'], true));
+		if ($autoEncode && $canEncode) {
 			$resolutions = $payload['resolutions'] ?? $this->config->getDefaultRenditions();
-			$this->queueService->enqueueEncode($job->getUserId(), $fileid, $media->getId(), $resolutions, true);
+			try {
+				$this->queueService->enqueueEncode($job->getUserId(), $fileid, $media->getId(), $resolutions, true);
+			} catch (\Throwable) {
+			}
 		}
 	}
 
@@ -114,7 +123,8 @@ class JobProcessorService {
 				}
 			},
 		);
-		$this->notifyEncode($job, true, null);
+		$this->encodeNotifications->onEncodeFinished($job, true, null);
+		$this->publishActivity($job, 'hls_ready');
 	}
 
 	private function processClip(Job $job): void {
@@ -181,37 +191,7 @@ class JobProcessorService {
 	}
 
 	private function processScan(Job $job): void {
-		$payload = json_decode($job->getPayload() ?? '{}', true) ?: [];
-		$path = (string)($payload['path'] ?? '/');
-		$userFolder = $this->rootFolder->getUserFolder($job->getUserId());
-		if (!$userFolder->nodeExists(ltrim($path, '/'))) {
-			return;
-		}
-		$folder = $userFolder->get(ltrim($path, '/'));
-		if (!$folder instanceof Folder) {
-			return;
-		}
-		$this->scanFolder($folder, $job->getUserId());
-	}
-
-	private function scanFolder(Folder $folder, string $userId): void {
-		foreach ($folder->getDirectoryListing() as $node) {
-			if ($node instanceof Folder) {
-				$this->scanFolder($node, $userId);
-				continue;
-			}
-			if (!$node instanceof \OCP\Files\File) {
-				continue;
-			}
-			$mime = $node->getMimeType();
-			if (!in_array($mime, ['video/mp4', 'video/quicktime'], true)) {
-				continue;
-			}
-			if ($node->getSize() <= 0) {
-				continue;
-			}
-			$this->queueService->enqueueFingerprint($userId, $node->getId());
-		}
+		$this->watchScan->processScanJob($job);
 	}
 
 	private function sanitizeClipFilename(string $name, string $sourceName): string {
@@ -260,17 +240,6 @@ class JobProcessorService {
 			if (!$userFolder->nodeExists($currentPath)) {
 				$userFolder->newFolder($currentPath);
 			}
-		}
-	}
-
-	private function notifyEncode(Job $job, bool $success, ?string $error): void {
-		$this->notifyJob(
-			$job,
-			$success ? 'encode_ready' : 'encode_failed',
-			$success ? 'HLS cache is ready' : ($error ?? 'Encode failed'),
-		);
-		if ($success) {
-			$this->publishActivity($job, 'hls_ready');
 		}
 	}
 

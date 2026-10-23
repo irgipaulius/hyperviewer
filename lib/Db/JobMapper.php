@@ -518,6 +518,54 @@ class JobMapper extends QBMapper {
 			->executeStatement();
 	}
 
+	public function hasActivePipelineForFileid(int $fileid): bool {
+		if ($fileid <= 0) {
+			return false;
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('fileid', $qb->createNamedParameter($fileid, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->in('type', $qb->createNamedParameter(['fingerprint', 'encode', 'upgrade'], IQueryBuilder::PARAM_STR_ARRAY)))
+			->andWhere($qb->expr()->in('state', $qb->createNamedParameter(['queued', 'running'], IQueryBuilder::PARAM_STR_ARRAY)))
+			->setMaxResults(1);
+		$result = $qb->executeQuery();
+		$row = $result->fetch();
+		$result->closeCursor();
+		return $row !== false;
+	}
+
+	public function countQueuedScansForWatch(int $watchId): int {
+		if ($watchId <= 0) {
+			return 0;
+		}
+		$needle = '"watchId":' . $watchId;
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('*', 'cnt'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('type', $qb->createNamedParameter('scan')))
+			->andWhere($qb->expr()->eq('state', $qb->createNamedParameter('queued')))
+			->andWhere($qb->expr()->like('payload', $qb->createNamedParameter('%' . $needle . '%')));
+		$result = $qb->executeQuery();
+		$row = $result->fetch();
+		$result->closeCursor();
+		return (int)($row['cnt'] ?? 0);
+	}
+
+	public function userHasActiveEncodePipeline(string $userId): bool {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+			->andWhere($qb->expr()->in('type', $qb->createNamedParameter(['fingerprint', 'encode', 'upgrade'], IQueryBuilder::PARAM_STR_ARRAY)))
+			->andWhere($qb->expr()->in('state', $qb->createNamedParameter(['queued', 'running'], IQueryBuilder::PARAM_STR_ARRAY)))
+			->setMaxResults(1);
+		$result = $qb->executeQuery();
+		$row = $result->fetch();
+		$result->closeCursor();
+		return $row !== false;
+	}
+
 	public static function categorizeError(string $error): string {
 		$e = strtolower($error);
 		if ($e === '') {

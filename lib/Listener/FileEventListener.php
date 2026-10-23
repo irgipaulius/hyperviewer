@@ -9,6 +9,7 @@ use OCA\HyperViewer\Service\ConfigService;
 use OCA\HyperViewer\Service\MediaIndexService;
 use OCA\HyperViewer\Service\QueueService;
 use OCA\HyperViewer\Service\UserPreferencesService;
+use OCA\HyperViewer\Service\VideoCollectionService;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Files\Events\Node\NodeCopiedEvent;
@@ -26,6 +27,7 @@ class FileEventListener implements IEventListener {
 		private MediaIndexService $mediaIndex,
 		private ConfigService $config,
 		private UserPreferencesService $userPreferences,
+		private VideoCollectionService $videoCollection,
 	) {
 	}
 
@@ -70,7 +72,7 @@ class FileEventListener implements IEventListener {
 			if (!$node instanceof File) {
 				return;
 			}
-			if (!in_array($node->getMimeType(), ['video/mp4', 'video/quicktime'], true) || $node->getSize() <= 0) {
+			if (!$node instanceof File || !$this->videoCollection->isVideoFile($node)) {
 				return;
 			}
 			$userId = $node->getOwner()?->getUID();
