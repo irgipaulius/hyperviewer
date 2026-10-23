@@ -67,6 +67,14 @@ function openWithDefaultPlayer(path) {
 	}
 }
 
+/**
+ * @param {import('@nextcloud/files').INode} node
+ * @param {import('@nextcloud/files').IFolder} folder
+ */
+export function openWithViewerForNode(node, folder) {
+	openWithDefaultPlayer(viewerPath(node, folder));
+}
+
 function videoPlaylistFromContents(contents) {
 	return (contents || [])
 		.filter(

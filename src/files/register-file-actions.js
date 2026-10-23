@@ -7,7 +7,7 @@ import {
 import { translate as t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import { showSuccess } from '@nextcloud/dialogs'
-import { playVideoSmart } from '../modules/video-player.js'
+import { executeDefaultPlay } from './play-action.js'
 import { resolveFileCacheStatus } from './cache-batch-store.js'
 import { folderPath, isVideoMime } from './nodePaths.js'
 
@@ -87,10 +87,8 @@ export function registerHyperViewerFileActions(handlers) {
 		default: DefaultType.DEFAULT,
 		enabled: ({ nodes }) =>
 			nodes.length === 1 && isVideoMime(nodes[0].mime),
-		exec: async ({ nodes, folder, contents }) => {
-			await playVideoSmart(nodes[0], folder, contents ?? [])
-			return true
-		},
+		exec: async ({ nodes, folder, contents }) =>
+			executeDefaultPlay(nodes[0], folder, contents ?? []),
 	})
 
 	registerFileAction({
@@ -155,6 +153,7 @@ export function registerHyperViewerFileActions(handlers) {
 			canExportClip
 			&& nodes.length === 1 && isVideoMime(nodes[0].mime),
 		exec: async ({ nodes, folder, contents }) => {
+			const { playVideoSmart } = await import('../modules/video-player.js')
 			await playVideoSmart(nodes[0], folder, contents ?? [], { clipMode: true })
 			return true
 		},
