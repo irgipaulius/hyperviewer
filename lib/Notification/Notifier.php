@@ -37,6 +37,12 @@ class Notifier implements INotifier {
 			case 'encode_failed':
 				$notification->setParsedSubject($l->t('HLS encoding failed'));
 				break;
+			case 'encode_batch_ready':
+				$notification->setParsedSubject($l->t('HLS batch ready'));
+				break;
+			case 'encode_batch_failed':
+				$notification->setParsedSubject($l->t('HLS batch failures'));
+				break;
 			case 'clip_ready':
 				$notification->setParsedSubject($l->t('Clip export finished'));
 				break;

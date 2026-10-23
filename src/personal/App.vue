@@ -204,7 +204,19 @@
 			<div v-else-if="tab === 'preferences'" class="hv-panel">
 				<div v-if="prefs" class="hv-prefs">
 					<label><input v-model="prefs.auto_generate_upload" type="checkbox"> Auto-generate HLS on upload (when enabled globally)</label>
-					<label><input v-model="prefs.notify_when_done" type="checkbox"> Notify when jobs finish</label>
+					<label>HLS notifications
+						<select v-model="prefs.hls_notify_mode">
+							<option value="summary">
+								Summary only (recommended)
+							</option>
+							<option value="per_file">
+								Per file
+							</option>
+							<option value="off">
+								Off
+							</option>
+						</select>
+					</label>
 					<label>Default renditions (comma-separated)
 						<input v-model="prefs.default_renditions" type="text">
 					</label>
@@ -371,7 +383,7 @@ export default {
 					const raw = p.preferences || {}
 					this.prefs = {
 						auto_generate_upload: !!raw.auto_generate_upload,
-						notify_when_done: raw.notify_when_done !== false,
+						hls_notify_mode: raw.hls_notify_mode || 'summary',
 						default_renditions: raw.default_renditions || '',
 						clip_export_dir: raw.clip_export_dir || '../exports',
 					}

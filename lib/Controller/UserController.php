@@ -187,6 +187,7 @@ class UserController extends Controller {
 		$allowed = [
 			UserPreferencesService::KEY_AUTO_GENERATE,
 			UserPreferencesService::KEY_NOTIFY_DONE,
+			UserPreferencesService::KEY_HLS_NOTIFY_MODE,
 			UserPreferencesService::KEY_DEFAULT_RENDITIONS,
 			UserPreferencesService::KEY_CLIP_EXPORT_DIR,
 		];
