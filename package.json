@@ -25,6 +25,7 @@
     "private": true,
     "scripts": {
         "check:vue-templates": "node scripts/check-inline-vue-template.mjs",
+        "test:php-lint": "sh scripts/test-php-lint.sh",
         "test:smoke": "node scripts/smoke-bundles.mjs && node scripts/test-webpack-public-path.mjs && node scripts/test-file-action-defaults.mjs && node scripts/test-play-action.mjs && node scripts/test-hls-overlay.mjs && node scripts/test-hls-row-detect.mjs",
         "test:mount": "node scripts/vue-mount-smoke.mjs",
         "build": "npm run check:vue-templates && NODE_ENV=production webpack --progress --config webpack.js && npm run test:smoke && npm run test:mount",
