@@ -42,8 +42,8 @@ const css = fs.readFileSync(path.join(root, 'css/files-integration.css'), 'utf8'
 if (!css.includes('.hv-hls-icon-badge')) {
 	fail('files-integration.css must style .hv-hls-icon-badge')
 }
-if (!css.includes('.files-list--grid')) {
-	fail('files-integration.css must include grid badge sizing')
+if (!css.includes('files-list__tbody--grid')) {
+	fail('files-integration.css must target NC 35 grid tbody (files-list__tbody--grid)')
 }
 
 if (failed) {

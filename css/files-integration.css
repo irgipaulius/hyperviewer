@@ -42,7 +42,9 @@
 	50% { opacity: 0.55; }
 }
 
-.files-list--grid .hv-hls-icon-badge {
+/* NC 35 grid: tbody.files-list__tbody--grid (FilesListVirtual.vue) */
+tbody.files-list__tbody--grid .hv-hls-icon-badge,
+.files-list__tbody--grid .hv-hls-icon-badge {
 	font-size: 11px;
 	padding: 2px 6px;
 	min-width: 28px;
