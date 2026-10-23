@@ -28,6 +28,7 @@ return [
 		['name' => 'job#batchDelete', 'url' => '/api/jobs/batch-delete', 'verb' => 'POST'],
 
 		['name' => 'watch#list', 'url' => '/api/auto-generation', 'verb' => 'GET'],
+		['name' => 'watch#folderMarkers', 'url' => '/api/watch/folder-markers', 'verb' => 'GET'],
 		['name' => 'watch#register', 'url' => '/cache/register-auto-generation', 'verb' => 'POST'],
 		['name' => 'watch#remove', 'url' => '/api/auto-generation/{id}', 'verb' => 'DELETE', 'requirements' => ['id' => '\d+']],
 		['name' => 'watch#scanNow', 'url' => '/api/auto-generation/{id}/scan', 'verb' => 'POST', 'requirements' => ['id' => '\d+']],

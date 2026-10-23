@@ -5,3 +5,4 @@ t("td",{staticClass:"files-list__row-mime",attrs:{title:e.mime,"data-cy-files-li
 // Rendered row from Cedevita NC 35.0.2 (list view), captured 2026-10-23 with headless Brave:
 <tr data-cy-files-list-row="" data-cy-files-list-row-fileid="504169" data-cy-files-list-row-name="Readme.md" draggable="true" class="files-list__row" index="0"> <td class="files-list__row-checkbox">…</td> <td data-cy-files-list-row-name="" class="files-list__row-name"><span class="files-list__row-icon"><span class="files-list__row-icon-preview-container"><img …></span></span>…
 // Grid view root: .files-list.files-list--grid (the tbody grid class is absent from in NC 35.0.2 files-main.js)
+<div class="files-list files-list--grid" data-cy-files-list="">

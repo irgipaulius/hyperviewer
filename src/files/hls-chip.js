@@ -1,13 +1,17 @@
 import { translate as t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import { showSuccess } from '@nextcloud/dialogs'
+import { applyWatchFolderChipToRow } from './folder-watch-chip-dom.js'
 import { rowVideoInfo } from './nodePaths.js'
 import { resolveFileCacheStatus, subscribeCacheBatchUpdates } from './cache-batch-store.js'
 import { currentFilesDirectory } from './files-router.js'
-import { apiPost } from '../shared/api.js'
+import { apiPost, fetchJson } from '../shared/api.js'
 
 /** @type {WeakMap<Element, { fileid: number, badge: HTMLElement, basename: string, directory: string }>} */
 const rowState = new WeakMap()
+
+/** @type {Set<number>} folder fileids on the user's watch list */
+let watchedFolderFileids = new Set()
 
 let observer = null
 let scanScheduled = false
@@ -101,8 +105,24 @@ function syncBadgeFileid(badge, fileid) {
 }
 
 function processRow(row) {
+	const fileid = Number(row.getAttribute('data-cy-files-list-row-fileid'))
+	if (applyWatchFolderChipToRow(row, watchedFolderFileids)) {
+		const prev = rowState.get(row)
+		if (prev?.badge && !prev.badge.classList.contains('hv-watch-folder')) {
+			prev.badge.remove()
+		}
+		const host = findIconHost(row)
+		if (host) {
+			const badge = host.querySelector('.hv-hls-icon-badge.hv-watch-folder')
+			if (badge) {
+				badge.title = t('hyperviewer', 'Watch folder — auto HLS')
+				rowState.set(row, { fileid, badge, basename: '', directory: '' })
+			}
+		}
+		return
+	}
+
 	const info = rowVideoInfo(row)
-	const fileid = info?.fileid
 	if (!info) {
 		const prev = rowState.get(row)
 		if (prev) {
@@ -124,16 +144,16 @@ function processRow(row) {
 
 	if (state) {
 		const badge = syncBadgeFileid(state.badge, state.fileid)
-		if (!badge || state.fileid !== fileid) {
+		if (!badge || state.fileid !== info.fileid) {
 			state.badge?.remove()
 			state = undefined
 		}
 	}
 
 	if (!state) {
-		const badge = createChipElement(fileid, basename, directory)
+		const badge = createChipElement(info.fileid, basename, directory)
 		host.appendChild(badge)
-		state = { fileid, badge, basename, directory }
+		state = { fileid: info.fileid, badge, basename, directory }
 		rowState.set(row, state)
 	} else {
 		state.basename = basename
@@ -141,11 +161,11 @@ function processRow(row) {
 		if (state.badge.parentElement !== host) {
 			host.appendChild(state.badge)
 		}
-		if (state.fileid !== fileid) {
+		if (state.fileid !== info.fileid) {
 			state.badge.remove()
-			const badge = createChipElement(fileid, basename, directory)
+			const badge = createChipElement(info.fileid, basename, directory)
 			host.appendChild(badge)
-			state = { fileid, badge, basename, directory }
+			state = { fileid: info.fileid, badge, basename, directory }
 			rowState.set(row, state)
 		}
 	}
@@ -203,6 +223,9 @@ function refreshFromBatch(rowsMap) {
 			processRow(row)
 			continue
 		}
+		if (watchedFolderFileids.has(fileid)) {
+			continue
+		}
 		const cached = rowsMap.get(state.fileid)
 		if (cached) {
 			applyStatusToBadge(state.badge, state.fileid, {
@@ -216,22 +239,47 @@ function refreshFromBatch(rowsMap) {
 	}
 }
 
+async function loadWatchedFolderMarkers() {
+	try {
+		const data = await fetchJson(
+			OC.generateUrl('/apps/hyperviewer/api/watch/folder-markers'),
+			{ headers: { requesttoken: OC.requestToken } },
+		)
+		if (data.success && Array.isArray(data.folders)) {
+			watchedFolderFileids = new Set(data.folders.map((f) => Number(f.fileid)).filter(Boolean))
+		}
+	} catch {
+		watchedFolderFileids = new Set()
+	}
+	scheduleScan()
+}
+
 /** DOM overlay for HLS status on file icons (list, grid, mobile). Not a file action. */
 export function registerHlsIconChip() {
 	subscribeCacheBatchUpdates(refreshFromBatch)
 
-	const boot = () => {
+	const boot = async () => {
+		await loadWatchedFolderMarkers()
 		attachObserver()
-		scheduleScan()
 	}
 	if (document.readyState === 'loading') {
-		document.addEventListener('DOMContentLoaded', boot, { once: true })
+		document.addEventListener('DOMContentLoaded', () => { boot() }, { once: true })
 	} else {
 		boot()
 	}
 
 	const router = window.OCP?.Files?.Router
 	if (router?.addOnChangeListener) {
-		router.addOnChangeListener(() => scheduleScan())
+		router.addOnChangeListener(() => {
+			loadWatchedFolderMarkers()
+		})
 	}
 }
+
+/** @internal test hook */
+export function __testSetWatchedFolderFileids(ids) {
+	watchedFolderFileids = new Set(ids)
+}
+
+/** @internal test hook — watch-folder marker only (no Nextcloud imports). */
+export { applyWatchFolderChipToRow as __testApplyWatchFolderChipToRow } from './folder-watch-chip-dom.js'

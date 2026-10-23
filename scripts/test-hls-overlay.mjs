@@ -42,6 +42,15 @@ const css = fs.readFileSync(path.join(root, 'css/files-integration.css'), 'utf8'
 if (!css.includes('.hv-hls-icon-badge')) {
 	fail('files-integration.css must style .hv-hls-icon-badge')
 }
+if (!css.includes('.hv-watch-folder')) {
+	fail('files-integration.css must style watch-folder marker .hv-watch-folder')
+}
+if (!chipSrc.includes('folder-watch-chip-dom') && !chipSrc.includes('applyWatchFolderChipToRow')) {
+	fail('hls-chip.js must apply watch-folder marker by fileid')
+}
+if (!chipSrc.includes('folder-markers')) {
+	fail('hls-chip.js must load /api/watch/folder-markers')
+}
 // Grid selector must use a class that really exists in NC 35.0.2 Files markup
 const fixture = fs.readFileSync(path.join(root, 'scripts/fixtures/nc35-files-row.txt'), 'utf8')
 if (!/\.files-list--grid\s+\.hv-hls-icon-badge/.test(css)) {

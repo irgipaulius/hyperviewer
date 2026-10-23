@@ -18,9 +18,14 @@
 	box-shadow: 0 0 0 1px var(--color-main-background);
 }
 
-.hv-hls-icon-badge.hv-ready {
+.hv-hls-icon-badge.hv-ready,
+.hv-hls-icon-badge.hv-watch-folder {
 	background: #f0a020;
 	color: #1a1a1a;
+}
+
+.hv-hls-icon-badge.hv-watch-folder {
+	pointer-events: none;
 }
 
 .hv-hls-icon-badge.hv-progress {
