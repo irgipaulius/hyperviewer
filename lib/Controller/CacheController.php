@@ -8,6 +8,7 @@ use OCA\HyperViewer\Db\JobMapper;
 use OCA\HyperViewer\Service\MediaIndexService;
 use OCA\HyperViewer\Service\QueueService;
 use OCA\HyperViewer\Service\ConfigService;
+use OCA\HyperViewer\Service\VideoCollectionService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\JSONResponse;
@@ -29,6 +30,7 @@ class CacheController extends Controller {
 		private QueueService $queueService,
 		private ConfigService $config,
 		private JobMapper $jobMapper,
+		private VideoCollectionService $videoCollection,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -145,29 +147,11 @@ class CacheController extends Controller {
 		if (!$folder instanceof Folder) {
 			return new JSONResponse(['error' => 'Not a directory'], 400);
 		}
-		$videos = [];
-		$this->collectVideos($folder, $videos);
-		return new JSONResponse(['videos' => $videos, 'count' => count($videos)]);
-	}
-
-	private function collectVideos(Folder $folder, array &$videos): void {
-		foreach ($folder->getDirectoryListing() as $node) {
-			if ($node instanceof Folder) {
-				$this->collectVideos($node, $videos);
-				continue;
-			}
-			if (!$node instanceof \OCP\Files\File) {
-				continue;
-			}
-			if (!in_array($node->getMimeType(), ['video/mp4', 'video/quicktime'], true)) {
-				continue;
-			}
-			$videos[] = [
-				'fileid' => $node->getId(),
-				'filename' => $node->getName(),
-				'directory' => dirname($node->getInternalPath()),
-				'size' => $node->getSize(),
-			];
-		}
+		$files = $this->videoCollection->collectInFolder($folder, $userFolder);
+		return new JSONResponse([
+			'success' => true,
+			'count' => count($files),
+			'files' => $files,
+		]);
 	}
 }

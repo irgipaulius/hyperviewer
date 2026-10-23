@@ -10,6 +10,12 @@ import { folderPath } from "./files/nodePaths.js";
 import { showError, showSuccess } from "@nextcloud/dialogs";
 import { toastQueued } from "./shared/toast-queue.js";
 import { fetchJson } from "./shared/api.js";
+import {
+	buildDirectoryVideoCountHtml,
+	directoryForDiscoveredFile,
+	parseDiscoverResponse,
+	buildCacheGenerationFilesPayload,
+} from "./files/directory-discover.js";
 
 console.log("🎬 Hyper Viewer Files integration loading…");
 
@@ -43,21 +49,11 @@ function openUnifiedCacheDialog(options) {
 		title = "Generate HLS Cache (Directory)";
 		fileCount = videoFiles.length;
 		fileList = videoFiles.map(f => f.filename).join(", ");
-		infoContent = `
-			<div class="directory-info-card">
-				<div class="info-item">
-					<strong>Directory:</strong> ${directoryPath}
-				</div>
-				<div class="info-item ${fileCount === 0 ? "no-videos" : ""}">
-					<strong>Video files found:</strong> ${fileCount}
-					${
-						fileCount > 0
-							? `<div class="file-list">${fileList}</div>`
-							: '<div class="no-videos-text">No videos currently, but auto-generation can monitor for new files</div>'
-					}
-				</div>
-			</div>
-		`;
+		infoContent = buildDirectoryVideoCountHtml(
+			fileCount,
+			directoryPath,
+			videoFiles.map(f => f.filename),
+		);
 	} else {
 		title = "Generate HLS Cache";
 		fileList = files.map(f => f.filename).join(", ");
@@ -513,11 +509,11 @@ async function discoverVideoFilesInDirectory(directoryPath) {
 			}
 		);
 
-		if (result.success) {
-			return result.files || [];
-		} else {
+		const parsed = parseDiscoverResponse(result);
+		if (!parsed.success) {
 			throw new Error(result.error || "Failed to discover video files");
 		}
+		return parsed.files;
 	} catch (error) {
 		console.error("Failed to discover video files:", error);
 		showError(`Failed to scan directory: ${error.message}`);
@@ -650,15 +646,7 @@ async function startCacheGeneration(files, directoryPath = null) {
 		resolutions
 	};
 
-	const filesData = files.map(file => ({
-		filename: file.filename,
-		fileid: file.fileid || file.context?.fileInfoModel?.id || 0,
-		directory:
-			directoryPath ||
-			file.directory ||
-			file.context?.dir ||
-			"/"
-	}));
+	const filesData = buildCacheGenerationFilesPayload(files, directoryPath);
 
 	console.log("Cache generation options:", options);
 	console.log("Files data:", filesData);
