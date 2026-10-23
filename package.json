@@ -1,7 +1,7 @@
 {
     "name": "hyperviewer",
     "description": "Review footage instantly, choose highlights, and export only what you need in full quality.",
-    "version": "2.1.7",
+    "version": "2.1.8",
     "license": "AGPL-3.0-or-later",
     "author": "Paulius Jacinkevičius <irgipaulius@gmail.com>",
     "contributors": [
@@ -26,7 +26,7 @@
     "scripts": {
         "check:vue-templates": "node scripts/check-inline-vue-template.mjs",
         "test:php-lint": "sh scripts/test-php-lint.sh && sh scripts/test-ffmpeg-args.sh",
-        "test:smoke": "node scripts/smoke-bundles.mjs && node scripts/test-webpack-public-path.mjs && node scripts/test-file-action-defaults.mjs && node scripts/test-play-action.mjs && node scripts/test-hls-overlay.mjs && node scripts/test-hls-row-detect.mjs",
+        "test:smoke": "node scripts/smoke-bundles.mjs && node scripts/test-webpack-public-path.mjs && node scripts/test-file-action-defaults.mjs && node scripts/test-play-action.mjs && node scripts/test-hls-overlay.mjs && node scripts/test-hls-row-detect.mjs && node scripts/test-discover-dialog.mjs && node scripts/test-cache-generation-paths.mjs && node scripts/test-folder-chip.mjs",
         "test:mount": "node scripts/vue-mount-smoke.mjs",
         "build": "npm run check:vue-templates && NODE_ENV=production webpack --progress --config webpack.js && npm run test:smoke && npm run test:mount",
         "dev": "NODE_ENV=development webpack --progress --config webpack.js",

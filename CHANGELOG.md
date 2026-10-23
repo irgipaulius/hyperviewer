@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.8] - 2026-10-23
+
+### Fixed
+- Watch-dir dialog showed zero videos: discover API and Files JS now share `{ success, count, files }` with user-root-relative paths.
+- Registering a watch directory queues an initial scan and sets `last_scan_at` after processing.
+- Watch scans enqueue fingerprint/encode jobs (skip ready, queued, and auto-disabled media) via shared `VideoCollectionService`.
+- Directory “start now” sends each file’s own path, not the watched folder path for every entry.
+- Watched folders show a static orange HLS marker in list and grid views (fileid-based, NC 35).
+- HLS notifications default to one summary per batch; Personal settings add per-file / summary / off.
+
 ## [2.1.7] - 2026-10-23
 
 ### Fixed
