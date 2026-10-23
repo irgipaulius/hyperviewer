@@ -9,6 +9,7 @@ use OCA\HyperViewer\Db\WatchDirMapper;
 use OCA\HyperViewer\Service\ConfigService;
 use OCA\HyperViewer\Service\PermissionsService;
 use OCA\HyperViewer\Service\QueueService;
+use OCA\HyperViewer\Service\UserPathService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\JSONResponse;
@@ -25,6 +26,7 @@ class WatchController extends Controller {
 		private QueueService $queueService,
 		private ConfigService $config,
 		private PermissionsService $permissions,
+		private UserPathService $userPaths,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -37,10 +39,11 @@ class WatchController extends Controller {
 		}
 		$user = $auth;
 		$items = $this->watchDirMapper->findAllForUser($user->getUID());
-		return new JSONResponse(['directories' => array_map(static fn ($w) => [
+		$uid = $user->getUID();
+		return new JSONResponse(['directories' => array_map(fn ($w) => [
 			'id' => $w->getId(),
 			'configKey' => (string)$w->getId(),
-			'directory' => $w->getPath(),
+			'directory' => $this->userPaths->normalizeWatchPath($w->getPath(), $uid),
 			'enabled' => $w->getEnabled(),
 			'resolutions' => json_decode($w->getResolutions() ?? '[]', true),
 			'lastScan' => $w->getLastScanAt(),
@@ -54,7 +57,10 @@ class WatchController extends Controller {
 			return $auth;
 		}
 		$user = $auth;
-		$directory = (string)$this->request->getParam('directory', '');
+		$directory = $this->userPaths->normalizeWatchPath(
+			(string)$this->request->getParam('directory', ''),
+			$user->getUID(),
+		);
 		$resolutions = $this->request->getParam('resolutions', $this->config->getDefaultRenditions());
 		$wd = $this->watchDirMapper->upsert($user->getUID(), $directory, null, $resolutions, true, 100);
 		return new JSONResponse(['success' => true, 'id' => $wd->getId()]);

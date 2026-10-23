@@ -44,6 +44,10 @@ class MetadataBackfillCommand extends Command {
 				$loc = $this->locationMapper->findAnyLocationForMedia($mediaId);
 			}
 			if ($loc === null || $loc->getFileid() === null) {
+				try {
+					$this->mediaMapper->markProbeSkipped($mediaId);
+				} catch (\Throwable) {
+				}
 				continue;
 			}
 			$userId = $loc->getUserId();
@@ -56,6 +60,10 @@ class MetadataBackfillCommand extends Command {
 				$this->hlsEncode->probeAndUpdateMedia($file, $media);
 				$updated++;
 			} catch (\Throwable $e) {
+				try {
+					$this->mediaMapper->markProbeSkipped($mediaId);
+				} catch (\Throwable) {
+				}
 				$output->writeln('<comment>Skip media ' . $mediaId . ': ' . $e->getMessage() . '</comment>');
 			}
 		}

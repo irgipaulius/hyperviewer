@@ -9,8 +9,8 @@ import { folderPath, isVideoMime } from './nodePaths.js'
 import { resolveFileCacheStatus, subscribeCacheBatchUpdates } from './cache-batch-store.js'
 import { apiPost } from '../shared/api.js'
 
-/** @type {Map<number, HTMLElement>} */
-const badgesByFileid = new Map()
+/** @type {Map<number, { badge: HTMLElement, basename: string, directory: string }>} */
+const chipsByFileid = new Map()
 
 function injectStyles() {
 	if (document.getElementById('hyperviewer-hls-chip-style')) {
@@ -20,17 +20,19 @@ function injectStyles() {
 	style.id = 'hyperviewer-hls-chip-style'
 	style.textContent = `
 		.hv-hls-icon-badge {
-			position: absolute;
-			right: 0;
-			bottom: 0;
-			z-index: 4;
-			min-width: 22px;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			min-width: 28px;
+			min-height: 22px;
+			margin-inline-end: 4px;
 			text-align: center;
-			font-size: 8px;
+			font-size: 9px;
 			font-weight: 700;
-			line-height: 1.3;
-			padding: 1px 4px;
-			border-radius: 6px;
+			line-height: 1.2;
+			padding: 2px 6px;
+			border-radius: 8px;
+			vertical-align: middle;
 			pointer-events: auto;
 			box-shadow: 0 0 0 1px var(--color-main-background);
 		}
@@ -48,48 +50,12 @@ function injectStyles() {
 			background: var(--color-error, #e9322d);
 			color: var(--color-error-text, #fff);
 		}
-		.files-list__row-icon,
-		.files-list__row-icon-preview-container {
-			position: relative;
-		}
 		@keyframes hv-hls-pulse {
 			0%, 100% { opacity: 1; }
 			50% { opacity: 0.55; }
 		}
 	`
 	document.head.appendChild(style)
-}
-
-function currentFilesDirectory() {
-	return window.location.pathname.replace(/^.*\/apps\/files\/files\//, '/') || '/'
-}
-
-function findRowForFileid(fileid) {
-	return document.querySelector(`[data-cy-files-list-row-fileid="${fileid}"]`)
-		|| document.querySelector(`[data-fileid="${fileid}"]`)
-}
-
-function rowMime(row) {
-	return row.getAttribute('data-cy-files-list-row-mime')
-		|| row.querySelector('[data-mime]')?.getAttribute('data-mime')
-		|| ''
-}
-
-function mountBadgeOnIcon(fileid, badge) {
-	const row = findRowForFileid(fileid)
-	const icon = row?.querySelector('.files-list__row-icon')
-	if (!icon) {
-		return false
-	}
-	icon.style.position = icon.style.position || 'relative'
-	const existing = icon.querySelector('.hv-hls-icon-badge')
-	if (existing) {
-		existing.replaceWith(badge)
-	} else {
-		icon.appendChild(badge)
-	}
-	badgesByFileid.set(fileid, badge)
-	return true
 }
 
 function applyStatusToBadge(badge, fileid, status) {
@@ -100,6 +66,7 @@ function applyStatusToBadge(badge, fileid, status) {
 		badge.classList.add('hv-failed')
 		badge.textContent = '!'
 		badge.title = status.job_error || t('hyperviewer', 'Failed — click to retry')
+		badge.hidden = false
 		return
 	}
 	if (job && (job.state === 'queued' || job.state === 'running')) {
@@ -113,6 +80,7 @@ function applyStatusToBadge(badge, fileid, status) {
 			badge.textContent = '…'
 		}
 		badge.title = t('hyperviewer', 'HLS encoding in progress')
+		badge.hidden = false
 		return
 	}
 	const state = status.cache_state ?? (status.exists ? 'ready' : 'none')
@@ -120,59 +88,47 @@ function applyStatusToBadge(badge, fileid, status) {
 		badge.classList.add('hv-ready')
 		badge.textContent = 'HLS'
 		badge.title = t('hyperviewer', 'HLS cache ready')
+		badge.hidden = false
 		return
 	}
-	badge.remove()
-	badgesByFileid.delete(fileid)
+	badge.hidden = true
 }
 
-async function refreshBadge(fileid, filename, directory) {
-	let badge = badgesByFileid.get(fileid)
-	if (!badge) {
-		badge = document.createElement('span')
-		badge.className = 'hv-hls-icon-badge'
-		badge.setAttribute('role', 'status')
-		badge.addEventListener('click', async (ev) => {
-			ev.stopPropagation()
-			const status = await resolveFileCacheStatus(fileid, filename, directory)
-			if (status.job && status.job.state === 'failed') {
-				await apiPost(generateUrl(`/apps/hyperviewer/api/jobs/${status.job.id}/retry`))
-				showSuccess(t('hyperviewer', 'Job re-queued'))
-			}
-		})
-		if (!mountBadgeOnIcon(fileid, badge)) {
-			return
-		}
-	}
+async function refreshChip(entry) {
+	const { badge, basename, directory, fileid } = entry
 	try {
-		const status = await resolveFileCacheStatus(fileid, filename, directory)
+		const status = await resolveFileCacheStatus(fileid, basename, directory)
 		applyStatusToBadge(badge, fileid, status)
 	} catch {
-		badge.remove()
-		badgesByFileid.delete(fileid)
+		badge.hidden = true
 	}
 }
 
-export function scanVisibleVideoRows() {
-	const directory = currentFilesDirectory()
-	const rows = document.querySelectorAll('[data-cy-files-list-row-fileid], [data-fileid]')
-	rows.forEach(row => {
-		const raw = row.getAttribute('data-cy-files-list-row-fileid')
-			|| row.getAttribute('data-fileid')
-		const fileid = raw ? parseInt(raw, 10) : 0
-		if (!fileid || !isVideoMime(rowMime(row))) {
-			return
+function createChipElement(fileid, basename, directory) {
+	const badge = document.createElement('span')
+	badge.className = 'hv-hls-icon-badge'
+	badge.setAttribute('role', 'status')
+	badge.setAttribute('aria-live', 'polite')
+	badge.hidden = true
+	badge.addEventListener('click', async (ev) => {
+		ev.stopPropagation()
+		const status = await resolveFileCacheStatus(fileid, basename, directory)
+		if (status.job && status.job.state === 'failed') {
+			await apiPost(generateUrl(`/apps/hyperviewer/api/jobs/${status.job.id}/retry`))
+			showSuccess(t('hyperviewer', 'Job re-queued'))
 		}
-		const nameEl = row.querySelector('.files-list__row-name-text, .files-list__row-name')
-		const filename = nameEl?.textContent?.trim() || ''
-		refreshBadge(fileid, filename, directory)
 	})
+	return badge
 }
 
 export function registerHlsIconChip() {
 	injectStyles()
-	subscribeCacheBatchUpdates(() => scanVisibleVideoRows())
-	setInterval(() => scanVisibleVideoRows(), 4000)
+
+	subscribeCacheBatchUpdates(() => {
+		for (const entry of chipsByFileid.values()) {
+			refreshChip(entry)
+		}
+	})
 
 	registerFileAction({
 		id: 'hyperviewer-hls-icon-chip',
@@ -182,17 +138,27 @@ export function registerHlsIconChip() {
 		order: -100,
 		enabled: ({ nodes }) =>
 			nodes.length === 1 && isVideoMime(nodes[0].mime),
+		inline: () => true,
 		renderInline: async ({ nodes, folder }) => {
 			const node = nodes[0]
 			const fileid = node.fileid ?? 0
 			if (!fileid) {
 				return null
 			}
-			await refreshBadge(fileid, node.basename, folderPath(folder, node))
-			return null
+			const directory = folderPath(folder, node)
+			const basename = node.basename
+			let entry = chipsByFileid.get(fileid)
+			if (!entry) {
+				const badge = createChipElement(fileid, basename, directory)
+				entry = { badge, basename, directory, fileid }
+				chipsByFileid.set(fileid, entry)
+			} else {
+				entry.basename = basename
+				entry.directory = directory
+			}
+			await refreshChip(entry)
+			return entry.badge.hidden ? null : entry.badge
 		},
 		exec: async () => null,
 	})
-
-	scanVisibleVideoRows()
 }

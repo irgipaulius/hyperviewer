@@ -93,10 +93,7 @@ class MediaMapper extends QBMapper {
 		$qb = $this->db->getQueryBuilder();
 		$qb->selectDistinct('m.id')
 			->from($this->getTableName(), 'm')
-			->where($qb->expr()->orX(
-				$qb->expr()->isNull('m.duration'),
-				$qb->expr()->lte('m.duration', $qb->createNamedParameter(0)),
-			))
+			->where($qb->expr()->isNull('m.duration'))
 			->andWhere($qb->expr()->in(
 				'm.cache_state',
 				$qb->createNamedParameter(['ready', 'partial', 'none'], IQueryBuilder::PARAM_STR_ARRAY),
@@ -113,6 +110,13 @@ class MediaMapper extends QBMapper {
 		}
 		$res->closeCursor();
 		return $ids;
+	}
+
+	public function markProbeSkipped(int $mediaId): void {
+		$media = $this->findById($mediaId);
+		$media->setDuration(0);
+		$media->setFps(0);
+		$this->update($media);
 	}
 
 	/** @return list<string> */

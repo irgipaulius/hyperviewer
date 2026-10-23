@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace OCA\HyperViewer\Db;
 
+use OCA\HyperViewer\Service\UserPathService;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 
 /** @extends QBMapper<WatchDir> */
 class WatchDirMapper extends QBMapper {
-	public function __construct(IDBConnection $db) {
+	public function __construct(
+		IDBConnection $db,
+		private UserPathService $userPaths,
+	) {
 		parent::__construct($db, 'hv_watch_dirs', WatchDir::class);
 	}
 
@@ -50,6 +54,7 @@ class WatchDirMapper extends QBMapper {
 		bool $enabled,
 		int $priority,
 	): WatchDir {
+		$path = $this->userPaths->normalizeWatchPath($path, $userId);
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())

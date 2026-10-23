@@ -81,7 +81,7 @@ class FfmpegRunner {
 		if ($binary === '' || !is_executable($binary)) {
 			throw new \RuntimeException('ffprobe binary not configured');
 		}
-		$cmd = array_merge([$binary, '-nostdin', '-hide_banner', '-loglevel', 'error'], $args);
+		$cmd = array_merge([$binary, '-hide_banner', '-loglevel', 'error'], $args);
 		$descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
 		$proc = proc_open($cmd, $descriptors, $pipes);
 		if (!is_resource($proc)) {

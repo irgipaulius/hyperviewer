@@ -1,7 +1,7 @@
 {
     "name": "hyperviewer",
     "description": "Review footage instantly, choose highlights, and export only what you need in full quality.",
-    "version": "2.1.0",
+    "version": "2.1.1",
     "license": "AGPL-3.0-or-later",
     "author": "Paulius Jacinkevičius <irgipaulius@gmail.com>",
     "contributors": [
@@ -53,8 +53,8 @@
         "extends @nextcloud/browserslist-config"
     ],
     "engines": {
-        "node": ">=14.0.0",
-        "npm": ">=7.0.0"
+        "node": ">=18.0.0 <=22.x",
+        "npm": ">=9.0.0"
     },
     "devDependencies": {
         "@nextcloud/babel-config": "^1.0.0",
@@ -70,6 +70,7 @@
         "vue-template-compiler": "2.6.14"
     },
     "optionalDependencies": {
+        "@parcel/watcher": "^2.4.1",
         "fsevents": "2.3.3"
     }
 }
