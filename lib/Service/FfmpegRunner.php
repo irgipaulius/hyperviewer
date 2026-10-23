@@ -7,6 +7,7 @@ namespace OCA\HyperViewer\Service;
 class FfmpegRunner {
 	private ?array $lastProgress = null;
 	private int $lastProgressAt = 0;
+	private string $lastStderr = '';
 
 	public function __construct(
 		private ConfigService $config,
@@ -42,6 +43,7 @@ class FfmpegRunner {
 			? (int)($durationSeconds * $timeoutMult + 600)
 			: 7200;
 		$stdoutBuf = '';
+		$this->lastStderr = '';
 		while (true) {
 			if ($shouldCancel !== null && $shouldCancel()) {
 				$this->terminate($proc);
@@ -65,15 +67,26 @@ class FfmpegRunner {
 					$this->parseProgressLine($line, $durationSeconds, $onProgress);
 				}
 			}
+			$this->readStderr($pipes[2]);
 			$status = proc_get_status($proc);
 			if (!$status['running']) {
 				break;
 			}
 			usleep(200000);
 		}
+		stream_set_blocking($pipes[2], true);
+		$this->readStderr($pipes[2]);
 		fclose($pipes[1]);
 		fclose($pipes[2]);
 		return proc_close($proc);
+	}
+
+	/** @param resource $pipe */
+	private function readStderr($pipe): void {
+		$err = stream_get_contents($pipe);
+		if ($err !== false && $err !== '') {
+			$this->lastStderr = substr($this->lastStderr . $err, -4000);
+		}
 	}
 
 	public function runFfprobe(array $args): string {
@@ -125,8 +138,12 @@ class FfmpegRunner {
 			return $cmd;
 		}
 		if ($mode === 'auto') {
-			if (PHP_OS_FAMILY === 'FreeBSD' && is_executable('/usr/sbin/idprio')) {
+			if (PHP_OS_FAMILY === 'FreeBSD' && self::idprioUsable()) {
 				return array_merge(['/usr/sbin/idprio', '31'], $cmd);
+			}
+			if (PHP_OS_FAMILY === 'FreeBSD' && is_executable('/usr/bin/nice')) {
+				// idprio needs privileges a jailed www user lacks (RTP_SET: Operation not permitted).
+				return array_merge(['/usr/bin/nice', '-n', '19'], $cmd);
 			}
 			if (PHP_OS_FAMILY === 'Linux' && is_executable('/usr/bin/nice')) {
 				$wrapped = ['/usr/bin/nice', '-n', '19'];
@@ -137,6 +154,39 @@ class FfmpegRunner {
 			}
 		}
 		return $cmd;
+	}
+
+	private static ?bool $idprioUsable = null;
+
+	/** idprio exists but fails for unprivileged users in jails; probe once per process. */
+	public static function idprioUsable(?string $binary = '/usr/sbin/idprio'): bool {
+		if ($binary !== '/usr/sbin/idprio') {
+			return self::probeIdprio($binary);
+		}
+		if (self::$idprioUsable === null) {
+			self::$idprioUsable = self::probeIdprio($binary);
+		}
+		return self::$idprioUsable;
+	}
+
+	private static function probeIdprio(string $binary): bool {
+		if (!is_executable($binary)) {
+			return false;
+		}
+		$true = is_executable('/usr/bin/true') ? '/usr/bin/true' : '/bin/true';
+		$proc = proc_open([$binary, '31', $true], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+		if (!is_resource($proc)) {
+			return false;
+		}
+		foreach ($pipes as $p) {
+			stream_get_contents($p);
+			fclose($p);
+		}
+		return proc_close($proc) === 0;
+	}
+
+	public function getLastStderr(): string {
+		return trim($this->lastStderr);
 	}
 
 	private function parseProgressLine(string $line, ?float $durationSeconds, ?callable $onProgress): void {

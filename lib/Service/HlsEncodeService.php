@@ -146,7 +146,8 @@ class HlsEncodeService {
 		]);
 		$code = $this->ffmpeg->run($args, $duration, $onProgress, $shouldCancel);
 		if ($code !== 0) {
-			throw new \RuntimeException('ffmpeg failed for rendition ' . $name);
+			$err = $this->ffmpeg->getLastStderr();
+			throw new \RuntimeException('ffmpeg failed for rendition ' . $name . ' (exit ' . $code . ')' . ($err !== '' ? ': ' . substr($err, -500) : ''));
 		}
 	}
 
