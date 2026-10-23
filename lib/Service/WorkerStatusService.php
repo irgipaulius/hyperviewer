@@ -80,10 +80,18 @@ class WorkerStatusService {
 			'queue_paused' => $this->config->getBool(ConfigService::KEY_QUEUE_PAUSED),
 			'start_hint_service' => 'hyperviewer_worker',
 			'start_hint_command' => 'HV_WORKER=1 occ hyperviewer:worker',
-			'cache_directory' => $this->config->getString(ConfigService::KEY_CACHE_DIR),
-			'ffmpeg' => $this->ffmpegInfo->getVersions(),
+			'ffmpeg' => $this->ffmpegInfo->getVersionsForApi(),
 			'disk_free_bytes' => $this->ffmpegInfo->diskFreeAtCachePath(),
 			'hardware_encoders' => $this->ffmpegInfo->detectHardwareEncoders(),
+		];
+	}
+
+	/** @return array{status: string, queued_waiting: int} */
+	public function getPersonalHint(): array {
+		$snap = $this->getSnapshot();
+		return [
+			'status' => (string)($snap['status'] ?? 'stopped'),
+			'queued_waiting' => (int)($snap['queued_waiting'] ?? 0),
 		];
 	}
 }

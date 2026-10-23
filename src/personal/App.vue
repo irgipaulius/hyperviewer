@@ -17,226 +17,262 @@
 			Loading…
 		</div>
 
-		<div v-else-if="tab === 'overview'" class="hv-panel">
-			<div v-if="overview" class="hv-summary-cards">
-				<div class="hv-card">
-					<span class="hv-card-n">{{ overview.ready_count || 0 }}</span> videos ready
-				</div>
-				<div class="hv-card">
-					<span class="hv-card-n">{{ overview.video_minutes_ready || 0 }}</span> min ready
-				</div>
-				<div class="hv-card">
-					<span class="hv-card-n">{{ formatBytes(overview.cache_bytes) }}</span> cache used
-				</div>
-				<div class="hv-card">
-					<span class="hv-card-n">{{ overview.queued || 0 }}</span> in queue
-				</div>
-			</div>
-			<div v-if="overview && overview.sparkline_done_7d" class="hv-sparkline" title="Jobs finished (7 days)">
-				<span
-					v-for="(n, i) in overview.sparkline_done_7d"
-					:key="i"
-					class="hv-spark-bar"
-					:style="{ height: sparkHeight(n) }" />
-			</div>
-			<p v-if="overview" class="hv-path-muted">
-				<span v-if="overview.storage_free_bytes != null">Account free: {{ formatBytes(overview.storage_free_bytes) }}</span>
-				· Cache used: {{ formatBytes(overview.cache_bytes) }}
-				<span v-if="overview.cache_quota_bytes"> / {{ formatBytes(overview.cache_quota_bytes) }} quota</span>
-			</p>
-			<p v-if="overview && overview.ready_count === 0" class="hv-empty-hint">
-				Right-click a video in Files → <strong>Generate HLS Cache</strong>.
-			</p>
-		</div>
-
-		<div v-else-if="tab === 'queue'" class="hv-panel">
-			<div class="hv-queue-toolbar">
-				<button type="button" @click="cancelAllQueued">
-					Pause all mine (cancel queued)
-				</button>
-			</div>
-			<div v-if="jobs.length === 0" class="hv-empty-hint">
-				No active jobs.
-			</div>
-			<table v-else class="grid hv-jobs-table">
-				<thead>
-					<tr>
-						<th>File</th><th>Chain</th><th>State</th><th>Progress</th><th>Queue / ETA</th><th></th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr v-for="j in jobs" :key="j.id">
-						<td class="hv-file-cell">
-							<a
-								v-if="j.filename"
-								:href="filesLink(j)"
-								target="_blank"
-								rel="noopener">{{ j.filename }}</a>
-							<span v-else>file #{{ j.fileid || '?' }}</span>
-							<div class="hv-path-muted">
-								{{ j.directory }}
-							</div>
-						</td>
-						<td>{{ j.chain && j.chain.label ? j.chain.label : j.type_label }}</td>
-						<td><span :class="'hv-state hv-state-' + j.state">{{ j.state }}</span></td>
-						<td>
-							<div class="hv-progress-bar">
-								<div class="hv-progress-fill" :style="{ width: j.progress + '%' }" />
-							</div>
-							{{ j.progress }}%
-						</td>
-						<td>
-							<span v-if="j.queue_position">{{ j.queue_position }} in line</span>
-							<span v-else-if="j.eta_seconds">~{{ formatDuration(j.eta_seconds) }} left</span>
-							<span v-else>—</span>
-						</td>
-						<td class="hv-actions">
-							<button v-if="j.state === 'failed'" type="button" @click="retryJob(j.id)">
-								Retry
-							</button>
-							<button v-if="j.state === 'queued' || j.state === 'running'" type="button" @click="cancelJob(j.id)">
-								Cancel
-							</button>
-							<button v-if="j.state === 'queued'" type="button" @click="bumpJob(j.id)">
-								Move up
-							</button>
-						</td>
-					</tr>
-				</tbody>
-			</table>
-		</div>
-
-		<div v-else-if="tab === 'history'" class="hv-panel">
-			<div class="hv-queue-toolbar">
-				<input
-					v-model="historyQuery"
-					type="search"
-					placeholder="Search filename or type"
-					@change="refresh">
-				<label>State
-					<select v-model="historyState" @change="refresh">
-						<option value="">done + failed</option>
-						<option value="done">done</option>
-						<option value="failed">failed</option>
-					</select>
-				</label>
-				<label>Type
-					<select v-model="historyType" @change="refresh">
-						<option value="">all</option>
-						<option value="hls">HLS</option>
-						<option value="clip">clip</option>
-						<option value="fingerprint">fingerprint</option>
-					</select>
-				</label>
-			</div>
-			<div v-if="historyJobs.length === 0" class="hv-empty-hint">
-				No finished jobs yet.
-			</div>
-			<ul v-else class="hv-library-list">
-				<li v-for="j in historyJobs" :key="j.id">
-					<strong>#{{ j.id }}</strong> {{ j.filename || '?' }} — {{ j.state }}
-					<span class="hv-path-muted">{{ formatTs(j.finished_at || j.created_at) }}</span>
-					<button v-if="j.state === 'failed'" type="button" @click="retryJob(j.id)">
-						Re-run
-					</button>
-					<button v-if="j.type === 'clip' && j.state === 'done'" type="button" @click="openHistoryResult(j)">
-						Open clip
-					</button>
-					<button v-if="(j.type === 'encode' || j.type === 'upgrade' || j.type_label === 'hls') && j.state === 'done' && j.fileid" type="button" @click="openHistoryResult(j)">
-						Play HLS
-					</button>
-				</li>
-			</ul>
-		</div>
-
-		<div v-else-if="tab === 'library'" class="hv-panel">
-			<div v-if="library.length === 0" class="hv-empty-hint">
-				No HLS-ready videos indexed yet.
-			</div>
-			<ul v-else class="hv-library-list">
-				<li v-for="item in library" :key="item.fileid">
-					<span v-if="item.pinned" class="hv-pin">★</span>
-					<a :href="filesLink(item)" target="_blank" rel="noopener">{{ item.filename }}</a>
-					<span class="hv-path-muted">
-						{{ item.cache_state }} · {{ formatBytes(item.cache_bytes) }}
-						<span v-if="item.renditions && item.renditions.length"> · {{ item.renditions.join('/') }}</span>
-						<span v-else> · auto</span>
+		<template v-else>
+			<div
+				v-if="overview && overview.worker_status !== 'running' && (overview.queued > 0 || overview.global_queued > 0)"
+				class="hv-worker-banner hv-worker-stopped">
+				<strong>Background worker is not running</strong>
+				<p class="hv-path-muted">
+					You have {{ overview.queued }} job(s) queued locally
+					<span v-if="overview.global_queued > overview.queued">
+						({{ overview.global_queued }} waiting on the server).
 					</span>
-					<div class="hv-actions">
-						<button type="button" @click="playLibraryItem(item)">Play</button>
-						<button type="button" @click="copyStream(item.fileid)">Copy stream</button>
-						<button type="button" @click="createPublicLink(item.fileid)">Public link</button>
-						<button type="button" @click="regenerate(item.fileid)">Regenerate</button>
-						<button type="button" @click="togglePin(item)">{{ item.pinned ? 'Unpin' : 'Pin' }}</button>
-						<button type="button" @click="deleteCache(item.fileid)">Delete cache</button>
+					<span v-else>.</span>
+					Jobs will not start until an admin starts the hyperviewer worker on the server.
+				</p>
+			</div>
+
+			<div v-if="tab === 'overview'" class="hv-panel">
+				<div v-if="overview" class="hv-summary-cards">
+					<div class="hv-card">
+						<span class="hv-card-n">{{ overview.ready_count || 0 }}</span> videos ready
 					</div>
-				</li>
-			</ul>
-		</div>
-
-		<div v-else-if="tab === 'preferences'" class="hv-panel">
-			<div v-if="prefs" class="hv-prefs">
-				<label><input v-model="prefs.auto_generate_upload" type="checkbox"> Auto-generate HLS on upload (when enabled globally)</label>
-				<label><input v-model="prefs.notify_when_done" type="checkbox"> Notify when jobs finish</label>
-				<label>Default renditions (comma-separated)
-					<input v-model="prefs.default_renditions" type="text">
-				</label>
-				<label>Clip export folder (relative to Files)
-					<input v-model="prefs.clip_export_dir" type="text">
-				</label>
-				<button type="button" @click="savePrefs">Save preferences</button>
+					<div class="hv-card">
+						<span class="hv-card-n">{{ overview.video_minutes_ready || 0 }}</span> min ready
+					</div>
+					<div class="hv-card">
+						<span class="hv-card-n">{{ formatBytes(overview.cache_bytes) }}</span> cache used
+					</div>
+					<div class="hv-card">
+						<span class="hv-card-n">{{ overview.queued || 0 }}</span> in queue
+					</div>
+				</div>
+				<div v-if="overview && overview.sparkline_done_7d" class="hv-sparkline" title="Jobs finished (7 days)">
+					<span
+						v-for="(n, i) in overview.sparkline_done_7d"
+						:key="i"
+						class="hv-spark-bar"
+						:style="{ height: sparkHeight(n) }" />
+				</div>
+				<p v-if="overview" class="hv-path-muted">
+					<span v-if="overview.storage_free_bytes != null">Account free: {{ formatBytes(overview.storage_free_bytes) }}</span>
+					· Cache used: {{ formatBytes(overview.cache_bytes) }}
+					<span v-if="overview.cache_quota_bytes"> / {{ formatBytes(overview.cache_quota_bytes) }} quota</span>
+				</p>
+				<p v-if="overview && overview.ready_count === 0" class="hv-empty-hint">
+					Right-click a video in Files → <strong>Generate HLS Cache</strong>.
+				</p>
 			</div>
-		</div>
 
-		<div v-else-if="tab === 'watch'" class="hv-panel">
-			<div class="hv-queue-toolbar">
-				<input
-					v-model="watchPath"
-					type="text"
-					placeholder="/Videos/inbox"
-					class="hv-watch-input">
-				<button type="button" @click="pickWatchFolder">
-					Pick folder…
-				</button>
-				<button type="button" @click="addWatchFolder">
-					Add watch folder
-				</button>
-			</div>
-			<p class="hv-empty-hint">
-				Watch folders auto-queue new videos for HLS. Path is relative to your Files root.
-			</p>
-			<ul v-if="watchDirs.length" class="hv-library-list">
-				<li v-for="w in watchDirs" :key="w.id">
-					<label><input type="checkbox" :checked="w.enabled" @change="toggleWatch(w, $event)"> {{ w.directory }}</label>
-					<span class="hv-path-muted">{{ (w.resolutions || []).join(', ') }}</span>
-					<button type="button" @click="removeWatch(w.id)">
-						Remove
+			<div v-else-if="tab === 'queue'" class="hv-panel">
+				<div class="hv-queue-toolbar">
+					<button type="button" @click="cancelAllQueued">
+						Pause all mine (cancel queued)
 					</button>
-				</li>
-			</ul>
-		</div>
+				</div>
+				<div v-if="jobs.length === 0" class="hv-empty-hint">
+					No active jobs.
+				</div>
+				<table v-else class="grid hv-jobs-table">
+					<thead>
+						<tr>
+							<th>File</th><th>Chain</th><th>State</th><th>Progress</th><th>Queue / ETA</th><th />
+						</tr>
+					</thead>
+					<tbody>
+						<tr v-for="j in jobs" :key="j.id">
+							<td class="hv-file-cell">
+								<a
+									v-if="j.filename"
+									:href="filesLink(j)"
+									target="_blank"
+									rel="noopener">{{ j.filename }}</a>
+								<span v-else>file #{{ j.fileid || '?' }}</span>
+								<div class="hv-path-muted">
+									{{ j.directory }}
+								</div>
+							</td>
+							<td>{{ j.chain && j.chain.label ? j.chain.label : j.type_label }}</td>
+							<td><span :class="'hv-state hv-state-' + j.state">{{ j.state }}</span></td>
+							<td>
+								<div class="hv-progress-bar">
+									<div class="hv-progress-fill" :style="{ width: j.progress + '%' }" />
+								</div>
+								{{ j.progress }}%
+							</td>
+							<td>
+								<span v-if="j.queue_position">{{ j.queue_position }} in line</span>
+								<span v-else-if="j.eta_seconds">~{{ formatDuration(j.eta_seconds) }} left</span>
+								<span v-else>—</span>
+							</td>
+							<td class="hv-actions">
+								<button v-if="j.state === 'failed'" type="button" @click="retryJob(j.id)">
+									Retry
+								</button>
+								<button v-if="j.state === 'queued' || j.state === 'running'" type="button" @click="cancelJob(j.id)">
+									Cancel
+								</button>
+								<button v-if="j.state === 'queued'" type="button" @click="bumpJob(j.id)">
+									Move up
+								</button>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
 
-		<div v-else-if="tab === 'links'" class="hv-panel">
-			<button type="button" @click="refreshLinks">
-				Refresh links
-			</button>
-			<ul v-if="publicLinks.length" class="hv-library-list">
-				<li v-for="link in publicLinks" :key="link.id">
-					{{ link.filename || ('file #' + link.fileid) }}
-					<span class="hv-path-muted">{{ link.view_count }} views · expires {{ link.expires_at ? formatTs(link.expires_at) : 'never' }}</span>
-					<button type="button" @click="copyText(link.url)">Copy URL</button>
-					<button type="button" @click="revokeLink(link.id)">Revoke</button>
-				</li>
-			</ul>
-			<p v-else class="hv-empty-hint">No active public links. Create one from Library.</p>
-		</div>
+			<div v-else-if="tab === 'history'" class="hv-panel">
+				<div class="hv-queue-toolbar">
+					<input
+						v-model="historyQuery"
+						type="search"
+						placeholder="Search filename or type"
+						@change="refresh">
+					<label>State
+						<select v-model="historyState" @change="refresh">
+							<option value="">done + failed</option>
+							<option value="done">done</option>
+							<option value="failed">failed</option>
+						</select>
+					</label>
+					<label>Type
+						<select v-model="historyType" @change="refresh">
+							<option value="">all</option>
+							<option value="hls">HLS</option>
+							<option value="clip">clip</option>
+							<option value="fingerprint">fingerprint</option>
+						</select>
+					</label>
+				</div>
+				<div v-if="historyJobs.length === 0" class="hv-empty-hint">
+					No finished jobs yet.
+				</div>
+				<ul v-else class="hv-library-list">
+					<li v-for="j in historyJobs" :key="j.id">
+						<strong>#{{ j.id }}</strong> {{ j.filename || '?' }} — {{ j.state }}
+						<span class="hv-path-muted">{{ formatTs(j.finished_at || j.created_at) }}</span>
+						<button v-if="j.state === 'failed'" type="button" @click="retryJob(j.id)">
+							Re-run
+						</button>
+						<button v-if="j.type === 'clip' && j.state === 'done'" type="button" @click="openHistoryResult(j)">
+							Open clip
+						</button>
+						<button v-if="(j.type === 'encode' || j.type === 'upgrade' || j.type_label === 'hls') && j.state === 'done' && j.fileid" type="button" @click="openHistoryResult(j)">
+							Play HLS
+						</button>
+					</li>
+				</ul>
+			</div>
 
-		<div v-else-if="tab === 'logs'" class="hv-panel hv-logs">
-			<button type="button" @click="downloadLogs">
-				Download logs
-			</button>
-			<pre v-for="l in userLogs" :key="l.id">[{{ l.level }}] {{ l.message }}</pre>
-		</div>
+			<div v-else-if="tab === 'library'" class="hv-panel">
+				<div v-if="library.length === 0" class="hv-empty-hint">
+					No HLS-ready videos indexed yet.
+				</div>
+				<ul v-else class="hv-library-list">
+					<li v-for="item in library" :key="item.fileid">
+						<span v-if="item.pinned" class="hv-pin">★</span>
+						<a :href="filesLink(item)" target="_blank" rel="noopener">{{ item.filename }}</a>
+						<span class="hv-path-muted">
+							{{ item.cache_state }} · {{ formatBytes(item.cache_bytes) }}
+							<span v-if="item.renditions && item.renditions.length"> · {{ item.renditions.join('/') }}</span>
+							<span v-else> · auto</span>
+						</span>
+						<div class="hv-actions">
+							<button type="button" @click="playLibraryItem(item)">
+								Play
+							</button>
+							<button type="button" @click="copyStream(item.fileid)">
+								Copy stream
+							</button>
+							<button type="button" @click="createPublicLink(item.fileid)">
+								Public link
+							</button>
+							<button type="button" @click="regenerate(item.fileid)">
+								Regenerate
+							</button>
+							<button type="button" @click="togglePin(item)">
+								{{ item.pinned ? 'Unpin' : 'Pin' }}
+							</button>
+							<button type="button" @click="deleteCache(item.fileid)">
+								Delete cache
+							</button>
+						</div>
+					</li>
+				</ul>
+			</div>
+
+			<div v-else-if="tab === 'preferences'" class="hv-panel">
+				<div v-if="prefs" class="hv-prefs">
+					<label><input v-model="prefs.auto_generate_upload" type="checkbox"> Auto-generate HLS on upload (when enabled globally)</label>
+					<label><input v-model="prefs.notify_when_done" type="checkbox"> Notify when jobs finish</label>
+					<label>Default renditions (comma-separated)
+						<input v-model="prefs.default_renditions" type="text">
+					</label>
+					<label>Clip export folder (relative to Files)
+						<input v-model="prefs.clip_export_dir" type="text">
+					</label>
+					<button type="button" @click="savePrefs">
+						Save preferences
+					</button>
+				</div>
+			</div>
+
+			<div v-else-if="tab === 'watch'" class="hv-panel">
+				<div class="hv-queue-toolbar">
+					<input
+						v-model="watchPath"
+						type="text"
+						placeholder="/Videos/inbox"
+						class="hv-watch-input">
+					<button type="button" @click="pickWatchFolder">
+						Pick folder…
+					</button>
+					<button type="button" @click="addWatchFolder">
+						Add watch folder
+					</button>
+				</div>
+				<p class="hv-empty-hint">
+					Watch folders auto-queue new videos for HLS. Path is relative to your Files root.
+				</p>
+				<ul v-if="watchDirs.length" class="hv-library-list">
+					<li v-for="w in watchDirs" :key="w.id">
+						<label><input type="checkbox" :checked="w.enabled" @change="toggleWatch(w, $event)"> {{ w.directory }}</label>
+						<span class="hv-path-muted">{{ (w.resolutions || []).join(', ') }}</span>
+						<button type="button" @click="removeWatch(w.id)">
+							Remove
+						</button>
+					</li>
+				</ul>
+			</div>
+
+			<div v-else-if="tab === 'links'" class="hv-panel">
+				<button type="button" @click="refreshLinks">
+					Refresh links
+				</button>
+				<ul v-if="publicLinks.length" class="hv-library-list">
+					<li v-for="link in publicLinks" :key="link.id">
+						{{ link.filename || ('file #' + link.fileid) }}
+						<span class="hv-path-muted">{{ link.view_count }} views · expires {{ link.expires_at ? formatTs(link.expires_at) : 'never' }}</span>
+						<button type="button" @click="copyText(link.url)">
+							Copy URL
+						</button>
+						<button type="button" @click="revokeLink(link.id)">
+							Revoke
+						</button>
+					</li>
+				</ul>
+				<p v-else class="hv-empty-hint">
+					No active public links. Create one from Library.
+				</p>
+			</div>
+
+			<div v-else-if="tab === 'logs'" class="hv-panel hv-logs">
+				<button type="button" @click="downloadLogs">
+					Download logs
+				</button>
+				<pre v-for="l in userLogs" :key="l.id">[{{ l.level }}] {{ l.message }}</pre>
+			</div>
+		</template>
 	</div>
 </template>
 
@@ -277,6 +313,12 @@ export default {
 			loading: true,
 		}
 	},
+	watch: {
+		tab() {
+			this.loading = true
+			this.refresh()
+		},
+	},
 	async mounted() {
 		const open = window.sessionStorage && window.sessionStorage.getItem('hyperviewer_open_tab')
 		if (open) {
@@ -305,9 +347,7 @@ export default {
 		},
 		async refresh() {
 			try {
-				if (this.tab === 'overview' || !this.overview) {
-					this.overview = await apiGet(generateUrl('/apps/hyperviewer/api/user/overview'))
-				}
+				this.overview = await apiGet(generateUrl('/apps/hyperviewer/api/user/overview'))
 				if (this.tab === 'queue' || this.tab === 'overview') {
 					const res = await apiGet(generateUrl('/apps/hyperviewer/api/jobs'), { limit: 100 })
 					this.jobs = (res.jobs || []).filter(j => ['queued', 'running', 'failed'].includes(j.state))
@@ -459,12 +499,6 @@ export default {
 			this.watchPath = ''
 			showSuccess('Watch folder registered')
 			await this.refresh()
-		},
-	},
-	watch: {
-		tab() {
-			this.loading = true
-			this.refresh()
 		},
 	},
 }

@@ -73,7 +73,6 @@ class AdminController extends Controller {
 				'queued_depth_histogram' => $this->jobMapper->queuedDepthHistogram(),
 			],
 			'cache' => array_merge($cache, [
-				'cache_directory' => $cacheDir,
 				'cache_bytes_disk_estimate' => $diskBytes,
 				'failed_jobs' => $this->jobMapper->countByState('failed'),
 			]),

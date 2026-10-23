@@ -20,6 +20,10 @@ class Notifier implements INotifier {
 		return 'hyperviewer';
 	}
 
+	public function getId(): string {
+		return $this->getID();
+	}
+
 	public function getName(): string {
 		return $this->l10nFactory->get('hyperviewer')->t('Hyper Viewer');
 	}

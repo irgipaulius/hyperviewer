@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 class AdminApiPrivacyTest extends TestCase {
 	/** @return list<string> */
 	private function forbiddenKeys(): array {
-		return ['filename', 'fileid', 'user_id', 'path', 'directory', 'files_dir', 'fingerprint'];
+		return ['filename', 'fileid', 'user_id', 'path', 'directory', 'files_dir', 'fingerprint', 'cache_directory', '/var/'];
 	}
 
 	public function testAdminStatusFixtureContainsNoForbiddenKeys(): void {

@@ -163,11 +163,7 @@ class JobController extends Controller {
 		$user = $auth;
 		$body = json_decode((string)file_get_contents('php://input'), true) ?: [];
 		$ids = array_map('intval', $body['ids'] ?? []);
-		$jobs = $this->jobMapper->findByIds($ids);
-		$jobs = array_values(array_filter(
-			$jobs,
-			fn ($j) => $j->getUserId() === $user->getUID(),
-		));
+		$jobs = $this->jobMapper->findByIdsForUser($ids, $user->getUID());
 		return new JSONResponse([
 			'jobs' => array_map(fn ($j) => $this->jobDisplay->serialize($j), $jobs),
 		]);

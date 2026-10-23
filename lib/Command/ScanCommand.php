@@ -20,6 +20,7 @@ class ScanCommand extends Command {
 
 	protected function configure(): void {
 		$this->setName('hyperviewer:scan')
+			->setDescription('Enqueue a folder scan job to discover videos and queue fingerprint jobs')
 			->addOption('user', null, InputOption::VALUE_REQUIRED, 'User id')
 			->addOption('path', null, InputOption::VALUE_REQUIRED, 'Directory path', '/')
 			->addOption('dry-run', null, InputOption::VALUE_NONE, 'Dry run');

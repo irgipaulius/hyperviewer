@@ -58,8 +58,8 @@ class MediaMapper extends QBMapper {
 	public function getCacheSummary(): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select($qb->func()->count('*', 'cnt'))
-			->addSelect($qb->func()->sum('cache_bytes', 'bytes'))
 			->from($this->getTableName());
+		DbAggregate::selectSum($qb, 'cache_bytes', 'bytes');
 		$res = $qb->executeQuery();
 		$row = $res->fetch();
 		$res->closeCursor();
@@ -86,6 +86,33 @@ class MediaMapper extends QBMapper {
 			'cache_bytes_db' => $bytes,
 			'by_state' => $byState,
 		];
+	}
+
+	/** @return list<int> */
+	public function findIdsMissingDuration(int $limit = 200, ?string $userId = null): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->selectDistinct('m.id')
+			->from($this->getTableName(), 'm')
+			->where($qb->expr()->orX(
+				$qb->expr()->isNull('m.duration'),
+				$qb->expr()->lte('m.duration', $qb->createNamedParameter(0)),
+			))
+			->andWhere($qb->expr()->in(
+				'm.cache_state',
+				$qb->createNamedParameter(['ready', 'partial', 'none'], IQueryBuilder::PARAM_STR_ARRAY),
+			))
+			->setMaxResults($limit);
+		if ($userId !== null && $userId !== '') {
+			$qb->innerJoin('m', 'hv_locations', 'l', $qb->expr()->eq('l.media_id', 'm.id'))
+				->andWhere($qb->expr()->eq('l.user_id', $qb->createNamedParameter($userId)));
+		}
+		$res = $qb->executeQuery();
+		$ids = [];
+		while ($row = $res->fetch()) {
+			$ids[] = (int)$row['id'];
+		}
+		$res->closeCursor();
+		return $ids;
 	}
 
 	/** @return list<string> */

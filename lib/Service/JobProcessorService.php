@@ -77,6 +77,12 @@ class JobProcessorService {
 		$fileid = (int)$job->getFileid();
 		$file = $this->mediaIndex->resolveFileForUser($job->getUserId(), $fileid);
 		$media = $this->mediaIndex->indexOrRebind($file, $job->getUserId());
+		if ($media->getDuration() === null || $media->getDuration() <= 0) {
+			try {
+				$this->hlsEncode->probeAndUpdateMedia($file, $media);
+			} catch (\Throwable) {
+			}
+		}
 		$job->setMediaId($media->getId());
 		$this->jobMapper->update($job);
 		$payload = json_decode($job->getPayload() ?? '{}', true) ?: [];

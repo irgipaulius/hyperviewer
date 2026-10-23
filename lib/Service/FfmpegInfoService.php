@@ -10,6 +10,16 @@ class FfmpegInfoService {
 	) {
 	}
 
+	/** @return array{ffmpeg: ?string, ffprobe: ?string} */
+	public function getVersionsForApi(): array {
+		$ffmpeg = $this->config->getString(ConfigService::KEY_FFMPEG);
+		$ffprobe = $this->config->getString(ConfigService::KEY_FFPROBE);
+		return [
+			'ffmpeg' => $this->probeVersion($ffmpeg),
+			'ffprobe' => $this->probeVersion($ffprobe),
+		];
+	}
+
 	/** @return array{ffmpeg: ?string, ffprobe: ?string, ffmpeg_path: string, ffprobe_path: string} */
 	public function getVersions(): array {
 		$ffmpeg = $this->config->getString(ConfigService::KEY_FFMPEG);

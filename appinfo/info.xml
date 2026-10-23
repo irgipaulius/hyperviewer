@@ -5,7 +5,7 @@
     <name>Hyper Viewer</name>
     <summary>Review footage instantly, choose highlights, and export only what you need in full quality.</summary>
     <description><![CDATA[HLS proxies, Shaka playback, frame-accurate clipping, and original-quality export — with a queue-backed encoder for Nextcloud 35.]]></description>
-    <version>2.0.3</version>
+    <version>2.1.0</version>
     <licence>agpl</licence>
     <author mail="irgipaulius@gmail.com" homepage="https://github.com/irgipaulius">Paulius Jacinkevičius</author>
     <namespace>HyperViewer</namespace>
@@ -27,6 +27,7 @@
         <command>OCA\HyperViewer\Command\ScanCommand</command>
         <command>OCA\HyperViewer\Command\ReindexCommand</command>
         <command>OCA\HyperViewer\Command\CacheStatsCommand</command>
+        <command>OCA\HyperViewer\Command\MetadataBackfillCommand</command>
     </commands>
     <types>
         <type>video/quicktime</type>

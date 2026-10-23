@@ -4,7 +4,7 @@
 
 import "./styles/cache-modal.css";
 import { registerHyperViewerFileActions } from "./files/register-file-actions.js";
-import { startIconOverlayObserver } from "./files/icon-overlay.js";
+import { registerHlsIconChip } from "./files/hls-chip.js";
 import { folderPath } from "./files/nodePaths.js";
 import { showError, showSuccess } from "@nextcloud/dialogs";
 import { toastQueued } from "./shared/toast-queue.js";
@@ -724,7 +724,7 @@ async function bootstrapFilesIntegration() {
 		openDirectoryCacheGenerationDialog,
 		caps,
 	});
-	startIconOverlayObserver();
+	registerHlsIconChip();
 	console.log("✅ Hyper Viewer file actions registered (@nextcloud/files v4)");
 }
 

@@ -134,6 +134,70 @@ class LocationMapper extends QBMapper {
 		return (int)($row['cnt'] ?? 0);
 	}
 
+	public function findAnyLocationForMedia(int $mediaId): ?Location {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('media_id', $qb->createNamedParameter($mediaId, IQueryBuilder::PARAM_INT)))
+			->orderBy('seen_at', 'DESC')
+			->setMaxResults(1);
+		try {
+			return $this->findEntity($qb);
+		} catch (\OCP\AppFramework\Db\DoesNotExistException) {
+			return null;
+		}
+	}
+
+	public function findAnyUserIdForMedia(int $mediaId): ?string {
+		$loc = $this->findAnyLocationForMedia($mediaId);
+		if ($loc === null) {
+			return null;
+		}
+		$uid = $loc->getUserId();
+		return $uid !== '' ? $uid : null;
+	}
+
+	public function countUserMediaInState(string $userId, string $state): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('*', 'cnt'))
+			->from($this->getTableName(), 'l')
+			->innerJoin('l', 'hv_media', 'm', $qb->expr()->eq('l.media_id', 'm.id'))
+			->where($qb->expr()->eq('l.user_id', $qb->createNamedParameter($userId)))
+			->andWhere($qb->expr()->eq('m.cache_state', $qb->createNamedParameter($state)));
+		$res = $qb->executeQuery();
+		$row = $res->fetch();
+		$res->closeCursor();
+		return (int)($row['cnt'] ?? 0);
+	}
+
+	public function sumCacheBytesForUser(string $userId): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->from($this->getTableName(), 'l')
+			->innerJoin('l', 'hv_media', 'm', $qb->expr()->eq('l.media_id', 'm.id'))
+			->where($qb->expr()->eq('l.user_id', $qb->createNamedParameter($userId)));
+		DbAggregate::selectSum($qb, 'm.cache_bytes', 'bytes');
+		$res = $qb->executeQuery();
+		$row = $res->fetch();
+		$res->closeCursor();
+		return (int)($row['bytes'] ?? 0);
+	}
+
+	public function sumReadyDurationSecondsForUser(string $userId): float {
+		$qb = $this->db->getQueryBuilder();
+		$qb->from($this->getTableName(), 'l')
+			->innerJoin('l', 'hv_media', 'm', $qb->expr()->eq('l.media_id', 'm.id'))
+			->where($qb->expr()->eq('l.user_id', $qb->createNamedParameter($userId)))
+			->andWhere($qb->expr()->in(
+				'm.cache_state',
+				$qb->createNamedParameter(['ready', 'partial'], IQueryBuilder::PARAM_STR_ARRAY),
+			));
+		DbAggregate::selectSum($qb, 'm.duration', 'secs');
+		$res = $qb->executeQuery();
+		$row = $res->fetch();
+		$res->closeCursor();
+		return (float)($row['secs'] ?? 0);
+	}
+
 	/** @return list<string> */
 	public function listDistinctUserIds(): array {
 		$qb = $this->db->getQueryBuilder();

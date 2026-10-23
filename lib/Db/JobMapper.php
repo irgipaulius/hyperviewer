@@ -127,6 +127,19 @@ class JobMapper extends QBMapper {
 	}
 
 	/** @return Job[] */
+	public function findByIdsForUser(array $ids, string $userId): array {
+		if ($ids === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->in('id', $qb->createNamedParameter($ids, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)));
+		return $this->findEntities($qb);
+	}
+
+	/** @return Job[] */
 	public function findByFileids(array $fileids): array {
 		if ($fileids === []) {
 			return [];
@@ -140,6 +153,16 @@ class JobMapper extends QBMapper {
 	}
 
 	/** @return Job[] */
+	public function listJobsForUser(
+		string $userId,
+		?string $state,
+		int $limit,
+		int $offset,
+		?string $type = null,
+	): array {
+		return $this->listJobs($state, $limit, $offset, $userId, $type);
+	}
+
 	public function listJobs(
 		?string $state,
 		int $limit,

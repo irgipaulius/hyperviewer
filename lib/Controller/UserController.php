@@ -15,6 +15,7 @@ use OCA\HyperViewer\Service\PermissionsService;
 use OCA\HyperViewer\Service\PublicLinkService;
 use OCA\HyperViewer\Service\UserMediaService;
 use OCA\HyperViewer\Service\UserPreferencesService;
+use OCA\HyperViewer\Service\WorkerStatusService;
 use OCA\HyperViewer\Db\PublicLinkMapper;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\DataDownloadResponse;
@@ -23,7 +24,6 @@ use OCP\Files\IRootFolder;
 use OCP\IURLGenerator;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\JSONResponse;
-use OCP\IDBConnection;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserSession;
@@ -38,7 +38,6 @@ class UserController extends Controller {
 		private LocationMapper $locationMapper,
 		private LogMapper $logMapper,
 		private JobDisplayService $jobDisplay,
-		private IDBConnection $db,
 		private UserMediaService $userMedia,
 		private UserPreferencesService $preferences,
 		private MediaIndexService $mediaIndex,
@@ -48,6 +47,7 @@ class UserController extends Controller {
 		private PublicLinkMapper $publicLinkMapper,
 		private PermissionsService $permissions,
 		private ConfigService $config,
+		private WorkerStatusService $workerStatus,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -75,10 +75,11 @@ class UserController extends Controller {
 		$user = $auth;
 		$uid = $user->getUID();
 		$since = strtotime('today midnight');
-		$ready = $this->countUserMediaInState($uid, 'ready');
-		$partial = $this->countUserMediaInState($uid, 'partial');
-		$bytes = $this->sumUserCacheBytes($uid);
-		$minutes = $this->sumUserReadyMinutes($uid);
+		$ready = $this->locationMapper->countUserMediaInState($uid, 'ready');
+		$partial = $this->locationMapper->countUserMediaInState($uid, 'partial');
+		$bytes = $this->locationMapper->sumCacheBytesForUser($uid);
+		$minutes = (int)round($this->locationMapper->sumReadyDurationSecondsForUser($uid) / 60);
+		$worker = $this->workerStatus->getPersonalHint();
 		$jobsToday = $this->jobMapper->countForUserSince($uid, $since);
 		$queued = $this->jobMapper->countForUserByState($uid, 'queued');
 		$sparkline = $this->jobMapper->countDonePerDayForUser($uid, 7);
@@ -94,6 +95,8 @@ class UserController extends Controller {
 			'sparkline_done_7d' => $sparkline,
 			'storage_free_bytes' => $storageFree,
 			'cache_quota_bytes' => $quotaBytes,
+			'worker_status' => $worker['status'],
+			'global_queued' => $worker['queued_waiting'],
 		]);
 	}
 
@@ -387,48 +390,6 @@ class UserController extends Controller {
 			return new JSONResponse(['error' => $e->getMessage()], 403);
 		}
 		return $user;
-	}
-
-	private function countUserMediaInState(string $userId, string $state): int {
-		$qb = $this->db->getQueryBuilder();
-		$qb->select($qb->func()->count('*', 'cnt'))
-			->from('hv_locations', 'l')
-			->innerJoin('l', 'hv_media', 'm', $qb->expr()->eq('l.media_id', 'm.id'))
-			->where($qb->expr()->eq('l.user_id', $qb->createNamedParameter($userId)))
-			->andWhere($qb->expr()->eq('m.cache_state', $qb->createNamedParameter($state)));
-		$res = $qb->executeQuery();
-		$row = $res->fetch();
-		$res->closeCursor();
-		return (int)($row['cnt'] ?? 0);
-	}
-
-	private function sumUserCacheBytes(string $userId): int {
-		$qb = $this->db->getQueryBuilder();
-		$qb->select($qb->func()->sum('m.cache_bytes', 'bytes'))
-			->from('hv_locations', 'l')
-			->innerJoin('l', 'hv_media', 'm', $qb->expr()->eq('l.media_id', 'm.id'))
-			->where($qb->expr()->eq('l.user_id', $qb->createNamedParameter($userId)));
-		$res = $qb->executeQuery();
-		$row = $res->fetch();
-		$res->closeCursor();
-		return (int)($row['bytes'] ?? 0);
-	}
-
-	private function sumUserReadyMinutes(string $userId): int {
-		$qb = $this->db->getQueryBuilder();
-		$qb->select($qb->func()->sum('m.duration', 'secs'))
-			->from('hv_locations', 'l')
-			->innerJoin('l', 'hv_media', 'm', $qb->expr()->eq('l.media_id', 'm.id'))
-			->where($qb->expr()->eq('l.user_id', $qb->createNamedParameter($userId)))
-			->andWhere($qb->expr()->in(
-				'm.cache_state',
-				$qb->createNamedParameter(['ready', 'partial'], \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_STR_ARRAY),
-			));
-		$res = $qb->executeQuery();
-		$row = $res->fetch();
-		$res->closeCursor();
-		$secs = (float)($row['secs'] ?? 0);
-		return (int)round($secs / 60);
 	}
 
 	private function readUserStorageFree(string $uid): ?int {

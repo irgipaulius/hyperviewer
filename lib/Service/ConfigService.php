@@ -125,7 +125,27 @@ class ConfigService {
 			}
 			$out[$key] = ['value' => $this->defaults[$key], 'source' => 'default'];
 		}
-		return $out;
+		return $this->redactPathsInSettings($out);
+	}
+
+	/** @param array<string, array{value: mixed, source: string}> $settings */
+	private function redactPathsInSettings(array $settings): array {
+		$pathKeys = [
+			self::KEY_CACHE_DIR,
+			self::KEY_FFMPEG,
+			self::KEY_FFPROBE,
+		];
+		foreach ($pathKeys as $key) {
+			if (!isset($settings[$key])) {
+				continue;
+			}
+			$val = (string)($settings[$key]['value'] ?? '');
+			if ($val !== '' && (str_starts_with($val, '/') || preg_match('#^[A-Za-z]:\\\\#', $val) === 1)) {
+				$settings[$key]['value'] = '[configured]';
+				$settings[$key]['configured'] = true;
+			}
+		}
+		return $settings;
 	}
 
 	public function setOverride(string $key, string $value): void {

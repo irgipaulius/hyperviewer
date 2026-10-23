@@ -1,6 +1,8 @@
 /** @typedef {{ fileid: number, filename: string, directory: string, cache_state?: string, hasCache?: boolean, job?: object, job_error?: string, queue_position?: number }} RowStatus */
 
 const byFileid = new Map()
+/** @type {Set<(rows: Map<number, RowStatus>) => void>} */
+const listeners = new Set()
 /** @type {Map<string, { fileid: number, filename: string, directory: string }>} */
 const pending = new Map()
 let flushPromise = null
@@ -58,6 +60,23 @@ async function runFlush() {
 			byFileid.set(row.fileid, row)
 		}
 	}
+	notifyListeners()
+}
+
+function notifyListeners() {
+	for (const fn of listeners) {
+		try {
+			fn(byFileid)
+		} catch {
+			// ignore
+		}
+	}
+}
+
+/** @param {(rows: Map<number, RowStatus>) => void} fn */
+export function subscribeCacheBatchUpdates(fn) {
+	listeners.add(fn)
+	return () => listeners.delete(fn)
 }
 
 function enqueueFlush() {
