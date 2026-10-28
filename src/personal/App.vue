@@ -19,7 +19,7 @@
 
 		<template v-else>
 			<div
-				v-if="overview && overview.worker_status !== 'running' && (overview.queued > 0 || overview.global_queued > 0)"
+				v-if="overview && overview.worker_status === 'stopped' && (overview.queued > 0 || overview.global_queued > 0)"
 				class="hv-worker-banner hv-worker-stopped">
 				<strong>Background worker is not running</strong>
 				<p class="hv-path-muted">
